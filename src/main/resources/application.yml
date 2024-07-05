@@ -1,0 +1,13 @@
+server:
+  port: 8080
+  address: 0.0.0.0
+
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://${POSTGRESQL_HOST:localhost}:${POSTGRESQL_PORT:5432}/${POSTGRESQL_DB:trailence}
+    username: ${POSTGRESQL_USERNAME:postgres}
+    password: ${POSTGRESQL_PASSWORD:postgres}
+  
+trailence:
+  jwt:
+    secret: ${JWT_SECRET}
