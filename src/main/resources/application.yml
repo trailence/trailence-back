@@ -10,4 +10,4 @@ spring:
   
 trailence:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${TRAILENCE_JWT_SECRET}
