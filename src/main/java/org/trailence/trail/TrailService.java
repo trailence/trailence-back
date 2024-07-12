@@ -100,17 +100,37 @@ public class TrailService {
                     var dtoOpt = dtos.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString()) && owner.equals(dto.getOwner())).findAny();
                     if (dtoOpt.isEmpty()) return Mono.empty();
                     var dto = dtoOpt.get();
-                    // TODO handle change of collection
-                    // TODO when track changed, delete the previous if needed
-                    if (!dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
-                        return trackRepo.existsByUuidAndOwner(UUID.fromString(dto.getCurrentTrackUuid()), owner)
-                                .flatMap(ok -> {
-                                    if (!ok) return Mono.empty();
-                                    entity.setCurrentTrackUuid(UUID.fromString(dto.getCurrentTrackUuid()));
-                                    return updateEntity(entity, dto, true);
-                                });
+                    Mono<Boolean> checks = Mono.just(true);
+                    Mono<?> actions = Mono.just(true);
+                    var changed = false;
+                    if (dto.getCollectionUuid() != null && !dto.getCollectionUuid().equals(entity.getCollectionUuid().toString())) {
+                    	// change of collection: it must exist, and we should remove all associated tags
+                    	var newUuid = UUID.fromString(dto.getCollectionUuid());
+                    	checks = checks.flatMap(ok -> {
+                    		if (!ok) return Mono.just(false);
+                    		return collectionRepo.existsByUuidAndOwner(newUuid, owner);
+                    	});
+                    	actions = actions.then(trailTagRepo.deleteAllByTrailUuidInAndOwner(Set.of(entity.getUuid()), owner).then(Mono.just(true)));
+                    	entity.setCollectionUuid(newUuid);
+                    	changed = true;
                     }
-                    return updateEntity(entity, dto, false);
+                    if (dto.getCurrentTrackUuid() != null && !dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
+                    	var newUuid = UUID.fromString(dto.getCurrentTrackUuid());
+                    	checks = checks.flatMap(ok -> {
+                    		if (!ok) return Mono.just(false);
+                    		return trackRepo.existsByUuidAndOwner(newUuid, owner);
+                    	});
+                    	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
+                    		actions = actions.then(trackRepo.deleteByUuidAndOwner(entity.getCurrentTrackUuid(), owner));
+                        entity.setCurrentTrackUuid(newUuid);
+                        changed = true;
+                    }
+                    var a = actions;
+                    var c = changed;
+                    return checks.flatMap(ok -> {
+                    	if (!ok) return Mono.empty();
+                    	return a.then(updateEntity(entity, dto, c));
+                    });
                 }, 3, 6)
                 .collectList()
                 .flatMapMany(uuids -> repo.findAllByUuidInAndOwner(uuids, owner))
