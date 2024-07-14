@@ -11,3 +11,6 @@ spring:
 trailence:
   jwt:
     secret: ${TRAILENCE_JWT_SECRET}
+  external:
+    geonames:
+      username: ${GEONAMES_USER:}
