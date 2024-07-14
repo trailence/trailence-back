@@ -17,7 +17,7 @@ public class InitDB {
 	@Autowired private UserService userService;
 	
 	private static final String[] TABLES = {
-		"users", "user_keys", "user_preferences",
+		"users", "user_keys", "user_preferences", "user_extensions",
 		"collections", "tracks", "trails", "tags", "trails_tags",
 	};
 	
