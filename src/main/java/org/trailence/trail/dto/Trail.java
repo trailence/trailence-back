@@ -18,6 +18,7 @@ public class Trail {
 
     private String name;
     private String description;
+    private String location;
 
     private String originalTrackUuid;
     private String currentTrackUuid;

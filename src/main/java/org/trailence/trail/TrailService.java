@@ -3,6 +3,7 @@ package org.trailence.trail;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -66,6 +67,7 @@ public class TrailService {
             entity.setOwner(owner);
             entity.setName(dto.getName());
             entity.setDescription(dto.getDescription());
+            entity.setLocation(dto.getLocation());
             entity.setCollectionUuid(collectionId);
             entity.setOriginalTrackUuid(originalTrackId);
             entity.setCurrentTrackUuid(currentTrackId);
@@ -138,13 +140,17 @@ public class TrailService {
     }
 
     private Mono<UUID> updateEntity(TrailEntity entity, Trail dto, boolean changed) {
-        if (!entity.getName().equals(dto.getName())) {
+        if (!Objects.equals(entity.getName(), dto.getName())) {
             entity.setName(dto.getName());
             changed = true;
         }
-        if (!entity.getDescription().equals(dto.getDescription())) {
+        if (!Objects.equals(entity.getDescription(), dto.getDescription())) {
             entity.setDescription(dto.getDescription());
             changed = true;
+        }
+        if (!Objects.equals(entity.getLocation(), dto.getLocation())) {
+        	entity.setLocation(dto.getLocation());
+        	changed = true;
         }
         if (!changed) return Mono.empty();
         return DbUtils.updateByUuidAndOwner(r2dbc, entity)
@@ -200,6 +206,7 @@ public class TrailService {
                 entity.getUpdatedAt(),
                 entity.getName(),
                 entity.getDescription(),
+                entity.getLocation(),
                 entity.getOriginalTrackUuid().toString(),
                 entity.getCurrentTrackUuid().toString(),
                 entity.getCollectionUuid().toString()
