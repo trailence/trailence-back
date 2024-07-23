@@ -1,5 +1,9 @@
 package org.trailence.auth.rest;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,9 +14,11 @@ import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
+import org.trailence.auth.dto.UserKey;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -35,6 +41,16 @@ public class AuthV1Controller {
 	@PostMapping("renew")
 	public Mono<AuthResponse> renew(@Valid @RequestBody RenewTokenRequest request) {
 		return service.renew(request);
+	}
+	
+	@GetMapping("mykeys")
+	public Flux<UserKey> getMyKeys(Authentication auth) {
+		return service.getMyKeys(auth);
+	}
+	
+	@DeleteMapping("mykeys/{keyid}")
+	public Mono<Void> deleteMyKey(@PathVariable("keyid") String id, Authentication auth) {
+		return service.deleteMyKey(id, auth);
 	}
 	
 }

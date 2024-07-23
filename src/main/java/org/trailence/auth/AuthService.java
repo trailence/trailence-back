@@ -8,10 +8,13 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.auth.db.UserKeyEntity;
 import org.trailence.auth.db.UserKeyRepository;
@@ -20,6 +23,7 @@ import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
+import org.trailence.auth.dto.UserKey;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.rest.JwtAuthenticationManager;
@@ -27,10 +31,12 @@ import org.trailence.preferences.UserPreferencesService;
 import org.trailence.user.db.UserRepository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -119,6 +125,23 @@ public class AuthService {
 			response.setPreferences(pref);
 			return response;
 		});
+	}
+	
+	public Flux<UserKey> getMyKeys(Authentication auth) {
+		return keyRepo.findByEmail(auth.getPrincipal().toString()).map(entity -> {
+			Map<String, Object> info;
+			try {
+				info = TrailenceUtils.mapper.readValue(entity.getDeviceInfo().asString(), new TypeReference<Map<String, Object>>() {});
+			} catch (Exception e) {
+				log.error("Error decoding device info", e);
+				info = new HashMap<>();
+			}
+			return new UserKey(entity.getId().toString(), entity.getCreatedAt(), entity.getLastUsage(), info);
+		});
+	}
+	
+	public Mono<Void> deleteMyKey(String id, Authentication auth) {
+		return keyRepo.deleteByIdAndEmail(UUID.fromString(id), auth.getPrincipal().toString());
 	}
 	
 }

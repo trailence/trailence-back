@@ -19,7 +19,7 @@ public class InitDB {
 	private static final String[] TABLES = {
 		"users", "user_keys", "user_preferences", "user_extensions",
 		"collections", "tracks", "trails", "tags", "trails_tags",
-		"jobs_queue"
+		"jobs_queue", "verification_codes"
 	};
 	
 	public void init() {

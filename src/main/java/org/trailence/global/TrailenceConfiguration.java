@@ -41,6 +41,7 @@ public class TrailenceConfiguration {
 			.pathMatchers(HttpMethod.POST, "/api/auth/v1/init_renew").permitAll()
 			.pathMatchers(HttpMethod.POST, "/api/auth/v1/renew").permitAll()
 			.pathMatchers(HttpMethod.GET, "/api/ping").permitAll()
+			.pathMatchers(HttpMethod.DELETE, "/api/user/v1/changePassword").permitAll()
 			.pathMatchers("/**").authenticated()
 		)
 		.addFilterBefore(new JwtFilter(authManager), SecurityWebFiltersOrder.HTTP_BASIC)

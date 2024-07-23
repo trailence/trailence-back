@@ -23,6 +23,9 @@ spring:
 trailence:
   jwt:
     secret: ${TRAILENCE_JWT_SECRET}
+  hostname: ${TRAILENCE_HOSTNAME:trailence.org}
+  protocol: ${TRAILENCE_PROTOCOL:https}
+  linkpath: ${TRAILENCE_LINK_PATH:/link/}
   external:
     geonames:
       username: ${GEONAMES_USER:}
