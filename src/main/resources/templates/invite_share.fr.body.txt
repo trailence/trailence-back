@@ -1,0 +1,9 @@
+Bonjour,
+
+{{from}} souhaite partager des parcours avec vous sur {{hostname}}.
+
+Vous pouvez y accéder sans avoir de compte en utilisant ce lien: {{link}}
+
+Si par la suite vous souhaitez gérer vos propres parcours, ou accéder aux parcours qui sont partagés avec vous sans besoin de lien, vous pourrez créer un compte gratuitement.
+
+Ce mail est envoyé à l'initiative de {{from}}, afin de vous partager des parcours, nous ne vous enverrons pas d'autre mail par la suite concernant ce partage.

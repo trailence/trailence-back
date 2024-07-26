@@ -9,7 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.UnauthorizedException;
 
 import com.auth0.jwt.JWT;
@@ -48,15 +51,18 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 			} catch (Exception e) {
 				throw new UnauthorizedException();
 			}
-			return new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, List.of());
+			Boolean isComplete = decoded.getClaim("complete").asBoolean();
+			List<GrantedAuthority> authorities = Boolean.TRUE.equals(isComplete) ? List.of(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER)) : List.of();
+			return new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities);
 		});
 	}
 	
-	public Tuple2<String, Instant> generateToken(String email) {
+	public Tuple2<String, Instant> generateToken(String email, boolean isComplete) {
 		var expires = Instant.now().plus(tokenValidity);
 		var token = JWT.create()
 			.withSubject(email)
 			.withExpiresAt(expires)
+			.withClaim("complete", isComplete)
 			.sign(algo);
 		return Tuples.of(token, expires);
 	}

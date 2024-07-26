@@ -39,6 +39,7 @@ public class TagService {
 	private final TrailCollectionRepository collectionRepo;
 	private final TrailTagRepository trailTagRepo;
 	private final R2dbcEntityTemplate r2dbc;
+	private final ShareService shareService;
 	
 	public Mono<List<Tag>> bulkCreate(List<Tag> dtos, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
@@ -122,6 +123,7 @@ public class TagService {
 		.flatMap(entities -> {
 			var tagsUuids = entities.stream().map(TagEntity::getUuid).collect(Collectors.toSet());
 			return trailTagRepo.deleteAllByTagUuidInAndOwner(tagsUuids, owner)
+			.then(shareService.tagsDeleted(tagsUuids, owner))
 			.then(repo.deleteAllByUuidInAndOwner(tagsUuids, owner));
 		});
 	}

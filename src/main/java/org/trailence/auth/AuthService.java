@@ -22,12 +22,15 @@ import org.trailence.auth.dto.AuthResponse;
 import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
+import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.rest.JwtAuthenticationManager;
+import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.UserPreferencesService;
+import org.trailence.user.UserService;
 import org.trailence.user.db.UserRepository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -50,12 +53,14 @@ public class AuthService {
 	private final R2dbcEntityTemplate r2dbc;
 	private final SecureRandom random;
 	private final UserPreferencesService userPreferencesService;
+	private final TokenService tokenService;
+	private final UserService userService;
 	
 	public Mono<AuthResponse> login(LoginRequest request) {
 		return userRepo.findByEmailAndPassword(request.getEmail().toLowerCase(), TrailenceUtils.hashPassword(request.getPassword()))
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
 			.flatMap(user -> {
-				var token = auth.generateToken(user.getEmail());
+				var token = auth.generateToken(user.getEmail(), true);
 				
 				UserKeyEntity key = new UserKeyEntity();
 				key.setId(UUID.randomUUID());
@@ -69,10 +74,43 @@ public class AuthService {
 					log.error("Invalid device info", e);
 				}
 				
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null);
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true);
 				
 				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
 			});
+	}
+	
+	public Mono<AuthResponse> loginShare(LoginShareRequest request) {
+		return Mono.fromCallable(() -> tokenService.check(request.getToken()))
+		.flatMap(tokenData ->
+			userRepo.findById(tokenData.getEmail())
+			.switchIfEmpty(Mono.defer(() -> {
+				// first time the user use a share link -> create his account without password
+				return userService.createUser(tokenData.getEmail().toLowerCase(), null)
+					.then(userRepo.findById(tokenData.getEmail()));
+			}))
+			.flatMap(user -> {
+				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
+				
+				var token = auth.generateToken(user.getEmail(), false);
+				
+				UserKeyEntity key = new UserKeyEntity();
+				key.setId(UUID.randomUUID());
+				key.setEmail(user.getEmail());
+				key.setPublicKey(request.getPublicKey());
+				key.setCreatedAt(System.currentTimeMillis());
+				key.setLastUsage(System.currentTimeMillis());
+				try {
+					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
+				} catch (JsonProcessingException e) {
+					log.error("Invalid device info", e);
+				}
+				
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, false);
+				
+				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
+			})
+		);
 	}
 	
 	public Mono<InitRenewResponse> initRenew(InitRenewRequest request) {
@@ -105,17 +143,21 @@ public class AuthService {
 		})
 		.switchIfEmpty(Mono.error(new ForbiddenException()))
 		.flatMap(key -> {
-			var token = auth.generateToken(key.getEmail());
-			key.setLastUsage(System.currentTimeMillis());
-			try {
-				key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
-			} catch (JsonProcessingException e) {
-				log.error("Invalid device info", e);
-			}
-			key.setRandom(null);
-			key.setRandomExpires(0L);
-			var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null);
-			return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
+			return userRepo.findById(key.getEmail())
+			.switchIfEmpty(Mono.error(new ForbiddenException()))
+			.flatMap(user -> {	
+				var token = auth.generateToken(key.getEmail(), user.getPassword() != null);
+				key.setLastUsage(System.currentTimeMillis());
+				try {
+					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
+				} catch (JsonProcessingException e) {
+					log.error("Invalid device info", e);
+				}
+				key.setRandom(null);
+				key.setRandomExpires(0L);
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null, user.getPassword() != null);
+				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
+			});
 		});
 	}
 	

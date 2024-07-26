@@ -14,6 +14,7 @@ import org.springframework.data.relational.core.sql.Assignments;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Conditions;
+import org.springframework.data.relational.core.sql.Delete;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.data.relational.core.sql.Table;
@@ -50,6 +51,27 @@ public final class DbUtils {
 			public String toQuery() {
 				SqlRenderer sqlRenderer = SqlRenderer.create(r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext());
 				return sqlRenderer.render(select);
+			}
+		};
+	}
+
+	public static PreparedOperation<Delete> delete(Delete delete, Bindings bindings, R2dbcEntityTemplate r2dbc) {
+		return new PreparedOperation<Delete>() {
+			@Override
+			public void bindTo(BindTarget target) {
+				if (bindings != null)
+					bindings.apply(target);
+			}
+			
+			@Override
+			public Delete getSource() {
+				return delete;
+			}
+			
+			@Override
+			public String toQuery() {
+				SqlRenderer sqlRenderer = SqlRenderer.create(r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext());
+				return sqlRenderer.render(delete);
 			}
 		};
 	}

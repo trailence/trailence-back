@@ -34,6 +34,7 @@ public class TrailCollectionService {
     private final R2dbcEntityTemplate r2dbc;
     private final TrailService trailService;
     private final TagService tagService;
+    private final ShareService shareService;
 
     public Mono<TrailCollection> create(TrailCollection dto, Authentication auth) {
         UUID id = UUID.fromString(dto.getUuid());
@@ -82,8 +83,9 @@ public class TrailCollectionService {
         .all().collectList()
         .flatMap(deletable ->
         	Mono.zip(
-        		trailService.deleteAllFromCollections(deletable, owner).publishOn(Schedulers.parallel()),
-        		tagService.deleteAllFromCollections(deletable, owner).publishOn(Schedulers.parallel())
+        		trailService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+        		tagService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+        		shareService.collectionsDeleted(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel())
         	)
         	.then(repo.deleteAllByUuidInAndOwner(deletable, owner))
         );

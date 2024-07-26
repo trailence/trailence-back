@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity.CsrfSpec;
@@ -21,6 +22,7 @@ import org.trailence.global.rest.JwtFilter;
 import reactor.core.publisher.Mono;
 
 @Configuration
+@EnableReactiveMethodSecurity
 public class TrailenceConfiguration {
 
 	@Bean
@@ -38,6 +40,7 @@ public class TrailenceConfiguration {
 		.authorizeExchange(auth -> auth
 			.pathMatchers(HttpMethod.GET, "/actuator/**").permitAll()
 			.pathMatchers(HttpMethod.POST, "/api/auth/v1/login").permitAll()
+			.pathMatchers(HttpMethod.POST, "/api/auth/v1/share").permitAll()
 			.pathMatchers(HttpMethod.POST, "/api/auth/v1/init_renew").permitAll()
 			.pathMatchers(HttpMethod.POST, "/api/auth/v1/renew").permitAll()
 			.pathMatchers(HttpMethod.GET, "/api/ping").permitAll()

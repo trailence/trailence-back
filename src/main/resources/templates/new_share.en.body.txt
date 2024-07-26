@@ -1,0 +1,7 @@
+Hello,
+
+{{from}} wants to share trails with you on {{hostname}}.
+
+To access it, you just have to sign in and go to the menu "Shared with me"
+
+This email is sent at the initiative of {{from}}, in order to share trails with you, we will not send you any other email afterwards concerning this share.

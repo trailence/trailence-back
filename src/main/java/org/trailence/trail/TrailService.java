@@ -27,6 +27,7 @@ import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.db.TrailTagRepository;
+import org.trailence.trail.dto.ShareElementType;
 import org.trailence.trail.dto.Trail;
 
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class TrailService {
     private final TrailCollectionRepository collectionRepo;
     private final TrailTagRepository trailTagRepo;
     private final R2dbcEntityTemplate r2dbc;
+    private final ShareService shareService;
 
     private Mono<Trail> createNotExisting(Trail dto, Authentication auth) {
         UUID collectionId = UUID.fromString(dto.getCollectionUuid());
@@ -177,24 +179,64 @@ public class TrailService {
 				tracksUuids.add(entity.getCurrentTrackUuid());
 			});
 			return Mono.zip(
-				trailTagRepo.deleteAllByTrailUuidInAndOwner(trailsUuids, owner).publishOn(Schedulers.parallel()),
-				trackRepo.deleteAllByUuidInAndOwner(tracksUuids, owner).publishOn(Schedulers.parallel())
+				trailTagRepo.deleteAllByTrailUuidInAndOwner(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+				trackRepo.deleteAllByUuidInAndOwner(tracksUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+				shareService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel())
 			).then(repo.deleteAllByUuidInAndOwner(trailsUuids, owner));
 		});
     }
 
     public Mono<UpdateResponse<Trail>> getUpdates(List<Versioned> known, Authentication auth) {
-    	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessibleTrails(auth.getPrincipal().toString()), TrailEntity.class, known, this::toDTO);
+    	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessibleTrails(auth.getPrincipal().toString()), TrailEntity.class, trail -> trail.getOwner() + " " + trail.getUuid().toString(), known, this::toDTO);
     }
 
-    private Select buildSelectAccessibleTrails(String email) {
-        // TODO shares
-        Table table = Table.create("trails");
-        return Select.builder()
-                .select(AsteriskFromTable.create(table))
-                .from(table)
-                .where(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(email)))
-                .build();
+    private List<Select> buildSelectAccessibleTrails(String email) {
+    	Table shares = Table.create("shares");
+    	Table share_elements = Table.create("share_elements");
+        Table trails = Table.create("trails");
+        Table trails_tags = Table.create("trails_tags");
+        
+        Select sharedCollections = Select.builder()
+    		.select(AsteriskFromTable.create(trails))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("collection_uuid", trails), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
+    		)
+    		.build();
+    	
+    	Select sharedTags = Select.builder()
+			.select(AsteriskFromTable.create(trails))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails_tags).on(Conditions.isEqual(Column.create("tag_uuid", trails_tags), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails_tags), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
+    		)
+    		.build();
+    	
+    	Select sharedTrails = Select.builder()
+			.select(AsteriskFromTable.create(trails))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
+    		)
+    		.build();
+    	
+    	Select ownedTrails = Select.builder()
+	        .select(AsteriskFromTable.create(trails))
+	        .from(trails)
+	        .where(Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(email)))
+	        .build();
+    	
+    	return List.of(ownedTrails, sharedTrails, sharedTags, sharedCollections);
     }
 
     private Trail toDTO(TrailEntity entity) {

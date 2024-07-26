@@ -12,6 +12,7 @@ import java.util.zip.GZIPOutputStream;
 
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.Column;
+import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
@@ -26,6 +27,7 @@ import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.trail.db.TrackEntity;
 import org.trailence.trail.db.TrackRepository;
+import org.trailence.trail.dto.ShareElementType;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
@@ -34,6 +36,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 
@@ -94,9 +97,9 @@ public class TrackService {
 	public Mono<UpdateResponse<UuidAndOwner>> getUpdates(List<Versioned> known, Authentication auth) {
 		List<UuidAndOwner> newItems = new LinkedList<>();
 		List<UuidAndOwner> updatedItems = new LinkedList<>();
-		Select selectAccessible = buildSelectAccessibleTracks(auth.getPrincipal().toString());
-		return r2dbc.query(DbUtils.select(selectAccessible, null, r2dbc), row -> Tuples.of((UUID) row.get("uuid"), (String) row.get("owner"), (Long) row.get("version")))
-		.all()
+		List<Select> selectAccessible = buildSelectAccessibleTracks(auth.getPrincipal().toString());
+		return Flux.concat(selectAccessible.stream().map(select -> r2dbc.query(DbUtils.select(select, null, r2dbc), row -> Tuples.of((UUID) row.get("uuid"), (String) row.get("owner"), (Long) row.get("version"))).all()).toList())
+		.distinct()
 		.doOnNext(version -> {
 			Optional<Versioned> knownOpt;
 			synchronized (known) {
@@ -127,20 +130,152 @@ public class TrackService {
 		}));
 	}
 	
-	private Select buildSelectAccessibleTracks(String email) {
-		// TODO shares
-		Table table = Table.create("tracks");
-		return Select.builder()
-		.select(Column.create("uuid", table), Column.create("owner", table), Column.create("version", table))
-		.from(table)
-		.where(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(email)))
-		.build();
+	private List<Select> buildSelectAccessibleTracks(String email) {
+    	Table shares = Table.create("shares");
+    	Table share_elements = Table.create("share_elements");
+        Table trails = Table.create("trails");
+        Table trails_tags = Table.create("trails_tags");
+		Table tracks = Table.create("tracks");
+		
+		Condition trailToTrackCondition = 
+			Conditions.isEqual(Column.create("original_track_uuid", trails), Column.create("uuid", tracks))
+			.or(Conditions.isEqual(Column.create("current_track_uuid", trails), Column.create("uuid", tracks)))
+			.and(Conditions.isEqual(Column.create("owner", trails), Column.create("owner", tracks)));
+
+        Select sharedCollections = Select.builder()
+        	.select(Column.create("uuid", tracks), Column.create("owner", tracks), Column.create("version", tracks))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("collection_uuid", trails), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.join(tracks).on(trailToTrackCondition)
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
+    		)
+    		.build();
+    	
+    	Select sharedTags = Select.builder()
+    		.select(Column.create("uuid", tracks), Column.create("owner", tracks), Column.create("version", tracks))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails_tags).on(Conditions.isEqual(Column.create("tag_uuid", trails_tags), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails_tags), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.join(tracks).on(trailToTrackCondition)
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
+    		)
+    		.build();
+    	
+    	Select sharedTrails = Select.builder()
+    		.select(Column.create("uuid", tracks), Column.create("owner", tracks), Column.create("version", tracks))
+    		.from(shares)
+    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
+    		.join(trails).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.join(tracks).on(trailToTrackCondition)
+    		.where(
+    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
+    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
+    		)
+    		.build();
+
+    	Select owned = Select.builder()
+			.select(Column.create("uuid", tracks), Column.create("owner", tracks), Column.create("version", tracks))
+			.from(tracks)
+			.where(Conditions.isEqual(Column.create("owner", tracks), SQL.literalOf(email)))
+			.build();
+    	
+    	return List.of(owned, sharedCollections, sharedTags, sharedTrails);
+	}
+	
+	private Mono<Boolean> isFromSharedTrail(String trackUuid, String trackOwner, String user) {
+		Table trails = Table.create("trails");
+		Table share_elements = Table.create("share_elements");
+		Table shares = Table.create("shares");
+		var select = Select.builder()
+			.select(Column.create("uuid", trails))
+			.from(trails)
+			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("owner", share_elements))))
+			.join(shares).on(
+				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
+				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
+				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(trackOwner)))
+				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			)
+			.limit(1)
+			.where(
+				Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(trackOwner))
+				.and(Conditions.isEqual(Column.create("original_track_uuid", trails), SQL.literalOf(trackUuid)).or(Conditions.isEqual(Column.create("current_track_uuid", trails), SQL.literalOf(trackUuid))))
+			)
+			.build();
+		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
+	}
+	
+	private Mono<Boolean> isFromSharedTag(String trackUuid, String trackOwner, String user) {
+		Table trails = Table.create("trails");
+		Table share_elements = Table.create("share_elements");
+		Table shares = Table.create("shares");
+		Table trails_tags = Table.create("trails_tags");
+		var select = Select.builder()
+			.select(Column.create("uuid", trails))
+			.from(trails)
+			.join(trails_tags).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("uuid", trails)))
+			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("tag_uuid", trails_tags)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("owner", trails))))
+			.join(shares).on(
+				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
+				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
+				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(trackOwner)))
+				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			)
+			.limit(1)
+			.where(
+				Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(trackOwner))
+				.and(Conditions.isEqual(Column.create("original_track_uuid", trails), SQL.literalOf(trackUuid)).or(Conditions.isEqual(Column.create("current_track_uuid", trails), SQL.literalOf(trackUuid))))
+			)
+			.build();
+		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
+	}
+	
+	private Mono<Boolean> isFromSharedCollection(String trackUuid, String trackOwner, String user) {
+		Table trails = Table.create("trails");
+		Table share_elements = Table.create("share_elements");
+		Table shares = Table.create("shares");
+		var select = Select.builder()
+			.select(Column.create("uuid", trails))
+			.from(trails)
+			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("collection_uuid", trails)).and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(trackOwner))))
+			.join(shares).on(
+				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
+				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
+				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(trackOwner)))
+				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			)
+			.limit(1)
+			.where(
+				Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(trackOwner))
+				.and(Conditions.isEqual(Column.create("original_track_uuid", trails), SQL.literalOf(trackUuid)).or(Conditions.isEqual(Column.create("current_track_uuid", trails), SQL.literalOf(trackUuid))))
+			)
+			.build();
+		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
 	}
 
 	public Mono<Track> getTrack(String uuid, String owner, Authentication auth) {
-		// TODO allow if shared
-		if (!owner.equals(auth.getPrincipal().toString())) return Mono.error(new NotFoundException("track", uuid));
-		return repo.findByUuidAndOwner(UUID.fromString(uuid), owner).map(this::toDTO);
+		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), owner).map(this::toDTO);
+		if (owner.equals(auth.getPrincipal().toString())) return getFromDB;
+		String user = auth.getPrincipal().toString();
+		return isFromSharedTrail(uuid, owner, user)
+		.flatMap(sharedTrail -> {
+			if (sharedTrail.booleanValue()) return getFromDB;
+			return isFromSharedTag(uuid, owner, user)
+			.flatMap(sharedTag -> {
+				if (sharedTag.booleanValue()) return getFromDB;
+				return isFromSharedCollection(uuid, owner, user)
+				.flatMap(sharedCollection -> {
+					if (sharedCollection.booleanValue()) return getFromDB;
+					return Mono.error(new NotFoundException("track", uuid));
+				});
+			});
+		});
 	}
 	
 	private Track toDTO(TrackEntity entity) {

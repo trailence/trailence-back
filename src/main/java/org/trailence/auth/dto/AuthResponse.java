@@ -16,5 +16,6 @@ public class AuthResponse {
 	private String email;
 	private String keyId;
 	private UserPreferences preferences;
+	private boolean isComplete;
 	
 }

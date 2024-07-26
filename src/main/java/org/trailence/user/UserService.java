@@ -1,5 +1,8 @@
 package org.trailence.user;
 
+import java.util.Map;
+import java.util.UUID;
+
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -15,11 +18,9 @@ import org.trailence.user.dto.ChangePasswordRequest;
 import org.trailence.verificationcode.VerificationCodeService;
 import org.trailence.verificationcode.VerificationCodeService.Spec;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
-
-import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +33,7 @@ public class UserService {
 	private final TokenService tokenService;
 
 	public Mono<Void> createUser(String email, String password) {
-		UserEntity entity = new UserEntity(email.toLowerCase(), TrailenceUtils.hashPassword(password), System.currentTimeMillis());
+		UserEntity entity = new UserEntity(email.toLowerCase(), password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis());
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
@@ -60,10 +61,10 @@ public class UserService {
 		.flatMap(data -> verificationCodeService.cancelAll("change_password", data.getEmail()));
 	}
 	
-	public Mono<Void> changePassword(ChangePasswordRequest request, Authentication auth) {
+	public Mono<Void> changePassword(@Valid ChangePasswordRequest request, Authentication auth) {
 		String email = auth.getPrincipal().toString();
 		return verificationCodeService.check(request.getCode(), "change_password", email, String.class)
-		.flatMap(s -> userRepo.findByEmailAndPassword(email, TrailenceUtils.hashPassword(request.getPreviousPassword())))
+		.flatMap(s -> userRepo.findByEmailAndPassword(email, request.getPreviousPassword() != null ? TrailenceUtils.hashPassword(request.getPreviousPassword()) : null))
 		.flatMap(entity -> {
 			entity.setPassword(TrailenceUtils.hashPassword(request.getNewPassword()));
 			return userRepo.save(entity);

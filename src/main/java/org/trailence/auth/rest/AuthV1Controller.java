@@ -13,6 +13,7 @@ import org.trailence.auth.dto.AuthResponse;
 import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
+import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 
@@ -51,6 +52,11 @@ public class AuthV1Controller {
 	@DeleteMapping("mykeys/{keyid}")
 	public Mono<Void> deleteMyKey(@PathVariable("keyid") String id, Authentication auth) {
 		return service.deleteMyKey(id, auth);
+	}
+	
+	@PostMapping("share")
+	public Mono<AuthResponse> loginShare(@Valid @RequestBody LoginShareRequest request) {
+		return service.loginShare(request);
 	}
 	
 }

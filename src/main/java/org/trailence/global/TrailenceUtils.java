@@ -18,7 +18,12 @@ import reactor.core.scheduler.Schedulers;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TrailenceUtils {
 	
-	public static ObjectMapper mapper = new ObjectMapper();
+	public static final ObjectMapper mapper = new ObjectMapper();
+	
+	public static final String AUTHORITY_COMPLETE_USER = "complete";
+	public static final String PREAUTHORIZE_COMPLETE = "hasAuthority('" + AUTHORITY_COMPLETE_USER + "')";
+	
+	public static final int MIN_PASSWORD_SIZE = 6;
 
 	public static String hashPassword(String password) {
 		return DigestUtils.sha256Hex(password);

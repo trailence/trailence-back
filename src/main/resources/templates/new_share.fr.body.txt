@@ -1,0 +1,7 @@
+Bonjour,
+
+{{from}} souhaite partager des parcours avec vous sur {{hostname}}.
+
+Pour y accéder il suffit de vous connecter et d'aller dans le menu "Partagé avec moi"
+
+Ce mail est envoyé à l'initiative de {{from}}, afin de vous partager des parcours, nous ne vous enverrons pas d'autre mail par la suite concernant ce partage.

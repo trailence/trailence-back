@@ -1,0 +1,9 @@
+Hello,
+
+{{from}} wants to share trails with you on {{hostname}}.
+
+You can access it without having an account by following this link: {{link}}
+
+If you later wish to manage your own trails, or access trails shared with you without the need for a link, you can create an account for free.
+
+This email is sent at the initiative of {{from}}, in order to share trails with you, we will not send you any other email afterwards concerning this share.
