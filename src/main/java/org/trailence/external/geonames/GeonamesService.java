@@ -22,7 +22,7 @@ public class GeonamesService {
 		if (username.length() == 0) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("http://api.geonames.org").build();
 		return client.get()
-		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}", Map.of("lat", lat, "lng", lng, "lang", language, "username", username))
+		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}&radius=2", Map.of("lat", lat, "lng", lng, "lang", language, "username", username))
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
 		.map(response -> {
 			Object geonames = response.get("geonames");
