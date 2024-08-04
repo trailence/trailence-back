@@ -17,4 +17,6 @@ To launch it:
     * And optionally if you want to create a user:
         * TRAILENCE_INIT_USER to the user's email
         * TRAILENCE_INIT_PASSWORD to the user's password
+    * Optionally, if you want to use some external services:
+        * GEONAMES_USER (username provided by geonames.org)
    
