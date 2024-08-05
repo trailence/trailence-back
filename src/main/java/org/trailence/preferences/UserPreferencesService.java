@@ -48,6 +48,9 @@ public class UserPreferencesService {
 		entity.setTraceMinMillis(dto.getTraceMinMillis());
 		entity.setOfflineMapMaxKeepDays(dto.getOfflineMapMaxKeepDays());
 		entity.setOfflineMapMaxZoom(dto.getOfflineMapMaxZoom());
+		entity.setEstimatedBaseSpeed(dto.getEstimatedBaseSpeed());
+		entity.setLongBreakMinimumDuration(dto.getLongBreakMinimumDuration());
+		entity.setLongBreakMaximumDistance(dto.getLongBreakMaximumDistance());
 	}
 	
 	private UserPreferences toDto(UserPreferencesEntity entity) {
@@ -61,7 +64,10 @@ public class UserPreferencesService {
 			entity.getTraceMinMeters(),
 			entity.getTraceMinMillis(),
 			entity.getOfflineMapMaxKeepDays(),
-			entity.getOfflineMapMaxZoom()
+			entity.getOfflineMapMaxZoom(),
+			entity.getEstimatedBaseSpeed(),
+			entity.getLongBreakMinimumDuration(),
+			entity.getLongBreakMaximumDistance()
 		);
 	}
 

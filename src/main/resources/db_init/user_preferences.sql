@@ -11,5 +11,8 @@ CREATE TABLE IF NOT EXISTS public.user_preferences
     trace_min_millis bigint,
     offline_map_max_keep_days integer,
     offline_map_max_zoom smallint,
+    estimated_base_speed bigint,
+    long_break_minimum_duration bigint,
+    long_break_maximum_distance bigint,
     CONSTRAINT user_preferences_pkey PRIMARY KEY (email)
 )

@@ -29,4 +29,8 @@ public class UserPreferencesEntity {
 	private Integer offlineMapMaxKeepDays;
 	private Short offlineMapMaxZoom;
 	
+	private Long estimatedBaseSpeed;
+	private Long longBreakMinimumDuration;
+	private Long longBreakMaximumDistance;
+	
 }
