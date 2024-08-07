@@ -218,7 +218,7 @@ public class ShareService {
 		Table share_elements = Table.create("share_elements");
 		Table shares = Table.create("shares");
 		Select selectSharesIds = Select.builder()
-			.select(Column.create("id", shares))
+			.select(Column.create("uuid", shares))
 			.from(share_elements)
 			.join(shares).on(
 				Conditions.isEqual(Column.create("uuid", shares), Column.create("share_uuid", share_elements))
