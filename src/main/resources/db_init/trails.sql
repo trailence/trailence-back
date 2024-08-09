@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.trails
     name character varying(200),
     description character varying(50000),
     location character varying(100),
+    loop_type character varying(2),
     original_track_uuid uuid NOT NULL,
     current_track_uuid uuid NOT NULL,
     collection_uuid uuid NOT NULL,

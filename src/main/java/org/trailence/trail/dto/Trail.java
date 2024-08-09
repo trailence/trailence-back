@@ -19,6 +19,7 @@ public class Trail {
     private String name;
     private String description;
     private String location;
+    private String loopType;
 
     private String originalTrackUuid;
     private String currentTrackUuid;

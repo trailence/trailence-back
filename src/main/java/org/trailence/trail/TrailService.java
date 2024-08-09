@@ -70,6 +70,7 @@ public class TrailService {
             entity.setName(dto.getName());
             entity.setDescription(dto.getDescription());
             entity.setLocation(dto.getLocation());
+            entity.setLoopType(dto.getLoopType());
             entity.setCollectionUuid(collectionId);
             entity.setOriginalTrackUuid(originalTrackId);
             entity.setCurrentTrackUuid(currentTrackId);
@@ -152,6 +153,10 @@ public class TrailService {
         }
         if (!Objects.equals(entity.getLocation(), dto.getLocation())) {
         	entity.setLocation(dto.getLocation());
+        	changed = true;
+        }
+        if (!Objects.equals(entity.getLoopType(), dto.getLoopType())) {
+        	entity.setLoopType(dto.getLoopType());
         	changed = true;
         }
         if (!changed) return Mono.empty();
@@ -249,6 +254,7 @@ public class TrailService {
                 entity.getName(),
                 entity.getDescription(),
                 entity.getLocation(),
+                entity.getLoopType(),
                 entity.getOriginalTrackUuid().toString(),
                 entity.getCurrentTrackUuid().toString(),
                 entity.getCollectionUuid().toString()
