@@ -19,12 +19,14 @@ import org.springframework.stereotype.Service;
 import org.trailence.auth.db.UserKeyEntity;
 import org.trailence.auth.db.UserKeyRepository;
 import org.trailence.auth.dto.AuthResponse;
+import org.trailence.auth.dto.ForgotPasswordRequest;
 import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
+import org.trailence.captcha.CaptchaService;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.rest.JwtAuthenticationManager;
@@ -55,10 +57,38 @@ public class AuthService {
 	private final UserPreferencesService userPreferencesService;
 	private final TokenService tokenService;
 	private final UserService userService;
+	private final CaptchaService captchaService;
 	
 	public Mono<AuthResponse> login(LoginRequest request) {
-		return userRepo.findByEmailAndPassword(request.getEmail().toLowerCase(), TrailenceUtils.hashPassword(request.getPassword()))
+		return userRepo.findByEmail(request.getEmail().toLowerCase())
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
+			// handle invalid attempt and captcha
+			.flatMap(user -> {
+				if (user.getInvalidAttempts() > 1) {
+					if (captchaService.isActivated() && request.getCaptchaToken() == null)
+						return Mono.error(new ForbiddenException("captcha-needed"));
+				}
+				if (request.getCaptchaToken() != null)
+					return captchaService.validate(request.getCaptchaToken())
+						.flatMap(ok -> {
+							if (!ok) return Mono.error(new ForbiddenException("captcha-needed"));
+							return Mono.just(user);
+						});
+				return Mono.just(user);
+			})
+			// handle password
+			.flatMap(user -> {
+				if (user.getPassword() == null)
+					return Mono.error(new ForbiddenException(user.getInvalidAttempts() >= 10 ? "locked" : "forbidden"));
+				if (!TrailenceUtils.hashPassword(request.getPassword()).equals(user.getPassword())) {
+					user.setInvalidAttempts(user.getInvalidAttempts() + 1);
+					if (user.getInvalidAttempts() >= 10)
+						user.setPassword(null);
+					return userRepo.save(user).then(Mono.error(new ForbiddenException(user.getPassword() == null ? "locked" : "forbidden")));
+				}
+				return Mono.just(user);
+			})
+			// ok, authenticate
 			.flatMap(user -> {
 				var token = auth.generateToken(user.getEmail(), true);
 				
@@ -75,8 +105,12 @@ public class AuthService {
 				}
 				
 				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true);
+				user.setInvalidAttempts(0);
 				
-				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
+				return userRepo.save(user)
+				.then(r2dbc.insert(key))
+				.thenReturn(response)
+				.flatMap(this::withPreferences);
 			});
 	}
 	
@@ -100,6 +134,7 @@ public class AuthService {
 				key.setPublicKey(request.getPublicKey());
 				key.setCreatedAt(System.currentTimeMillis());
 				key.setLastUsage(System.currentTimeMillis());
+				key.setInvalidAttempts(0);
 				try {
 					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
 				} catch (JsonProcessingException e) {
@@ -129,20 +164,24 @@ public class AuthService {
 	
 	public Mono<AuthResponse> renew(RenewTokenRequest request) {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
-		.filter(key -> {
-			if (key.getRandom() == null || !key.getRandom().equals(request.getRandom()) || key.getRandomExpires() < System.currentTimeMillis()) return false;
+		.switchIfEmpty(Mono.error(new ForbiddenException()))
+		.flatMap(key -> {
+			if (key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
+			if (!key.getRandom().equals(request.getRandom())) {
+				key.setInvalidAttempts(key.getInvalidAttempts() + 1);
+				if (key.getInvalidAttempts() > 3) {
+					return keyRepo.delete(key).then(Mono.error(new ForbiddenException()));
+				}
+			}
 			try {
 				PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(key.getPublicKey()));
 				Signature signer = Signature.getInstance("SHA256withRSA");
 				signer.initVerify(publicKey);
 				signer.update((request.getEmail() + request.getRandom()).getBytes(StandardCharsets.UTF_8));
-				return signer.verify(request.getSignature());
+				if (!signer.verify(request.getSignature())) return Mono.error(new ForbiddenException());
 			} catch (Exception e) {
-				return false;
+				return Mono.error(new ForbiddenException());
 			}
-		})
-		.switchIfEmpty(Mono.error(new ForbiddenException()))
-		.flatMap(key -> {
 			return userRepo.findById(key.getEmail())
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
 			.flatMap(user -> {	
@@ -184,6 +223,30 @@ public class AuthService {
 	
 	public Mono<Void> deleteMyKey(String id, Authentication auth) {
 		return keyRepo.deleteByIdAndEmail(UUID.fromString(id), auth.getPrincipal().toString());
+	}
+	
+	public Mono<String> getCaptchaKey() {
+		return captchaService.getKey();
+	}
+	
+	public Mono<Void> forgotPassword(ForgotPasswordRequest request) {
+		if (!captchaService.isActivated()) return Mono.error(new ForbiddenException());
+		if (request.getCaptchaToken() == null) return Mono.error(new ForbiddenException());
+		if (request.getEmail() == null) return Mono.error(new ForbiddenException());
+		String email = request.getEmail().toLowerCase();
+		String lang = request.getLang();
+		return userRepo.findByEmail(email)
+		.switchIfEmpty(Mono.error(new ForbiddenException()))
+		.flatMap(user -> 
+			captchaService.validate(request.getCaptchaToken())
+			.flatMap(ok -> {
+				if (!ok) return Mono.error(new ForbiddenException());
+				user.setPassword(null);
+				return userRepo.save(user);
+			})
+		)
+		.flatMap(user -> userService.sendChangePasswordCode(email, lang))
+		.then();
 	}
 	
 }

@@ -27,4 +27,6 @@ public class LoginRequest {
 	
 	private Map<String, Object> deviceInfo;
 	
+	private String captchaToken;
+	
 }

@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS public.user_keys
     random character(44) COLLATE pg_catalog."default",
     random_expires bigint,
     device_info jsonb NOT NULL,
+    invalid_attempts smallint NOT NULL DEFAULT 0,
     CONSTRAINT user_keys_pkey PRIMARY KEY (id)
 )

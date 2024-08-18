@@ -28,4 +28,6 @@ public class UserKeyEntity {
 	
 	private Json deviceInfo;
 	
+	private int invalidAttempts;
+	
 }

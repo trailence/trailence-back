@@ -4,21 +4,20 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.email.EmailService;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.exceptions.ForbiddenException;
+import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
 import org.trailence.trail.db.TrailCollectionEntity;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
-import org.trailence.user.dto.ChangePasswordRequest;
 import org.trailence.verificationcode.VerificationCodeService;
 import org.trailence.verificationcode.VerificationCodeService.Spec;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -33,7 +32,7 @@ public class UserService {
 	private final TokenService tokenService;
 
 	public Mono<Void> createUser(String email, String password) {
-		UserEntity entity = new UserEntity(email.toLowerCase(), password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis());
+		UserEntity entity = new UserEntity(email.toLowerCase(), password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0);
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
@@ -44,9 +43,10 @@ public class UserService {
 				.then();
 	}
 	
-	public Mono<Void> sendChangePasswordCode(String lang, Authentication auth) {
-		String email = auth.getPrincipal().toString();
-		return Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, "")))
+	public Mono<Void> sendChangePasswordCode(String email, String lang) {
+		return userRepo.findByEmail(email)
+		.switchIfEmpty(Mono.error(new NotFoundException("user", email)))
+		.flatMap(user -> Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, ""))))
 		.flatMap(stopLink ->
 			verificationCodeService.generate(email, "change_password", System.currentTimeMillis() + 10L * 60 * 1000, "", 6, Spec.DIGITS, 3)
 			.flatMap(code -> emailService.send(email, "change_password_code", lang, Map.of(
@@ -61,14 +61,20 @@ public class UserService {
 		.flatMap(data -> verificationCodeService.cancelAll("change_password", data.getEmail()));
 	}
 	
-	public Mono<Void> changePassword(@Valid ChangePasswordRequest request, Authentication auth) {
-		String email = auth.getPrincipal().toString();
-		return verificationCodeService.check(request.getCode(), "change_password", email, String.class)
-		.flatMap(s -> userRepo.findByEmailAndPassword(email, request.getPreviousPassword() != null ? TrailenceUtils.hashPassword(request.getPreviousPassword()) : null))
-		.flatMap(entity -> {
-			entity.setPassword(TrailenceUtils.hashPassword(request.getNewPassword()));
-			return userRepo.save(entity);
-		}).then();
+	public Mono<Void> changePassword(String email, String code, String newPassword, String previousPassword) {
+		if (email == null) return Mono.error(new ForbiddenException());
+		return userRepo.findByEmail(email.toLowerCase())
+		.flatMap(user -> {
+			if (user.getPassword() != null && !user.getPassword().equals(previousPassword))
+				return Mono.error(new ForbiddenException());
+			return verificationCodeService.check(code, "change_password", email, String.class)
+			.flatMap(check -> {
+				user.setPassword(TrailenceUtils.hashPassword(newPassword));
+				user.setInvalidAttempts(0);
+				return userRepo.save(user);
+			});
+		})
+		.then();
 	}
 
 	

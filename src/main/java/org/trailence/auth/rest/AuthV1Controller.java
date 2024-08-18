@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.auth.AuthService;
 import org.trailence.auth.dto.AuthResponse;
+import org.trailence.auth.dto.ForgotPasswordRequest;
 import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
@@ -57,6 +58,16 @@ public class AuthV1Controller {
 	@PostMapping("share")
 	public Mono<AuthResponse> loginShare(@Valid @RequestBody LoginShareRequest request) {
 		return service.loginShare(request);
+	}
+	
+	@GetMapping("captcha")
+	public Mono<String> getCaptchaKey() {
+		return service.getCaptchaKey();
+	}
+	
+	@PostMapping("forgot")
+	public Mono<Void> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+		return service.forgotPassword(request);
 	}
 	
 }

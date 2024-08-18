@@ -10,4 +10,8 @@ public class ForbiddenException extends TrailenceException {
 		super(HttpStatus.FORBIDDEN, "forbidden", "Access denied");
 	}
 	
+	public ForbiddenException(String errorCode) {
+		super(HttpStatus.FORBIDDEN, errorCode, "Access denied");
+	}
+	
 }

@@ -29,3 +29,7 @@ trailence:
   external:
     geonames:
       username: ${GEONAMES_USER:}
+    captcha:
+      clientKey: ${CAPTCHA_CLIENT_KEY:}
+      secretKey: ${CAPTCHA_SECRET_KEY:}
+
