@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
@@ -85,9 +86,10 @@ public class ShareService {
 				.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
 			)
 			.then(Mono.defer(() -> {
-				return userRepo.existsById(request.getTo().toLowerCase())
-				.flatMap(exists -> {
-					if (!exists.booleanValue()) {
+				return userRepo.findByEmail(request.getTo().toLowerCase())
+				.singleOptional()
+				.flatMap(optUser -> {
+					if (optUser.isEmpty() || optUser.get().getPassword() == null) {
 						String token;
 						try {
 							token = tokenService.generate(new TokenData("share", share.getToEmail(), share.getUuid().toString() + "/" + user));
