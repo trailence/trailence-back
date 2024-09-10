@@ -1,0 +1,16 @@
+package org.trailence.storage;
+
+import org.springframework.core.io.buffer.DataBuffer;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+public interface FileStorageProvider {
+
+	Mono<String> storeFile(String path, Flux<DataBuffer> content);
+	
+	Flux<DataBuffer> getFile(String fileId, String path);
+	
+	Mono<Void> deleteFile(String fileId, String path);
+	
+}

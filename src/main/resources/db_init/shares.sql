@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.shares
     to_email character varying(250) COLLATE pg_catalog."default" NOT NULL,
     element_type element_type NOT NULL,
 	created_at bigint NOT NULL,
+	include_photos boolean NOT NULL DEFAULT FALSE,
     CONSTRAINT shares_pkey PRIMARY KEY (uuid, from_email)
 );
 

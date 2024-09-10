@@ -2,6 +2,7 @@ package org.trailence.global;
 
 import java.security.SecureRandom;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,11 +19,13 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
 import org.springframework.web.server.session.WebSessionManager;
 import org.trailence.global.rest.JwtFilter;
+import org.trailence.storage.StorageProperties;
 
 import reactor.core.publisher.Mono;
 
 @Configuration
 @EnableReactiveMethodSecurity
+@EnableConfigurationProperties(StorageProperties.class)
 public class TrailenceConfiguration {
 
 	@Bean

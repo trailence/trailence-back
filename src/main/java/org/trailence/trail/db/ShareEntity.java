@@ -19,5 +19,6 @@ public class ShareEntity {
 	private String toEmail;
 	private ShareElementType elementType;
 	private long createdAt;
+	private boolean includePhotos;
 	
 }

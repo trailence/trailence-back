@@ -1,0 +1,1 @@
+ALTER TABLE public.shares ADD COLUMN IF NOT EXISTS include_photos boolean NOT NULL DEFAULT FALSE;

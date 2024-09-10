@@ -19,5 +19,6 @@ public class Share {
 	private long createdAt;
 	private List<String> elements;
 	private List<String> trails;
+	private boolean includePhotos;
 	
 }

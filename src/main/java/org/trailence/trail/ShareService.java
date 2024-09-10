@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
@@ -76,6 +75,7 @@ public class ShareService {
 			share.setName(request.getName());
 			share.setElementType(request.getType());
 			share.setCreatedAt(System.currentTimeMillis());
+			share.setIncludePhotos(request.isIncludePhotos());
 			List<ShareElementEntity> entities = new ArrayList<>(elements.size());
 			for (UUID uuid : elements) {
 				entities.add(new ShareElementEntity(share.getUuid(), uuid, user));
@@ -271,7 +271,8 @@ public class ShareService {
 			entity.getElementType(),
 			entity.getCreatedAt(),
 			elements != null ? elements.stream().map(UUID::toString).toList() : null,
-			trails != null ? trails.stream().map(UUID::toString).toList() : null
+			trails != null ? trails.stream().map(UUID::toString).toList() : null,
+			entity.isIncludePhotos()
 		);
 	}
 	

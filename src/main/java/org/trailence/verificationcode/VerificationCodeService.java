@@ -56,16 +56,15 @@ public class VerificationCodeService {
 	
 	private char generateChar(Spec spec) {
 		switch (spec) {
-		case DIGITS:
-			return (char)('0' + random.nextInt(10));
+		case DIGITS: return (char)('0' + random.nextInt(10));
+		default: return (char)(32 + random.nextInt(127 - 32));
 		}
-		return (char)(32 + random.nextInt(127 - 32));
 	}
 	
 	private Mono<Void> removeCodes(String key, String type, int maxCurrentCodes) {
 		if (maxCurrentCodes <= 0) return Mono.empty();
 		return repo.findByTypeAndKey(type, key, PageRequest.of(1, maxCurrentCodes, Direction.DESC, "expiresAt"))
-		.flatMap(code -> repo.delete(code))
+		.flatMap(repo::delete)
 		.then();
 	}
 	
@@ -89,7 +88,7 @@ public class VerificationCodeService {
 	
 	@Scheduled(fixedRate = 60, timeUnit = TimeUnit.MINUTES, initialDelay = 5)
 	public void clean() {
-		repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis()).subscribe();
+		repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis()).checkpoint("Clean expired verification codes").subscribe();
 	}
 	
 }

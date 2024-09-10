@@ -32,4 +32,9 @@ trailence:
     captcha:
       clientKey: ${CAPTCHA_CLIENT_KEY:}
       secretKey: ${CAPTCHA_SECRET_KEY:}
-
+  storage:
+    type: ${TRAILENCE_STORAGE_TYPE:fs}
+    username: ${TRAILENCE_STORAGE_USERNAME:}
+    password: ${TRAILENCE_STORAGE_PASSWORD:}
+    root: ${TRAILENCE_STORAGE_ROOT:./storage-fs}
+    url: ${TRAILENCE_STORAGE_URL:}

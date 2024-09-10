@@ -36,7 +36,10 @@ public class JobService {
 	@Scheduled(initialDelayString = "${trailence.jobs.initialDelay:60}", fixedDelayString = "${trailence.jobs.delay:60}", timeUnit = TimeUnit.SECONDS)
 	public void launch() {
 		if (!running.compareAndSet(false, true)) return;
-		execute().doFinally(s -> running.set(false)).subscribe();
+		execute()
+		.doFinally(s -> running.set(false))
+		.checkpoint("Job processing")
+		.subscribe();
 	}
 	
 	private Mono<Void> execute() {
@@ -59,7 +62,7 @@ public class JobService {
 				result = Mono.just(new Job.Result(entity.getRetry() < 100 ? System.currentTimeMillis() + 15 * 60 * 1000 : null));
 			} else {
 				log.info("Executing job {}", entity.getType());
-				result = job.get().execute(entity.getData(), entity.getRetry());
+				result = job.get().execute(entity.getData(), entity.getRetry()).checkpoint("Job " + entity.getType());
 			}
 			return result.flatMap(r -> {
 				if (r.retryAt == null) {

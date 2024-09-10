@@ -30,5 +30,6 @@ public class CreateShareRequest {
 	@NotNull
 	@Size(min = 2, max = 2)
 	private String toLanguage;
+	private boolean includePhotos = false;
 	
 }
