@@ -39,7 +39,6 @@ public class UserPreferencesService {
 	
 	private void toEntity(UserPreferences dto, UserPreferencesEntity entity) {
 		entity.setLang(dto.getLang());
-		entity.setElevationUnit(elevationUnitFromDto(dto.getElevationUnit()));
 		entity.setDistanceUnit(distanceUnitFromDto(dto.getDistanceUnit()));
 		entity.setHourFormat(hourFormatFromDto(dto.getHourFormat()));
 		entity.setDateFormat(dateFormatFromDto(dto.getDateFormat()));
@@ -56,7 +55,6 @@ public class UserPreferencesService {
 	private UserPreferences toDto(UserPreferencesEntity entity) {
 		return new UserPreferences(
 			entity.getLang(),
-			elevationUnitToDto(entity.getElevationUnit()),
 			distanceUnitToDto(entity.getDistanceUnit()),
 			hourFormatToDto(entity.getHourFormat()),
 			dateFormatToDto(entity.getDateFormat()),
@@ -71,26 +69,10 @@ public class UserPreferencesService {
 		);
 	}
 
-	private String elevationUnitToDto(Short value) {
-		if (value == null) return null;
-		switch (value) {
-		case 1: return "FOOT";
-		default: return "METERS";
-		}
-	}
-	
-	private Short elevationUnitFromDto(String value) {
-		if (value == null) return null;
-		switch (value) {
-		case "FOOT": return 1;
-		default: return 0;
-		}
-	}
-	
 	private String distanceUnitToDto(Short value) {
 		if (value == null) return null;
 		switch (value) {
-		case 1: return "MILES";
+		case 1: return "IMPERIAL";
 		default: return "METERS";
 		}
 	}
@@ -98,7 +80,7 @@ public class UserPreferencesService {
 	private Short distanceUnitFromDto(String value) {
 		if (value == null) return null;
 		switch (value) {
-		case "MILES": return 1;
+		case "IMPERIAL": return 1;
 		default: return 0;
 		}
 	}

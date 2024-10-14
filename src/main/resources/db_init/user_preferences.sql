@@ -2,7 +2,6 @@ CREATE TABLE IF NOT EXISTS public.user_preferences
 (
     email character varying(250) COLLATE pg_catalog."default" NOT NULL,
     lang character(2) DEFAULT NULL,
-    elevation_unit smallint DEFAULT NULL,
     distance_unit smallint DEFAULT NULL,
     hour_format smallint DEFAULT NULL,
     date_format smallint DEFAULT NULL,

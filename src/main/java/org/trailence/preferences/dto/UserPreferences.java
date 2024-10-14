@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 public class UserPreferences {
 
 	private String lang;
-	private String elevationUnit;
 	private String distanceUnit;
 	private String hourFormat;
 	private String dateFormat;

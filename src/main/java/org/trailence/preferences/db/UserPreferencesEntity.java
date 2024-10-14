@@ -17,7 +17,6 @@ public class UserPreferencesEntity {
 	private String email;
 	
 	private String lang;
-	private Short elevationUnit;
 	private Short distanceUnit;
 	private Short hourFormat;
 	private Short dateFormat;

@@ -1,0 +1,1 @@
+ALTER TABLE public.user_preferences DROP COLUMN IF EXISTS elevation_unit;

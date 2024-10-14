@@ -28,7 +28,8 @@ public class InitDB {
 	};
 	
 	private static final Migration[] migrations = {
-		new DatabaseMigration("0.7_shares_add_column_include_photos")
+		new DatabaseMigration("0.7_shares_add_column_include_photos"),
+		new DatabaseMigration("0.7_preferences_remove_elevation_unit"),
 	};
 	
 	public void init() {
