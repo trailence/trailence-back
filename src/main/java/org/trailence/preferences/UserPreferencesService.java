@@ -50,6 +50,10 @@ public class UserPreferencesService {
 		entity.setEstimatedBaseSpeed(dto.getEstimatedBaseSpeed());
 		entity.setLongBreakMinimumDuration(dto.getLongBreakMinimumDuration());
 		entity.setLongBreakMaximumDistance(dto.getLongBreakMaximumDistance());
+		entity.setPhotoMaxPixels(dto.getPhotoMaxPixels());
+		entity.setPhotoMaxQuality(dto.getPhotoMaxQuality());
+		entity.setPhotoMaxSizeKB(dto.getPhotoMaxSizeKB());
+		entity.setPhotoCacheDays(dto.getPhotoCacheDays());
 	}
 	
 	private UserPreferences toDto(UserPreferencesEntity entity) {
@@ -65,7 +69,11 @@ public class UserPreferencesService {
 			entity.getOfflineMapMaxZoom(),
 			entity.getEstimatedBaseSpeed(),
 			entity.getLongBreakMinimumDuration(),
-			entity.getLongBreakMaximumDistance()
+			entity.getLongBreakMaximumDistance(),
+			entity.getPhotoMaxPixels(),
+			entity.getPhotoMaxQuality(),
+			entity.getPhotoMaxSizeKB(),
+			entity.getPhotoCacheDays()
 		);
 	}
 

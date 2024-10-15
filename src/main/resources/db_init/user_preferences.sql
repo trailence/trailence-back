@@ -13,5 +13,9 @@ CREATE TABLE IF NOT EXISTS public.user_preferences
     estimated_base_speed bigint,
     long_break_minimum_duration bigint,
     long_break_maximum_distance bigint,
+    photo_max_pixels integer,
+    photo_max_quality smallint,
+    photo_max_size_kb integer,
+    photo_cache_days integer,
     CONSTRAINT user_preferences_pkey PRIMARY KEY (email)
 )

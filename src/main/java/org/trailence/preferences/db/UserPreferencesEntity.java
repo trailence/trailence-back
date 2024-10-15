@@ -32,4 +32,9 @@ public class UserPreferencesEntity {
 	private Long longBreakMinimumDuration;
 	private Long longBreakMaximumDistance;
 	
+	private Integer photoMaxPixels;
+	private Short photoMaxQuality;
+	private Integer photoMaxSizeKB;
+	private Integer photoCacheDays;
+
 }
