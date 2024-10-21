@@ -24,6 +24,7 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.trail.db.TrackEntity;
 import org.trailence.trail.db.TrackRepository;
@@ -47,6 +48,8 @@ public class TrackService {
 	private final TrackRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
 	
+	private static final long MAX_DATA_SIZE = 512L * 1024;
+	
 	public Mono<Track> createTrack(Track track, Authentication auth) {
 		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
 		.map(this::toDTO)
@@ -61,6 +64,7 @@ public class TrackService {
 				data.s = track.getS();
 				data.wp = track.getWp();
 				entity.setData(compress(data));
+				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("Track data max size exceeded");
 				return entity;
 			})
 			.flatMap(r2dbc::insert)
@@ -81,6 +85,7 @@ public class TrackService {
 				data.s = track.getS();
 				data.wp = track.getWp();
 				entity.setData(compress(data));
+				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("Track data max size exceeded");
 			} catch (Exception e) {
 				return Mono.error(e);
 			}

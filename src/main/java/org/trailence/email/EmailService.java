@@ -1,6 +1,8 @@
 package org.trailence.email;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -23,11 +25,16 @@ public class EmailService {
 	private String protocol;
 	@Value("${trailence.linkpath:/link/}")
 	private String linkpath;
+	
+	private static final String TEMPLATES_DIR = "templates/";
+	private static final List<String> SUPPORTED_LANG = Arrays.asList("en", "fr");
 
 	public Mono<Void> send(String to, String template, String lang, Map<String, String> templateData) {
-		Mono<String> readSubject = TrailenceUtils.readResource("templates/" + template + "." + lang + ".subject.txt");
-		Mono<String> readText = TrailenceUtils.readResource("templates/" + template + "." + lang + ".body.txt");
-		Mono<String> readHtml = TrailenceUtils.readResource("templates/" + template + "." + lang + ".body.html");
+		String language = lang.toLowerCase();
+		if (SUPPORTED_LANG.indexOf(language) < 0) language = "en";
+		Mono<String> readSubject = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".subject.txt");
+		Mono<String> readText = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".body.txt");
+		Mono<String> readHtml = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".body.html");
 		return Mono.zip(readSubject, readText, readHtml).flatMap(files -> {
 			String subject = applyTemplate(files.getT1(), templateData);
 			String text = applyTemplate(files.getT2(), templateData);
