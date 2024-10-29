@@ -58,16 +58,17 @@ public class GeonamesService {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Mono<List<Place>> searchPlace(String searchTerm) {
+	public Mono<List<Place>> searchPlace(String searchTerm, String language) {
 		if (username.length() == 0) return Mono.just(List.of());
 		String[] terms = searchTerm.split(" ");
 		if (terms.length == 0) return Mono.just(List.of());
-		String nameStart = terms[0];
-		String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 2).toList());
+		//String nameStart = terms[0];
+		// String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 2).toList());
+		String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 1).toList());
 		if (name.length() < 3) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("http://api.geonames.org").build();
 		return client.get()
-		.uri("/search?maxRows=10&featureClass=L&featureClass=P&featureClass=T&featureClass=H&fuzzy=0.5&orderby=relevance&type=json&username=" + username + "&name={name}&name_startsWith={nameStart}", name, nameStart)
+		.uri("/search?maxRows=10&featureClass=L&featureClass=P&featureClass=T&featureClass=H&fuzzy=0.6&orderby=relevance&type=json&username=" + username + "&name={name}&lang={lang}", name, language)
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
 		.map(response -> {
 			Object geonames = response.get("geonames");
@@ -86,6 +87,7 @@ public class GeonamesService {
 				getPlaceElement(names, elementMap, "adminName1");
 				getPlaceElement(names, elementMap, "countryName");
 				if (names.isEmpty()) continue;
+				if (names.getFirst().equals("Earth")) continue;
 				double lat;
 				double lng;
 				try {

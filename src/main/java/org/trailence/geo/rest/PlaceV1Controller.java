@@ -25,8 +25,8 @@ public class PlaceV1Controller {
 	}
 	
 	@GetMapping("/search")
-	public Mono<List<Place>> searchPlace(@RequestParam("terms") String terms) {
-		return geonames.searchPlace(terms);
+	public Mono<List<Place>> searchPlace(@RequestParam("terms") String terms, @RequestParam("lang") String language) {
+		return geonames.searchPlace(terms, language);
 	}
 	
 }
