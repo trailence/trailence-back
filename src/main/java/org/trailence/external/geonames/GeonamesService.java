@@ -57,6 +57,7 @@ public class GeonamesService {
 		}
 	}
 	
+	// doc: https://www.geonames.org/export/geonames-search.html
 	@SuppressWarnings("unchecked")
 	public Mono<List<Place>> searchPlace(String searchTerm, String language) {
 		if (username.length() == 0) return Mono.just(List.of());
