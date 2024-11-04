@@ -21,7 +21,6 @@ public final class BulkGetUpdates {
 
 	public static <E extends AbstractEntityUuidOwner, R, K> Mono<UpdateResponse<R>> bulkGetUpdates(R2dbcEntityTemplate r2dbc, List<Select> selectAccessible, Class<E> entityClass, Function<E, K> uniqueKeyExtractor, List<Versioned> known, Function<E, R> mapper) {
 		return bulkGetUpdates(
-			r2dbc,
 			Flux.concat(selectAccessible.stream().map(select -> r2dbc.query(DbUtils.select(select, null, r2dbc), entityClass).all()).toList())
 				.distinct(uniqueKeyExtractor),
             known,
@@ -31,14 +30,14 @@ public final class BulkGetUpdates {
 
 	public static <E extends AbstractEntityUuidOwner, R> Mono<UpdateResponse<R>> bulkGetUpdates(R2dbcEntityTemplate r2dbc, Select selectAccessible, Class<E> entityClass, List<Versioned> known, Function<E, R> mapper) {
 		return bulkGetUpdates(
-			r2dbc, 
 			r2dbc.query(DbUtils.select(selectAccessible, null, r2dbc), entityClass).all(),
             known,
             mapper
         );
 	}
 	
-	public static <E extends AbstractEntityUuidOwner, R> Mono<UpdateResponse<R>> bulkGetUpdates(R2dbcEntityTemplate r2dbc, Flux<E> entities, List<Versioned> known, Function<E, R> mapper) {
+	@SuppressWarnings("java:S2445") // synchronized on parameter
+	public static <E extends AbstractEntityUuidOwner, R> Mono<UpdateResponse<R>> bulkGetUpdates(Flux<E> entities, List<Versioned> known, Function<E, R> mapper) {
         List<E> newItems = new LinkedList<>();
         List<E> updatedItems = new LinkedList<>();
 

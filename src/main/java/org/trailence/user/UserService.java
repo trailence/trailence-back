@@ -30,6 +30,8 @@ public class UserService {
 	private final VerificationCodeService verificationCodeService;
 	private final EmailService emailService;
 	private final TokenService tokenService;
+	
+	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 
 	public Mono<Void> createUser(String email, String password) {
 		UserEntity entity = new UserEntity(email.toLowerCase(), password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0);
@@ -48,7 +50,7 @@ public class UserService {
 		.switchIfEmpty(Mono.error(new NotFoundException("user", email)))
 		.flatMap(user -> Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, ""))))
 		.flatMap(stopLink ->
-			verificationCodeService.generate(email, "change_password", System.currentTimeMillis() + 10L * 60 * 1000, "", 6, Spec.DIGITS, 3)
+			verificationCodeService.generate(email, CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, System.currentTimeMillis() + 10L * 60 * 1000, "", 6, Spec.DIGITS, 3)
 			.flatMap(code -> emailService.send(email, "change_password_code", lang, Map.of(
 				"code", code,
 				"stop_url", emailService.getLinkUrl(stopLink)
@@ -58,7 +60,7 @@ public class UserService {
 	
 	public Mono<Void> cancelChangePassword(String token) {
 		return Mono.fromCallable(() -> tokenService.check(token))
-		.flatMap(data -> verificationCodeService.cancelAll("change_password", data.getEmail()));
+		.flatMap(data -> verificationCodeService.cancelAll(CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, data.getEmail()));
 	}
 	
 	public Mono<Void> changePassword(String email, String code, String newPassword, String previousPassword) {
@@ -67,7 +69,7 @@ public class UserService {
 		.flatMap(user -> {
 			if (user.getPassword() != null && !user.getPassword().equals(previousPassword))
 				return Mono.error(new ForbiddenException());
-			return verificationCodeService.check(code, "change_password", email, String.class)
+			return verificationCodeService.check(code, CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, email, String.class)
 			.flatMap(check -> {
 				user.setPassword(TrailenceUtils.hashPassword(newPassword));
 				user.setInvalidAttempts(0);

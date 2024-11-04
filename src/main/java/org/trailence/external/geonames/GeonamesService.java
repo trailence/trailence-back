@@ -63,8 +63,6 @@ public class GeonamesService {
 		if (username.length() == 0) return Mono.just(List.of());
 		String[] terms = searchTerm.split(" ");
 		if (terms.length == 0) return Mono.just(List.of());
-		//String nameStart = terms[0];
-		// String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 2).toList());
 		String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 1).toList());
 		if (name.length() < 3) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("http://api.geonames.org").build();
@@ -77,30 +75,30 @@ public class GeonamesService {
 			Collection<Object> geonamesCol = (Collection<Object>)geonames;
 			List<Place> result = new LinkedList<>();
 			for (Object element : geonamesCol) {
-				if (!(element instanceof Map)) continue;
-				Map<String, Object> elementMap = (Map<String, Object>) element;
-				List<String> names = new LinkedList<>();
-				getPlaceElement(names, elementMap, "toponymName");
-				getPlaceElement(names, elementMap, "adminName5");
-				getPlaceElement(names, elementMap, "adminName4");
-				getPlaceElement(names, elementMap, "adminName3");
-				getPlaceElement(names, elementMap, "adminName2");
-				getPlaceElement(names, elementMap, "adminName1");
-				getPlaceElement(names, elementMap, "countryName");
-				if (names.isEmpty()) continue;
-				if (names.getFirst().equals("Earth")) continue;
-				double lat;
-				double lng;
-				try {
-					lat = Double.parseDouble(elementMap.get("lat").toString());
-					lng = Double.parseDouble(elementMap.get("lng").toString());
-				} catch (Exception e) {
-					continue;
-				}
-				result.add(new Place(names, lat, lng));
+				if (element instanceof Map)
+					handleSearchResult((Map<String, Object>) element, result);
 			}
 			return result;
 		});
+	}
+	
+	private void handleSearchResult(Map<String, Object> elementMap, List<Place> result) {
+		List<String> names = new LinkedList<>();
+		getPlaceElement(names, elementMap, "toponymName");
+		getPlaceElement(names, elementMap, "adminName5");
+		getPlaceElement(names, elementMap, "adminName4");
+		getPlaceElement(names, elementMap, "adminName3");
+		getPlaceElement(names, elementMap, "adminName2");
+		getPlaceElement(names, elementMap, "adminName1");
+		getPlaceElement(names, elementMap, "countryName");
+		if (names.isEmpty() || names.getFirst().equals("Earth")) return;
+		try {
+			double lat = Double.parseDouble(elementMap.get("lat").toString());
+			double lng = Double.parseDouble(elementMap.get("lng").toString());
+			result.add(new Place(names, lat, lng));
+		} catch (Exception e) {
+			// ignore
+		}
 	}
 	
 }

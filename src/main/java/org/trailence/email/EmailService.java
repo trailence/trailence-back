@@ -1,8 +1,6 @@
 package org.trailence.email;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -27,11 +25,9 @@ public class EmailService {
 	private String linkpath;
 	
 	private static final String TEMPLATES_DIR = "templates/";
-	private static final List<String> SUPPORTED_LANG = Arrays.asList("en", "fr");
 
 	public Mono<Void> send(String to, String template, String lang, Map<String, String> templateData) {
-		String language = lang.toLowerCase();
-		if (SUPPORTED_LANG.indexOf(language) < 0) language = "en";
+		String language = getLanguage(lang);
 		Mono<String> readSubject = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".subject.txt");
 		Mono<String> readText = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".body.txt");
 		Mono<String> readHtml = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".body.html");
@@ -41,6 +37,14 @@ public class EmailService {
 			String html = applyTemplate(files.getT3(), templateData);
 			return job.send(new Email(to, subject, text, html));
 		});
+	}
+	
+	@SuppressWarnings("java:S1301") // switch instead of if
+	private String getLanguage(String lang) {
+		switch (lang.toLowerCase()) {
+		case "fr": return "fr";
+		default: return "en";
+		}
 	}
 	
 	public String getLinkUrl(String link) {

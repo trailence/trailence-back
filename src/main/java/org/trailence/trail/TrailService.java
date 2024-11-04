@@ -10,11 +10,9 @@ import java.util.stream.Stream;
 
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
-import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
-import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.global.db.BulkGetUpdates;
@@ -22,10 +20,13 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.trail.db.ShareElementEntity;
+import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
+import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.db.TrailTagRepository;
 import org.trailence.trail.dto.ShareElementType;
 import org.trailence.trail.dto.Trail;
@@ -55,10 +56,25 @@ public class TrailService {
         UUID currentTrackId = UUID.fromString(dto.getCurrentTrackUuid());
         String owner = auth.getPrincipal().toString();
 
-        Mono<Boolean> collectionExists = collectionRepo.existsByUuidAndOwner(collectionId, owner).map(exists -> { if (!exists) throw new NotFoundException("collection", dto.getCollectionUuid()); return true; });
-        Mono<Boolean> originalTrackExists = trackRepo.existsByUuidAndOwner(originalTrackId, owner).map(exists -> { if (!exists) throw new NotFoundException("track", dto.getOriginalTrackUuid()); return true; });
+        Mono<Boolean> collectionExists = collectionRepo.existsByUuidAndOwner(collectionId, owner)
+        	.map(exists -> {
+        		if (!exists.booleanValue())
+        			throw new NotFoundException("collection", dto.getCollectionUuid());
+        		return true;
+        	});
+        Mono<Boolean> originalTrackExists = trackRepo.existsByUuidAndOwner(originalTrackId, owner)
+        	.map(exists -> {
+        		if (!exists.booleanValue())
+        			throw new NotFoundException("track", dto.getOriginalTrackUuid());
+        		return true;
+        	});
         Mono<Boolean> currentTrackExists = currentTrackId.equals(originalTrackId) ? Mono.just(true) :
-            trackRepo.existsByUuidAndOwner(currentTrackId, owner).map(exists -> { if (!exists) throw new NotFoundException("track", dto.getCurrentTrackUuid()); return true; });
+            trackRepo.existsByUuidAndOwner(currentTrackId, owner)
+            .map(exists -> {
+            	if (!exists.booleanValue())
+            		throw new NotFoundException("track", dto.getCurrentTrackUuid());
+            	return true;
+            });
 
         return Mono.zip(
             collectionExists.publishOn(Schedulers.parallel()),
@@ -105,45 +121,48 @@ public class TrailService {
         .flatMap(entity -> {
             var dtoOpt = dtos.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString()) && owner.equals(dto.getOwner())).findAny();
             if (dtoOpt.isEmpty()) return Mono.empty();
-            var dto = dtoOpt.get();
-            Mono<Boolean> checks = Mono.just(true);
-            Mono<?> actions = Mono.just(true);
-            var changed = false;
-            if (dto.getCollectionUuid() != null && !dto.getCollectionUuid().equals(entity.getCollectionUuid().toString())) {
-            	// change of collection: it must exist, and we should remove all associated tags
-            	var newUuid = UUID.fromString(dto.getCollectionUuid());
-            	checks = checks.flatMap(ok -> {
-            		if (!ok) return Mono.just(false);
-            		return collectionRepo.existsByUuidAndOwner(newUuid, owner);
-            	});
-            	actions = actions.then(trailTagRepo.deleteAllByTrailUuidInAndOwner(Set.of(entity.getUuid()), owner).then(Mono.just(true)));
-            	entity.setCollectionUuid(newUuid);
-            	changed = true;
-            }
-            if (dto.getCurrentTrackUuid() != null && !dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
-            	var newUuid = UUID.fromString(dto.getCurrentTrackUuid());
-            	checks = checks.flatMap(ok -> {
-            		if (!ok) return Mono.just(false);
-            		return trackRepo.existsByUuidAndOwner(newUuid, owner);
-            	});
-            	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
-            		actions = actions.then(trackRepo.deleteByUuidAndOwner(entity.getCurrentTrackUuid(), owner));
-                entity.setCurrentTrackUuid(newUuid);
-                changed = true;
-            }
-            var a = actions;
-            var c = changed;
-            return checks.flatMap(ok -> {
-            	if (!ok) return Mono.empty();
-            	return a.then(updateEntity(entity, dto, c));
-            });
+            return updateEntity(entity, dtoOpt.get(), owner);
         }, 3, 6)
         .collectList()
         .flatMapMany(uuids -> repo.findAllByUuidInAndOwner(uuids, owner))
         .map(this::toDTO);
     }
+    
+    private Mono<UUID> updateEntity(TrailEntity entity, Trail dto, String owner) {
+        Mono<Boolean> checks = Mono.just(true);
+        Mono<?> actions = Mono.just(true);
+        var changed = false;
+        if (dto.getCollectionUuid() != null && !dto.getCollectionUuid().equals(entity.getCollectionUuid().toString())) {
+        	// change of collection: it must exist, and we should remove all associated tags
+        	var newUuid = UUID.fromString(dto.getCollectionUuid());
+        	checks = checks.flatMap(ok -> {
+        		if (!ok.booleanValue()) return Mono.just(false);
+        		return collectionRepo.existsByUuidAndOwner(newUuid, owner);
+        	});
+        	actions = actions.then(trailTagRepo.deleteAllByTrailUuidInAndOwner(Set.of(entity.getUuid()), owner).then(Mono.just(true)));
+        	entity.setCollectionUuid(newUuid);
+        	changed = true;
+        }
+        if (dto.getCurrentTrackUuid() != null && !dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
+        	var newUuid = UUID.fromString(dto.getCurrentTrackUuid());
+        	checks = checks.flatMap(ok -> {
+        		if (!ok.booleanValue()) return Mono.just(false);
+        		return trackRepo.existsByUuidAndOwner(newUuid, owner);
+        	});
+        	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
+        		actions = actions.then(trackRepo.deleteByUuidAndOwner(entity.getCurrentTrackUuid(), owner));
+            entity.setCurrentTrackUuid(newUuid);
+            changed = true;
+        }
+        var a = actions;
+        var c = changed;
+        return checks.flatMap(ok -> {
+        	if (!ok.booleanValue()) return Mono.empty();
+        	return a.then(updateEntityFields(entity, dto, c));
+        });
+    }
 
-    private Mono<UUID> updateEntity(TrailEntity entity, Trail dto, boolean changed) {
+    private Mono<UUID> updateEntityFields(TrailEntity entity, Trail dto, boolean changed) {
         if (!Objects.equals(entity.getName(), dto.getName())) {
             entity.setName(dto.getName());
             changed = true;
@@ -198,49 +217,44 @@ public class TrailService {
     }
 
     private List<Select> buildSelectAccessibleTrails(String email) {
-    	Table shares = Table.create("shares");
-    	Table share_elements = Table.create("share_elements");
-        Table trails = Table.create("trails");
-        Table trails_tags = Table.create("trails_tags");
-        
         Select sharedCollections = Select.builder()
-    		.select(AsteriskFromTable.create(trails))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(trails).on(Conditions.isEqual(Column.create("collection_uuid", trails), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+    		.select(AsteriskFromTable.create(TrailEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
     		)
     		.build();
     	
     	Select sharedTags = Select.builder()
-			.select(AsteriskFromTable.create(trails))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(trails_tags).on(Conditions.isEqual(Column.create("tag_uuid", trails_tags), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails_tags), Column.create("from_email", shares))))
-    		.join(trails).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+			.select(AsteriskFromTable.create(TrailEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailTagEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
     		)
     		.build();
     	
     	Select sharedTrails = Select.builder()
-			.select(AsteriskFromTable.create(trails))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(trails).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
+			.select(AsteriskFromTable.create(TrailEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
     		)
     		.build();
     	
     	Select ownedTrails = Select.builder()
-	        .select(AsteriskFromTable.create(trails))
-	        .from(trails)
-	        .where(Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(email)))
+	        .select(AsteriskFromTable.create(TrailEntity.TABLE))
+	        .from(TrailEntity.TABLE)
+	        .where(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(email)))
 	        .build();
     	
     	return List.of(ownedTrails, sharedTrails, sharedTags, sharedCollections);

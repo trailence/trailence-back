@@ -8,13 +8,11 @@ import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
-import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Delete;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.data.relational.core.sql.SimpleFunction;
-import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.email.EmailService;
@@ -27,7 +25,9 @@ import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.ShareRepository;
 import org.trailence.trail.db.TagRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
+import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
+import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.CreateShareRequest;
 import org.trailence.trail.dto.Share;
 import org.trailence.trail.dto.ShareElementType;
@@ -57,17 +57,9 @@ public class ShareService {
 		// check all elements belongs to the caller
 		List<UUID> elements = request.getElements().stream().map(UUID::fromString).toList();
 		String user = auth.getPrincipal().toString();
-		Mono<Long> count;
-		switch (request.getType()) {
-		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).count(); break;
-		case TAG: count = tagRepo.findAllByUuidInAndOwner(elements, user).count(); break;
-		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user).count(); break;
-		default: return Mono.error(new BadRequestException("Invalid element type"));
-		}
 
-		return count.flatMap(nb -> {
-			if (nb.longValue() != elements.size()) return Mono.error(new BadRequestException("Some elements are invalid or not found"));
-			
+		return checkCount(request, elements, user)
+		.then(Mono.defer(() -> {
 			ShareEntity share = new ShareEntity();
 			share.setUuid(UUID.fromString(request.getId()));
 			share.setFromEmail(user);
@@ -82,11 +74,11 @@ public class ShareService {
 			}
 			return r2dbc.insert(share)
 			.thenMany(
-				Flux.fromIterable(entities).flatMap(entity -> r2dbc.insert(entity), 3, 6)
+				Flux.fromIterable(entities).flatMap(r2dbc::insert, 3, 6)
 				.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
 			)
-			.then(Mono.defer(() -> {
-				return userRepo.findByEmail(request.getTo().toLowerCase())
+			.then(Mono.defer(() ->
+				userRepo.findByEmail(request.getTo().toLowerCase())
 				.singleOptional()
 				.flatMap(optUser -> {
 					if (optUser.isEmpty() || optUser.get().getPassword() == null) {
@@ -105,16 +97,31 @@ public class ShareService {
 							"from", user
 						));
 					}
-				});
-			}))
+				})
+			))
 			.then(Mono.just(toDto(share, elements, null)))
 			.onErrorResume(DuplicateKeyException.class, e -> getShare(request.getId(), user));
+		}));
+	}
+	
+	private Mono<Void> checkCount(CreateShareRequest request, List<UUID> elements, String user) {
+		Mono<Long> count;
+		switch (request.getType()) {
+		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case TAG: count = tagRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		default: return Mono.error(new BadRequestException("Invalid element type"));
+		}
+
+		return count.flatMap(nb -> {
+			if (nb.longValue() != elements.size()) return Mono.error(new BadRequestException("Some elements are invalid or not found"));
+			return Mono.empty();
 		});
 	}
 	
 	private Mono<Share> getShare(String id, String owner) {
 		return shareRepo.findOneByUuidAndFromEmail(UUID.fromString(id), owner)
-		.flatMap(share -> myShareWithElements(share));
+		.flatMap(this::myShareWithElements);
 	}
 	
 	public Flux<Share> getShares(Authentication auth) {
@@ -139,13 +146,12 @@ public class ShareService {
 	}
 	
 	private Mono<List<UUID>> getElements(UUID shareId, String owner) {
-		Table table = Table.create("share_elements");
 		Select select = Select.builder()
-			.select(Column.create("element_uuid", table))
-			.from(table)
+			.select(ShareElementEntity.COL_ELEMENT_UUID)
+			.from(ShareElementEntity.TABLE)
 			.where(
-				Conditions.isEqual(Column.create("share_uuid", table), SQL.literalOf(shareId.toString()))
-				.and(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(owner)))
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(shareId.toString()))
+				.and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(owner)))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).all().collectList();
@@ -158,34 +164,29 @@ public class ShareService {
 	}
 	
 	private Mono<List<UUID>> getTrailsFromTags(ShareEntity share) {
-		Table share_elements = Table.create("share_elements");
-		Table trails_tags = Table.create("trails_tags");
-		Table trails = Table.create("trails");
 		Select select = Select.builder()
-			.select(Column.create("uuid", trails))
-			.from(share_elements)
-			.join(trails_tags).on(Conditions.isEqual(Column.create("tag_uuid", trails_tags), Column.create("element_uuid", share_elements)))
-			.join(trails).on(Conditions.isEqual(Column.create("uuid", trails), Column.create("trail_uuid", trails_tags)))
+			.select(TrailEntity.COL_UUID)
+			.from(ShareElementEntity.TABLE)
+			.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID))
+			.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_UUID, TrailTagEntity.COL_TRAIL_UUID))
 			.where(
-				Conditions.isEqual(Column.create("share_uuid", share_elements), SQL.literalOf(share.getUuid().toString()))
-				.and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(share.getFromEmail())))
-				.and(Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(share.getFromEmail())))
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(share.getUuid().toString()))
+				.and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(share.getFromEmail())))
+				.and(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(share.getFromEmail())))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).all().collectList();
 	}
 
 	private Mono<List<UUID>> getTrailsFromCollections(ShareEntity share) {
-		Table share_elements = Table.create("share_elements");
-		Table trails = Table.create("trails");
 		Select select = Select.builder()
-			.select(Column.create("uuid", trails))
-			.from(share_elements)
-			.join(trails).on(Conditions.isEqual(Column.create("collection_uuid", trails), Column.create("element_uuid", share_elements)))
+			.select(TrailEntity.COL_UUID)
+			.from(ShareElementEntity.TABLE)
+			.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID))
 			.where(
-				Conditions.isEqual(Column.create("share_uuid", share_elements), SQL.literalOf(share.getUuid().toString()))
-				.and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(share.getFromEmail())))
-				.and(Conditions.isEqual(Column.create("owner", trails), SQL.literalOf(share.getFromEmail())))
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(share.getUuid().toString()))
+				.and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(share.getFromEmail())))
+				.and(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(share.getFromEmail())))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).all().collectList();
@@ -197,8 +198,7 @@ public class ShareService {
 		return shareRepo.findOneByUuidAndFromEmail(UUID.fromString(id), from)
 		.flatMap(entity -> {
 			if (!entity.getFromEmail().equals(user) && !entity.getToEmail().equals(user)) return Mono.empty();
-			Table elementsTable = Table.create("share_elements");
-			Delete deleteElements = Delete.builder().from(elementsTable).where(Conditions.isEqual(Column.create("share_uuid", elementsTable), SQL.literalOf(id)).and(Conditions.isEqual(Column.create("owner", elementsTable), SQL.literalOf(from)))).build();
+			Delete deleteElements = Delete.builder().from(ShareElementEntity.TABLE).where(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(id)).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(from)))).build();
 			return r2dbc.getDatabaseClient().sql(DbUtils.delete(deleteElements, null, r2dbc)).then()
 			.then(shareRepo.deleteAllByUuidInAndFromEmail(List.of(UUID.fromString(id)), from));
 		});
@@ -217,39 +217,37 @@ public class ShareService {
 	}
 	
 	private Mono<Void> deleteShares(ShareElementType type, Collection<UUID> elements, String owner) {
-		Table share_elements = Table.create("share_elements");
-		Table shares = Table.create("shares");
 		Select selectSharesIds = Select.builder()
-			.select(Column.create("uuid", shares))
-			.from(share_elements)
-			.join(shares).on(
-				Conditions.isEqual(Column.create("uuid", shares), Column.create("share_uuid", share_elements))
-				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(owner)))
-				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(type.name())))
+			.select(ShareEntity.COL_UUID)
+			.from(ShareElementEntity.TABLE)
+			.join(ShareEntity.TABLE).on(
+				Conditions.isEqual(ShareEntity.COL_UUID, ShareElementEntity.COL_SHARE_UUID)
+				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(owner)))
+				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(type.name())))
 			)
 			.where(
-				Conditions.in(Column.create("element_uuid", share_elements), elements.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
+				Conditions.in(ShareElementEntity.COL_ELEMENT_UUID, elements.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(selectSharesIds, null, r2dbc), UUID.class).all().collectList()
 		.flatMap(sharesIds -> {
 			if (sharesIds.isEmpty()) return Mono.empty();
 			Delete deleteElements = Delete.builder()
-				.from(share_elements)
+				.from(ShareElementEntity.TABLE)
 				.where(
-					Conditions.in(Column.create("element_uuid", share_elements), elements.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
-					.and(Conditions.in(Column.create("share_uuid", share_elements), sharesIds.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList()))
-					.and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(owner)))
+					Conditions.in(ShareElementEntity.COL_ELEMENT_UUID, elements.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
+					.and(Conditions.in(ShareElementEntity.COL_SHARE_UUID, sharesIds.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList()))
+					.and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(owner)))
 				)
 				.build();
 			return r2dbc.getDatabaseClient().sql(DbUtils.delete(deleteElements, null, r2dbc)).then()
 			.then(Mono.defer(() -> {
 				Select selectNonEmptySharesIds = Select.builder()
-					.select(SimpleFunction.create("DISTINCT", List.of(Column.create("share_uuid", share_elements))))
-					.from(share_elements)
+					.select(SimpleFunction.create("DISTINCT", List.of(ShareElementEntity.COL_SHARE_UUID)))
+					.from(ShareElementEntity.TABLE)
 					.where(
-						Conditions.in(Column.create("share_uuid", share_elements), sharesIds.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
-						.and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(owner)))
+						Conditions.in(ShareElementEntity.COL_SHARE_UUID, sharesIds.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
+						.and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(owner)))
 					)
 					.build();
 				return r2dbc.query(DbUtils.select(selectNonEmptySharesIds, null, r2dbc), UUID.class).all().collectList()

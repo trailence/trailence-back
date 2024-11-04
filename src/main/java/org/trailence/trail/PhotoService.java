@@ -9,11 +9,9 @@ import java.util.UUID;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
-import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
-import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.global.db.BulkGetUpdates;
@@ -24,6 +22,10 @@ import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.storage.FileService;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
+import org.trailence.trail.db.ShareElementEntity;
+import org.trailence.trail.db.ShareEntity;
+import org.trailence.trail.db.TrailEntity;
+import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.ShareElementType;
 
@@ -39,6 +41,7 @@ public class PhotoService {
 	private final PhotoRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
 
+	@SuppressWarnings("java:S107") // number of parameters
 	public Mono<Photo> storePhoto(
 		String uuid, String trailUuid,
 		String description, Long dateTaken, Long latitude, Long longitude,
@@ -155,54 +158,48 @@ public class PhotoService {
     }
 
     private List<Select> buildSelectAccessiblePhotos(String email) {
-    	Table shares = Table.create("shares");
-    	Table share_elements = Table.create("share_elements");
-        Table trails = Table.create("trails");
-        Table trails_tags = Table.create("trails_tags");
-        Table photos = Table.create("photos");
-        
         Select sharedCollections = Select.builder()
-    		.select(AsteriskFromTable.create(photos))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(trails).on(Conditions.isEqual(Column.create("collection_uuid", trails), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails), Column.create("from_email", shares))))
-    		.join(photos).on(Conditions.isEqual(Column.create("trail_uuid", photos), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", photos), Column.create("owner", trails))))
+    		.select(AsteriskFromTable.create(PhotoEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
-    			.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
+    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
     		)
     		.build();
     	
     	Select sharedTags = Select.builder()
-			.select(AsteriskFromTable.create(photos))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(trails_tags).on(Conditions.isEqual(Column.create("tag_uuid", trails_tags), Column.create("element_uuid", share_elements)).and(Conditions.isEqual(Column.create("owner", trails_tags), Column.create("from_email", shares))))
-    		.join(photos).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("trail_uuid", photos)).and(Conditions.isEqual(Column.create("owner", photos), Column.create("from_email", shares))))
+			.select(AsteriskFromTable.create(PhotoEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailTagEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
-    			.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
+    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
     		)
     		.build();
     	
     	Select sharedTrails = Select.builder()
-			.select(AsteriskFromTable.create(photos))
-    		.from(shares)
-    		.join(share_elements).on(Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("from_email", shares))))
-    		.join(photos).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("trail_uuid", photos)).and(Conditions.isEqual(Column.create("owner", photos), Column.create("from_email", shares))))
+			.select(AsteriskFromTable.create(PhotoEntity.TABLE))
+    		.from(ShareEntity.TABLE)
+    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
+    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
     		.where(
-    			Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(email))
-    			.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
-    			.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
+    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
+    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
+    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
     		)
     		.build();
     	
     	Select ownedPhotos = Select.builder()
-	        .select(AsteriskFromTable.create(photos))
-	        .from(photos)
-	        .where(Conditions.isEqual(Column.create("owner", photos), SQL.literalOf(email)))
+	        .select(AsteriskFromTable.create(PhotoEntity.TABLE))
+	        .from(PhotoEntity.TABLE)
+	        .where(Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(email)))
 	        .build();
     	
     	return List.of(ownedPhotos, sharedTrails, sharedTags, sharedCollections);
@@ -233,76 +230,65 @@ public class PhotoService {
     }
 	
 	private Mono<Boolean> isFromSharedTrail(String photoUuid, String photoOwner, String user) {
-		Table share_elements = Table.create("share_elements");
-		Table shares = Table.create("shares");
-		Table photos = Table.create("photos");
 		var select = Select.builder()
-			.select(Column.create("uuid", photos))
-			.from(photos)
-			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("trail_uuid", photos)).and(Conditions.isEqual(Column.create("owner", photos), Column.create("owner", share_elements))))
-			.join(shares).on(
-				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
-				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TRAIL.name())))
-				.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
-				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			.select(PhotoEntity.COL_UUID)
+			.from(PhotoEntity.TABLE)
+			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareElementEntity.COL_OWNER)))
+			.join(ShareEntity.TABLE).on(
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
+				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
+				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
+				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
+				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
 			)
 			.limit(1)
 			.where(
-				Conditions.isEqual(Column.create("owner", photos), SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(Column.create("uuid", photos), SQL.literalOf(photoUuid)))
+				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
+				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
 	}
 	
 	private Mono<Boolean> isFromSharedTag(String photoUuid, String photoOwner, String user) {
-		Table share_elements = Table.create("share_elements");
-		Table shares = Table.create("shares");
-		Table trails_tags = Table.create("trails_tags");
-		Table photos = Table.create("photos");
 		var select = Select.builder()
-			.select(Column.create("uuid", photos))
-			.from(photos)
-			.join(trails_tags).on(Conditions.isEqual(Column.create("trail_uuid", trails_tags), Column.create("trail_uuid", photos)))
-			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("tag_uuid", trails_tags)).and(Conditions.isEqual(Column.create("owner", share_elements), Column.create("owner", photos))))
-			.join(shares).on(
-				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
-				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.TAG.name())))
-				.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
-				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			.select(PhotoEntity.COL_UUID)
+			.from(PhotoEntity.TABLE)
+			.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, PhotoEntity.COL_TRAIL_UUID))
+			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailTagEntity.COL_TAG_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, PhotoEntity.COL_OWNER)))
+			.join(ShareEntity.TABLE).on(
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
+				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
+				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
+				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
+				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
 			)
 			.limit(1)
 			.where(
-				Conditions.isEqual(Column.create("owner", photos), SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(Column.create("uuid", photos), SQL.literalOf(photoUuid)))
+				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
+				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
 	}
 	
 	private Mono<Boolean> isFromSharedCollection(String photoUuid, String photoOwner, String user) {
-		Table trails = Table.create("trails");
-		Table share_elements = Table.create("share_elements");
-		Table shares = Table.create("shares");
-		Table photos = Table.create("photos");
 		var select = Select.builder()
-			.select(Column.create("uuid", photos))
-			.from(photos)
-			.join(trails).on(Conditions.isEqual(Column.create("trail_uuid", photos), Column.create("uuid", trails)).and(Conditions.isEqual(Column.create("owner", photos), Column.create("owner", trails))))
-			.join(share_elements).on(Conditions.isEqual(Column.create("element_uuid", share_elements), Column.create("collection_uuid", trails)).and(Conditions.isEqual(Column.create("owner", share_elements), SQL.literalOf(photoOwner))))
-			.join(shares).on(
-				Conditions.isEqual(Column.create("share_uuid", share_elements), Column.create("uuid", shares))
-				.and(Conditions.isEqual(Column.create("element_type", shares), SQL.literalOf(ShareElementType.COLLECTION.name())))
-				.and(Conditions.isEqual(Column.create("include_photos", shares), SQL.literalOf(true)))
-				.and(Conditions.isEqual(Column.create("from_email", shares), SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(Column.create("to_email", shares), SQL.literalOf(user)))
+			.select(PhotoEntity.COL_UUID)
+			.from(PhotoEntity.TABLE)
+			.join(TrailEntity.TABLE).on(Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)))
+			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailEntity.COL_COLLECTION_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(photoOwner))))
+			.join(ShareEntity.TABLE).on(
+				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
+				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
+				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
+				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
+				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
 			)
 			.limit(1)
 			.where(
-				Conditions.isEqual(Column.create("owner", photos), SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(Column.create("uuid", photos), SQL.literalOf(photoUuid)))
+				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
+				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
 			)
 			.build();
 		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();

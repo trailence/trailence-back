@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S1301") // switch instead of if
 public class UserPreferencesService {
 	
 	private final UserPreferencesRepository repo;

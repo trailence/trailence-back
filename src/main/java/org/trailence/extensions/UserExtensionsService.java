@@ -30,46 +30,54 @@ public class UserExtensionsService {
 			.flatMapMany(existing -> {
 				List<Mono<?>> actions = new LinkedList<>();
 				for (var dto : list) {
-					if (dto.getVersion() == 0) {
-						var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
-						if (optEntity.isEmpty()) {
-							try {
-								UserExtensionEntity entity = new UserExtensionEntity();
-								entity.setId(UUID.randomUUID());
-								entity.setVersion(0);
-								entity.setEmail(email);
-								entity.setExtension(dto.getExtension());
-								entity.setData(Json.of(TrailenceUtils.mapper.writeValueAsString(dto.getData())));
-								actions.add(repo.save(entity));
-							} catch (Exception e) {
-								// ignore
-							}
-						}
-					} else if (dto.getVersion() == -1) {
-						var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
-						if (optEntity.isPresent())
-							actions.add(repo.delete(optEntity.get()));
-					} else {
-						var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
-						if (optEntity.isPresent()) {
-							var entity = optEntity.get();
-							try {
-								String newData = TrailenceUtils.mapper.writeValueAsString(dto.getData());
-								String existingData = TrailenceUtils.mapper.writeValueAsString(TrailenceUtils.mapper.readValue(entity.getData().asString(), Map.class));
-								if (!newData.equals(existingData)) {
-									entity.setData(Json.of(newData));
-									actions.add(repo.save(entity));
-								}
-							} catch (Exception e) {
-								// ignore
-							}
-						}
-					}
+					if (dto.getVersion() == 0) handleCreation(dto, existing, email, actions);
+					else if (dto.getVersion() == -1) handleDeletion(dto, existing, actions);
+					else handleUpdate(dto, existing, actions);
 				}
 				if (actions.isEmpty()) return Flux.fromIterable(existing);
 				return Flux.concat(actions).thenMany(repo.findByEmail(email));
 			})
 			.map(this::toDto);
+	}
+	
+	private void handleCreation(UserExtension dto, List<UserExtensionEntity> existing, String email, List<Mono<?>> actions) {
+		var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
+		if (optEntity.isEmpty()) {
+			try {
+				UserExtensionEntity entity = new UserExtensionEntity();
+				entity.setId(UUID.randomUUID());
+				entity.setVersion(0);
+				entity.setEmail(email);
+				entity.setExtension(dto.getExtension());
+				entity.setData(Json.of(TrailenceUtils.mapper.writeValueAsString(dto.getData())));
+				actions.add(repo.save(entity));
+			} catch (Exception e) {
+				// ignore
+			}
+		}
+	}
+	
+	private void handleDeletion(UserExtension dto, List<UserExtensionEntity> existing, List<Mono<?>> actions) {
+		var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
+		if (optEntity.isPresent())
+			actions.add(repo.delete(optEntity.get()));
+	}
+	
+	private void handleUpdate(UserExtension dto, List<UserExtensionEntity> existing, List<Mono<?>> actions) {
+		var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
+		if (optEntity.isPresent()) {
+			var entity = optEntity.get();
+			try {
+				String newData = TrailenceUtils.mapper.writeValueAsString(dto.getData());
+				String existingData = TrailenceUtils.mapper.writeValueAsString(TrailenceUtils.mapper.readValue(entity.getData().asString(), Map.class));
+				if (!newData.equals(existingData)) {
+					entity.setData(Json.of(newData));
+					actions.add(repo.save(entity));
+				}
+			} catch (Exception e) {
+				// ignore
+			}
+		}
 	}
 	
 	

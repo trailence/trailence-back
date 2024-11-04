@@ -104,7 +104,6 @@ public class TrailCollectionService {
     }
 
     private Select buildSelectAccessibleCollections(String email) {
-        // TODO shares
         Table table = Table.create("collections");
         return Select.builder()
             .select(AsteriskFromTable.create(table))

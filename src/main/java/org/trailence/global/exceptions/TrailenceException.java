@@ -10,8 +10,8 @@ public abstract class TrailenceException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 	
-	private HttpStatus status;
-	private String errorCode;
+	private final HttpStatus status;
+	private final String errorCode;
 	
 	protected TrailenceException(HttpStatus status, String errorCode, String message) {
 		super(message);

@@ -14,6 +14,7 @@ import org.trailence.user.UserService;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@SuppressWarnings("java:S6813") // use autowired instead of constructor
 public class InitDB {
 
 	@Autowired private R2dbcEntityTemplate db;
@@ -52,6 +53,7 @@ public class InitDB {
 		}
 	}
 	
+	@SuppressWarnings("java:S112") // RuntimeException
 	private void doMigrations() {
 		log.info("Retrieving migrations...");
 		List<String> done = db.getDatabaseClient().sql("SELECT id FROM migrations ORDER BY id").map((row,meta) -> row.get(0, String.class)).all().collectList().block();

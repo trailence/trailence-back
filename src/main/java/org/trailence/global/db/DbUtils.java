@@ -19,6 +19,7 @@ import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.data.relational.core.sql.Update;
+import org.springframework.data.relational.core.sql.render.RenderContext;
 import org.springframework.data.relational.core.sql.render.SqlRenderer;
 import org.springframework.r2dbc.core.PreparedOperation;
 import org.springframework.r2dbc.core.binding.BindMarker;
@@ -49,8 +50,7 @@ public final class DbUtils {
 			
 			@Override
 			public String toQuery() {
-				SqlRenderer sqlRenderer = SqlRenderer.create(r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext());
-				return sqlRenderer.render(select);
+				return getRenderer(r2dbc).render(select);
 			}
 		};
 	}
@@ -70,24 +70,28 @@ public final class DbUtils {
 			
 			@Override
 			public String toQuery() {
-				SqlRenderer sqlRenderer = SqlRenderer.create(r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext());
-				return sqlRenderer.render(delete);
+				return getRenderer(r2dbc).render(delete);
 			}
 		};
 	}
 	
+	private static final String PROPERTY_UUID = "uuid";
+	private static final String PROPERTY_OWNER = "owner";
+	
+	@SuppressWarnings("java:S3776") // complexity
 	public static <T> Mono<Long> updateByUuidAndOwner(R2dbcEntityTemplate r2dbc, T entity) {
 		RelationalPersistentEntity<?> type = r2dbc.getConverter().getMappingContext().getRequiredPersistentEntity(entity.getClass());
 		var accessor = type.getPropertyAccessor(entity);
 
-		UUID uuid = (UUID) accessor.getProperty(type.getRequiredPersistentProperty("uuid"));
-		String owner = (String) accessor.getProperty(type.getRequiredPersistentProperty("owner"));
+		UUID uuid = (UUID) accessor.getProperty(type.getRequiredPersistentProperty(PROPERTY_UUID));
+		String owner = (String) accessor.getProperty(type.getRequiredPersistentProperty(PROPERTY_OWNER));
+		if (uuid == null || owner == null) return Mono.just(0L);
 		var versionProperty = Optional.ofNullable(type.getVersionProperty());
 		
 		Table table = Table.create(type.getQualifiedTableName());
-
-		Condition where = Conditions.isEqual(Column.create("uuid", table), SQL.literalOf(uuid.toString()))
-			.and(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(owner)));
+		
+		Condition where = Conditions.isEqual(Column.create(PROPERTY_UUID, table), SQL.literalOf(uuid.toString()))
+			.and(Conditions.isEqual(Column.create(PROPERTY_OWNER, table), SQL.literalOf(owner)));
 		if (versionProperty.isPresent())
 			where = where.and(Conditions.isEqual(Column.create(versionProperty.get().getColumnName(), table), SQL.literalOf((Long) accessor.getProperty(versionProperty.get()))));
 		
@@ -98,7 +102,7 @@ public final class DbUtils {
 		List<Assignment> assignments = new LinkedList<>();
 		type.forEach(p -> {
 			if (p.isInsertOnly()) return;
-			if (p.getName().equals("uuid") || p.getName().equals("owner")) return;
+			if (p.getName().equals(PROPERTY_UUID) || p.getName().equals(PROPERTY_OWNER)) return;
 			if (p.equals(versionProperty.orElse(null))) {
 				assignments.add(Assignments.value(Column.create(versionProperty.get().getColumnName(), table), SQL.literalOf(((Long) accessor.getProperty(versionProperty.get()) + 1))));
 			} else if (p.getName().equals("updatedAt")) {
@@ -128,7 +132,8 @@ public final class DbUtils {
 			@Override
 			public void bindTo(BindTarget target) {
 				for (Pair<BindMarker, Object> binding : bindings)
-					binding.getKey().bind(target, binding.getValue());			}
+					binding.getKey().bind(target, binding.getValue());
+			}
 			
 			@Override
 			public Update getSource() {
@@ -137,12 +142,16 @@ public final class DbUtils {
 			
 			@Override
 			public String toQuery() {
-				SqlRenderer sqlRenderer = SqlRenderer.create(r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext());
-				return sqlRenderer.render(update);
+				return getRenderer(r2dbc).render(update);
 			}
 		};
 		
 		return r2dbc.getDatabaseClient().sql(operation).fetch().rowsUpdated();
+	}
+	
+	private static SqlRenderer getRenderer(R2dbcEntityTemplate r2dbc) {
+		RenderContext ctx = r2dbc.getDataAccessStrategy().getStatementMapper().getRenderContext();
+		return ctx != null ? SqlRenderer.create(ctx) : SqlRenderer.create();
 	}
 	
 }

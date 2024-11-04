@@ -28,6 +28,7 @@ public class FileService {
 	private Mono<FileStorageProvider> provider;
 	
 	@PostConstruct
+	@SuppressWarnings("java:S112") // RuntimeException
 	public void init() {
 		provider = Mono.fromSupplier(() -> {
 			if (properties.getType() != null)

@@ -33,6 +33,7 @@ import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.UserPreferencesService;
 import org.trailence.user.UserService;
+import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -62,32 +63,8 @@ public class AuthService {
 	public Mono<AuthResponse> login(LoginRequest request) {
 		return userRepo.findByEmail(request.getEmail().toLowerCase())
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
-			// handle invalid attempt and captcha
-			.flatMap(user -> {
-				if (user.getInvalidAttempts() > 1) {
-					if (captchaService.isActivated() && request.getCaptchaToken() == null)
-						return Mono.error(new ForbiddenException("captcha-needed"));
-				}
-				if (request.getCaptchaToken() != null)
-					return captchaService.validate(request.getCaptchaToken())
-						.flatMap(ok -> {
-							if (!ok) return Mono.error(new ForbiddenException("captcha-needed"));
-							return Mono.just(user);
-						});
-				return Mono.just(user);
-			})
-			// handle password
-			.flatMap(user -> {
-				if (user.getPassword() == null)
-					return Mono.error(new ForbiddenException(user.getInvalidAttempts() >= 10 ? "locked" : "forbidden"));
-				if (!TrailenceUtils.hashPassword(request.getPassword()).equals(user.getPassword())) {
-					user.setInvalidAttempts(user.getInvalidAttempts() + 1);
-					if (user.getInvalidAttempts() >= 10)
-						user.setPassword(null);
-					return userRepo.save(user).then(Mono.error(new ForbiddenException(user.getPassword() == null ? "locked" : "forbidden")));
-				}
-				return Mono.just(user);
-			})
+			.flatMap(user -> checkInvalidAttempts(user, request.getCaptchaToken()))
+			.flatMap(user -> checkPassword(user, request.getPassword()))
 			// ok, authenticate
 			.flatMap(user -> {
 				var token = auth.generateToken(user.getEmail(), true);
@@ -98,11 +75,7 @@ public class AuthService {
 				key.setPublicKey(request.getPublicKey());
 				key.setCreatedAt(System.currentTimeMillis());
 				key.setLastUsage(System.currentTimeMillis());
-				try {
-					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
-				} catch (JsonProcessingException e) {
-					log.error("Invalid device info", e);
-				}
+				toDeviceInfo(request.getDeviceInfo(), key);
 				
 				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true);
 				user.setInvalidAttempts(0);
@@ -114,15 +87,39 @@ public class AuthService {
 			});
 	}
 	
+	private Mono<UserEntity> checkInvalidAttempts(UserEntity user, String captchaToken) {
+		if (user.getInvalidAttempts() > 1 && captchaService.isActivated() && captchaToken == null)
+			return Mono.error(new ForbiddenException("captcha-needed"));
+		if (captchaToken != null)
+			return captchaService.validate(captchaToken)
+				.flatMap(ok -> {
+					if (!ok.booleanValue()) return Mono.error(new ForbiddenException("captcha-needed"));
+					return Mono.just(user);
+				});
+		return Mono.just(user);
+	}
+	
+	private Mono<UserEntity> checkPassword(UserEntity user, String password) {
+		if (user.getPassword() == null)
+			return Mono.error(new ForbiddenException(user.getInvalidAttempts() >= 10 ? "locked" : "forbidden"));
+		if (!TrailenceUtils.hashPassword(password).equals(user.getPassword())) {
+			user.setInvalidAttempts(user.getInvalidAttempts() + 1);
+			if (user.getInvalidAttempts() >= 10)
+				user.setPassword(null);
+			return userRepo.save(user).then(Mono.error(new ForbiddenException(user.getPassword() == null ? "locked" : "forbidden")));
+		}
+		return Mono.just(user);
+	}
+	
 	public Mono<AuthResponse> loginShare(LoginShareRequest request) {
 		return Mono.fromCallable(() -> tokenService.check(request.getToken()))
 		.flatMap(tokenData ->
 			userRepo.findById(tokenData.getEmail())
-			.switchIfEmpty(Mono.defer(() -> {
+			.switchIfEmpty(Mono.defer(() ->
 				// first time the user use a share link -> create his account without password
-				return userService.createUser(tokenData.getEmail().toLowerCase(), null)
-					.then(userRepo.findById(tokenData.getEmail()));
-			}))
+				userService.createUser(tokenData.getEmail().toLowerCase(), null)
+				.then(userRepo.findById(tokenData.getEmail()))
+			))
 			.flatMap(user -> {
 				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
 				
@@ -135,11 +132,7 @@ public class AuthService {
 				key.setCreatedAt(System.currentTimeMillis());
 				key.setLastUsage(System.currentTimeMillis());
 				key.setInvalidAttempts(0);
-				try {
-					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
-				} catch (JsonProcessingException e) {
-					log.error("Invalid device info", e);
-				}
+				toDeviceInfo(request.getDeviceInfo(), key);
 				
 				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, false);
 				
@@ -187,17 +180,21 @@ public class AuthService {
 			.flatMap(user -> {	
 				var token = auth.generateToken(key.getEmail(), user.getPassword() != null);
 				key.setLastUsage(System.currentTimeMillis());
-				try {
-					key.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(request.getDeviceInfo())));
-				} catch (JsonProcessingException e) {
-					log.error("Invalid device info", e);
-				}
+				toDeviceInfo(request.getDeviceInfo(), key);
 				key.setRandom(null);
 				key.setRandomExpires(0L);
 				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null, user.getPassword() != null);
 				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
 			});
 		});
+	}
+	
+	private void toDeviceInfo(Map<String, Object> map, UserKeyEntity entity) {
+		try {
+			entity.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(map)));
+		} catch (JsonProcessingException e) {
+			log.error("Invalid device info", e);
+		}
 	}
 	
 	private Mono<AuthResponse> withPreferences(AuthResponse response) {
@@ -240,7 +237,7 @@ public class AuthService {
 		.flatMap(user -> 
 			captchaService.validate(request.getCaptchaToken())
 			.flatMap(ok -> {
-				if (!ok) return Mono.error(new ForbiddenException());
+				if (!ok.booleanValue()) return Mono.error(new ForbiddenException());
 				user.setPassword(null);
 				return userRepo.save(user);
 			})

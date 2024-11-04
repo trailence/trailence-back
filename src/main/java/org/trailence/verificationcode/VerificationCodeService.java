@@ -54,6 +54,7 @@ public class VerificationCodeService {
 		return s.toString();
 	}
 	
+	@SuppressWarnings("java:S1301") // switch instead of if
 	private char generateChar(Spec spec) {
 		switch (spec) {
 		case DIGITS: return (char)('0' + random.nextInt(10));

@@ -28,6 +28,7 @@ public class JobService {
 	private final JobRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
 	
+	@SuppressWarnings("java:S6813") // autowired
 	@Lazy @Autowired
 	private List<Job> jobs;
 	
