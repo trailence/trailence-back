@@ -13,6 +13,8 @@
 
 		<spring-boot.version>3.3.5</spring-boot.version>
 		<java-jwt.version>4.4.0</java-jwt.version>
+		
+		<maven-jacoco.version>0.8.12</maven-jacoco.version>
 	</properties>
 
 	<dependencyManagement>
@@ -94,6 +96,31 @@
 							<classifier>spring-boot</classifier>
 							<mainClass>org.trailence.TrailenceApp</mainClass>
 						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${maven-jacoco.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>org/trailence/**/*.*</include>
+							</includes>
+						</configuration>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
 					</execution>
 				</executions>
 			</plugin>
