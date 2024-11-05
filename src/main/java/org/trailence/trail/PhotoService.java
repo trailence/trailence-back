@@ -1,5 +1,7 @@
 package org.trailence.trail;
 
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -19,12 +21,14 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.storage.FileService;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrailEntity;
+import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.ShareElementType;
@@ -39,6 +43,7 @@ public class PhotoService {
 	
 	private final FileService fileService;
 	private final PhotoRepository repo;
+	private final TrailRepository trailRepo;
 	private final R2dbcEntityTemplate r2dbc;
 
 	@SuppressWarnings("java:S107") // number of parameters
@@ -49,13 +54,25 @@ public class PhotoService {
 		Flux<DataBuffer> content, long size,
 		Authentication auth
 	) {
+		ValidationUtils.field("uuid", uuid).notNull().isUuid();
+		ValidationUtils.field("trailUuid", trailUuid).notNull().isUuid();
+		ValidationUtils.field("description", description).nullable().maxLength(5000);
 		String owner = auth.getPrincipal().toString();
-		return repo.findByUuidAndOwner(UUID.fromString(uuid), owner)
-		.map(Optional::of)
-		.switchIfEmpty(Mono.just(Optional.empty()))
+		return Mono.zip(
+			repo.findByUuidAndOwner(UUID.fromString(uuid), owner)
+				.map(Optional::of)
+				.switchIfEmpty(Mono.just(Optional.empty())
+			),
+			trailRepo.findByUuidAndOwner(UUID.fromString(trailUuid), owner)
+				.map(Optional::of)
+				.switchIfEmpty(Mono.just(Optional.empty()))
+		)
 		.flatMap(existing -> {
-			if (existing.isPresent()) {
-				return content.then(Mono.just(existing.get()));
+			if (existing.getT1().isPresent()) {
+				return content.then(Mono.just(existing.getT1().get()));
+			}
+			if (existing.getT2().isEmpty()) {
+				return Mono.error(new NotFoundException("trail", trailUuid));
 			}
 			return fileService.storeFile(size, content).flatMap(fileId -> {
 				PhotoEntity entity = new PhotoEntity();
@@ -77,19 +94,41 @@ public class PhotoService {
 	
     public Flux<Photo> bulkUpdate(List<Photo> dtos, Authentication auth) {
         String owner = auth.getPrincipal().toString();
-        return repo.findAllByUuidInAndOwner(dtos.stream().map(dto -> UUID.fromString(dto.getUuid())).toList(), owner)
+        List<Throwable> errors = new LinkedList<>();
+        List<Photo> valid = new LinkedList<>();
+        Set<UUID> uuids = new HashSet<>();
+        dtos.forEach(dto -> {
+        	try {
+	        	ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
+	        	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
+	        	valid.add(dto);
+	        	uuids.add(UUID.fromString(dto.getUuid()));
+        	} catch (Exception e) {
+        		errors.add(e);
+        	}
+        });
+        if (uuids.isEmpty()) {
+        	if (errors.isEmpty()) return Flux.empty();
+        	return Flux.error(errors.getFirst());
+        }
+        return repo.findAllByUuidInAndOwner(uuids, owner)
         .flatMap(entity -> {
-            var dtoOpt = dtos.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString()) && owner.equals(dto.getOwner())).findAny();
+            var dtoOpt = valid.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString())).findAny();
             if (dtoOpt.isEmpty()) return Mono.empty();
             var dto = dtoOpt.get();
             return updateEntity(entity, dto);
         }, 3, 6)
         .collectList()
-        .flatMapMany(uuids -> repo.findAllByUuidInAndOwner(uuids, owner))
+        .flatMapMany(updatedUuids -> {
+        	if (!updatedUuids.isEmpty()) return repo.findAllByUuidInAndOwner(updatedUuids, owner);
+        	if (!errors.isEmpty()) return Flux.error(errors.getFirst());
+        	return Flux.empty();
+        })
         .map(this::toDto);
     }
 
     private Mono<UUID> updateEntity(PhotoEntity entity, Photo dto) {
+        if (dto.getVersion() != entity.getVersion()) return Mono.just(entity.getUuid());
     	boolean changed = false;
         if (!Objects.equals(entity.getDescription(), dto.getDescription())) {
             entity.setDescription(dto.getDescription());
@@ -115,14 +154,13 @@ public class PhotoService {
         	entity.setIndex(dto.getIndex());
         	changed = true;
         }
-        if (!changed) return Mono.empty();
-        return DbUtils.updateByUuidAndOwner(r2dbc, entity)
-        .flatMap(nb -> nb == 0 ? Mono.empty() : Mono.just(entity.getUuid()));
+        if (!changed) return Mono.just(entity.getUuid());
+        return DbUtils.updateByUuidAndOwner(r2dbc, entity).thenReturn(entity.getUuid());
     }
     
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
         String owner = auth.getPrincipal().toString();
-        return delete(repo.findAllByUuidInAndOwner(uuids.stream().map(UUID::fromString).toList(), owner));
+        return delete(repo.findAllByUuidInAndOwner(new HashSet<>(uuids.stream().map(UUID::fromString).toList()), owner));
     }
     
     public Mono<Void> trailsDeleted(Set<UUID> trailsUuids, String owner) {
@@ -211,19 +249,20 @@ public class PhotoService {
     }
     
     private Mono<PhotoEntity> getPhoto(String owner, String uuid, Authentication auth) {
-    	Mono<PhotoEntity> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), owner);
-		if (owner.equals(auth.getPrincipal().toString())) return getFromDB;
+    	String email = owner.toLowerCase();
+    	Mono<PhotoEntity> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email);
+		if (email.equals(auth.getPrincipal().toString())) return getFromDB;
 		String user = auth.getPrincipal().toString();
-		return isFromSharedTrail(uuid, owner, user)
+		return isFromSharedTrail(uuid, email, user)
 		.flatMap(sharedTrail -> {
 			if (sharedTrail.booleanValue()) return getFromDB;
-			return isFromSharedTag(uuid, owner, user)
+			return isFromSharedTag(uuid, email, user)
 			.flatMap(sharedTag -> {
 				if (sharedTag.booleanValue()) return getFromDB;
-				return isFromSharedCollection(uuid, owner, user)
+				return isFromSharedCollection(uuid, email, user)
 				.flatMap(sharedCollection -> {
 					if (sharedCollection.booleanValue()) return getFromDB;
-					return Mono.error(new NotFoundException("track", uuid));
+					return Mono.error(new NotFoundException("photo", uuid));
 				});
 			});
 		});

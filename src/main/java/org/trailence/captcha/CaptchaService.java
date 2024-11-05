@@ -18,6 +18,8 @@ public class CaptchaService {
 	private String clientKey;
 	@Value("${trailence.external.captcha.secretKey:}")
 	private String secretKey;
+	@Value("${trailence.external.captcha.url}")
+	private String url;
 	
 	public boolean isActivated() {
 		return !clientKey.isEmpty() && !secretKey.isEmpty();
@@ -29,9 +31,8 @@ public class CaptchaService {
 
 	public Mono<Boolean> validate(String token) {
 		if (clientKey.isEmpty() || secretKey.isEmpty()) return Mono.just(false);
-		WebClient client = WebClient.builder().baseUrl("https://www.google.com/recaptcha/api").build();
+		WebClient client = WebClient.builder().baseUrl(url).build();
 		return client.post()
-		.uri("/siteverify")
 		.body(BodyInserters.fromFormData("secret", secretKey).with("response", token))
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
 		.map(response -> {

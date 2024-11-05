@@ -62,15 +62,15 @@ public class JobService {
 				log.error("Unknown job type {}, retry in 15 minutes", entity.getType());
 				result = Mono.just(new Job.Result(entity.getRetry() < 100 ? System.currentTimeMillis() + 15 * 60 * 1000 : null));
 			} else {
-				log.info("Executing job {}", entity.getType());
+				log.info("Executing job {} - {}", entity.getType(), entity.getId());
 				result = job.get().execute(entity.getData(), entity.getRetry()).checkpoint("Job " + entity.getType());
 			}
 			return result.flatMap(r -> {
 				if (r.retryAt == null) {
-					log.info("Job {} succeed", entity.getType());
+					log.info("Job {} succeed - id {}", entity.getType(), entity.getId());
 					return repo.delete(entity).thenReturn(entity);
 				} else {
-					log.info("Job {} failed", entity.getType());
+					log.info("Job {} failed - id {}", entity.getType(), entity.getId());
 					entity.setRetry(entity.getRetry() + 1);
 					entity.setNextRetryAt(r.retryAt);
 					return repo.save(entity);

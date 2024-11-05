@@ -1,0 +1,1 @@
+ALTER TABLE public.verification_codes ADD COLUMN IF NOT EXISTS invalid_attempts smallint NOT NULL DEFAULT 0;

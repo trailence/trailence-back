@@ -2,8 +2,10 @@ package org.trailence.trail;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -20,6 +22,8 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.trail.TrackService.TrackNotFound;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrackRepository;
@@ -36,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -65,14 +70,14 @@ public class TrailService {
         Mono<Boolean> originalTrackExists = trackRepo.existsByUuidAndOwner(originalTrackId, owner)
         	.map(exists -> {
         		if (!exists.booleanValue())
-        			throw new NotFoundException("track", dto.getOriginalTrackUuid());
+        			throw new TrackNotFound(owner, dto.getOriginalTrackUuid());
         		return true;
         	});
         Mono<Boolean> currentTrackExists = currentTrackId.equals(originalTrackId) ? Mono.just(true) :
             trackRepo.existsByUuidAndOwner(currentTrackId, owner)
             .map(exists -> {
             	if (!exists.booleanValue())
-            		throw new NotFoundException("track", dto.getCurrentTrackUuid());
+            		throw new TrackNotFound(owner, dto.getCurrentTrackUuid());
             	return true;
             });
 
@@ -98,46 +103,113 @@ public class TrailService {
     }
 
     public Mono<List<Trail>> bulkCreate(List<Trail> dtos, Authentication auth) {
-        return repo.findAllByUuidInAndOwner(dtos.stream().map(dto -> UUID.fromString(dto.getUuid())).toList(), auth.getPrincipal().toString())
+    	List<Trail> valid = new LinkedList<>();
+    	Set<UUID> uuids = new HashSet<>();
+    	List<Throwable> errors = new LinkedList<>();
+    	dtos.forEach(dto -> {
+    		try {
+    			validateCreate(dto);
+    			valid.add(dto);
+    			uuids.add(UUID.fromString(dto.getUuid()));
+    		} catch (Exception e) {
+    			errors.add(e);
+    		}
+    	});
+    	if (valid.isEmpty()) {
+    		if (errors.isEmpty()) return Mono.just(List.of());
+    		return Mono.error(errors.getFirst());
+    	}
+        return repo.findAllByUuidInAndOwner(uuids, auth.getPrincipal().toString())
         .collectList()
         .zipWhen(known -> {
-            List<Trail> toCreate = dtos.stream().filter(
-                dto -> known.stream().noneMatch(entity -> entity.getUuid().toString().equals(dto.getUuid()) && entity.getOwner().equals(dto.getOwner()))
-            ).toList();
+            List<Trail> toCreate = valid.stream().filter(dto -> known.stream().noneMatch(entity -> entity.getUuid().toString().equals(dto.getUuid()))).toList();
             if (toCreate.isEmpty()) return Mono.just(Collections.<Trail>emptyList());
             return Flux.fromIterable(toCreate)
             	.flatMap(dto -> createNotExisting(dto, auth)
-            		.doOnError(e -> log.error("Error creating trail", e))
-            		.onErrorComplete(),
+            		.map(Object.class::cast)
+            		.onErrorResume(e -> Mono.just((Object) e)),
             		3, 6
             	).collectList();
         })
-        .map(tuple -> Stream.concat(tuple.getT1().stream().map(this::toDTO), tuple.getT2().stream()).toList());
+        .flatMap(tuple -> {
+        	@SuppressWarnings("unchecked")
+			var created = (Stream<Trail>) tuple.getT2().stream().filter(Trail.class::isInstance);
+        	var existing = tuple.getT1().stream().map(this::toDTO);
+        	var result = Stream.concat(created, existing).toList();
+        	if (!result.isEmpty()) return Mono.just(result);
+        	var errors2 = tuple.getT2().stream().filter(Throwable.class::isInstance).map(Throwable.class::cast).toList();
+        	if (!errors2.isEmpty()) return Mono.error(errors2.getFirst());
+        	if (!errors.isEmpty()) return Mono.error(errors.getFirst());
+        	return Mono.just(result);
+        });
+    }
+    
+    private void validateCreate(Trail dto) {
+    	validate(dto);
+    	ValidationUtils.field("originalTrackUuid", dto.getOriginalTrackUuid()).notNull().isUuid();
+    }
+    
+    private void validate(Trail dto) {
+    	ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
+    	ValidationUtils.field("name", dto.getName()).nullable().maxLength(200);
+    	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(50000);
+    	ValidationUtils.field("location", dto.getLocation()).nullable().maxLength(100);
+    	ValidationUtils.field("loopType", dto.getLoopType()).nullable().maxLength(2);
+    	ValidationUtils.field("currentTrackUuid", dto.getCurrentTrackUuid()).notNull().isUuid();
+    	ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
     }
 
+    @SuppressWarnings("java:S3776")
     public Flux<Trail> bulkUpdate(List<Trail> dtos, Authentication auth) {
+    	List<Trail> valid = new LinkedList<>();
+    	Set<UUID> uuids = new HashSet<>();
+    	List<Throwable> errors = new LinkedList<>();
+    	dtos.forEach(dto -> {
+    		try {
+    			validate(dto);
+    			valid.add(dto);
+    			uuids.add(UUID.fromString(dto.getUuid()));
+    		} catch (Exception e) {
+    			errors.add(e);
+    		}
+    	});
+    	if (valid.isEmpty()) {
+    		if (errors.isEmpty()) return Flux.empty();
+    		return Flux.error(errors.getFirst());
+    	}
         String owner = auth.getPrincipal().toString();
-        return repo.findAllByUuidInAndOwner(dtos.stream().map(dto -> UUID.fromString(dto.getUuid())).toList(), owner)
+        return repo.findAllByUuidInAndOwner(uuids, owner)
         .flatMap(entity -> {
-            var dtoOpt = dtos.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString()) && owner.equals(dto.getOwner())).findAny();
-            if (dtoOpt.isEmpty()) return Mono.empty();
-            return updateEntity(entity, dtoOpt.get(), owner);
+            var dtoOpt = valid.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString())).findAny();
+            if (dtoOpt.isEmpty()) return Mono.just(Tuples.of(entity.getUuid(), false));
+            var dto = dtoOpt.get();
+            if (dto.getVersion() != entity.getVersion()) return Mono.just(Tuples.of(entity.getUuid(), true));
+            return updateEntity(entity, dto, owner).zipWith(Mono.just(true));
         }, 3, 6)
         .collectList()
-        .flatMapMany(uuids -> repo.findAllByUuidInAndOwner(uuids, owner))
+        .flatMapMany(results -> {
+        	var updatedUuids = results.stream().filter(r -> r.getT1() instanceof UUID && r.getT2().booleanValue()).map(r -> (UUID)r.getT1()).toList();
+        	if (!updatedUuids.isEmpty()) return repo.findAllByUuidInAndOwner(updatedUuids, owner);
+        	var errors2 = results.stream().filter(r -> r.getT1() instanceof Throwable).map(r -> (Throwable)r.getT1()).toList();
+        	if (!errors2.isEmpty()) return Flux.<TrailEntity>error(errors2.getFirst());
+        	if (!errors.isEmpty()) return Flux.<TrailEntity>error(errors.getFirst());
+        	return Flux.<TrailEntity>empty();
+        })
         .map(this::toDTO);
     }
     
-    private Mono<UUID> updateEntity(TrailEntity entity, Trail dto, String owner) {
-        Mono<Boolean> checks = Mono.just(true);
+    @SuppressWarnings("java:S3776")
+    private Mono<Object> updateEntity(TrailEntity entity, Trail dto, String owner) {
+        Mono<Optional<Throwable>> checks = Mono.just(Optional.empty());
         Mono<?> actions = Mono.just(true);
         var changed = false;
         if (dto.getCollectionUuid() != null && !dto.getCollectionUuid().equals(entity.getCollectionUuid().toString())) {
         	// change of collection: it must exist, and we should remove all associated tags
         	var newUuid = UUID.fromString(dto.getCollectionUuid());
-        	checks = checks.flatMap(ok -> {
-        		if (!ok.booleanValue()) return Mono.just(false);
-        		return collectionRepo.existsByUuidAndOwner(newUuid, owner);
+        	checks = checks.flatMap(error -> {
+        		if (error.isPresent()) return Mono.just(error);
+        		return collectionRepo.existsByUuidAndOwner(newUuid, owner)
+        			.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new NotFoundException("collection", newUuid.toString())));
         	});
         	actions = actions.then(trailTagRepo.deleteAllByTrailUuidInAndOwner(Set.of(entity.getUuid()), owner).then(Mono.just(true)));
         	entity.setCollectionUuid(newUuid);
@@ -145,9 +217,10 @@ public class TrailService {
         }
         if (dto.getCurrentTrackUuid() != null && !dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
         	var newUuid = UUID.fromString(dto.getCurrentTrackUuid());
-        	checks = checks.flatMap(ok -> {
-        		if (!ok.booleanValue()) return Mono.just(false);
-        		return trackRepo.existsByUuidAndOwner(newUuid, owner);
+        	checks = checks.flatMap(error -> {
+        		if (error.isPresent()) return Mono.just(error);
+        		return trackRepo.existsByUuidAndOwner(newUuid, owner)
+        			.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new TrackNotFound(owner, newUuid.toString())));
         	});
         	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
         		actions = actions.then(trackRepo.deleteByUuidAndOwner(entity.getCurrentTrackUuid(), owner));
@@ -156,8 +229,8 @@ public class TrailService {
         }
         var a = actions;
         var c = changed;
-        return checks.flatMap(ok -> {
-        	if (!ok.booleanValue()) return Mono.empty();
+        return checks.flatMap(error -> {
+        	if (error.isPresent()) return Mono.just(error.get());
         	return a.then(updateEntityFields(entity, dto, c));
         });
     }
@@ -179,9 +252,8 @@ public class TrailService {
         	entity.setLoopType(dto.getLoopType());
         	changed = true;
         }
-        if (!changed) return Mono.empty();
-        return DbUtils.updateByUuidAndOwner(r2dbc, entity)
-                .flatMap(nb -> nb == 0 ? Mono.empty() : Mono.just(entity.getUuid()));
+        if (!changed) return Mono.just(entity.getUuid());
+        return DbUtils.updateByUuidAndOwner(r2dbc, entity).thenReturn(entity.getUuid());
     }
 
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {

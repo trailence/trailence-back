@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.storage.FileStorageProvider;
 import org.trailence.storage.provider.StorageUtils;
 
@@ -22,12 +23,12 @@ public class FileSystemProvider implements FileStorageProvider {
 	private final String rootPath;
 	
 	@Override
-	public Mono<String> storeFile(String path, Flux<DataBuffer> content) {
+	public Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize) {
 		return Mono.defer(() -> {
 			FileOutputStream out;
+			File root = new File(rootPath);
+			File file = new File(root, path);
 			try {
-				File root = new File(rootPath);
-				File file = new File(root, path);
 				File dir = file.getParentFile();
 				dir.mkdirs();
 				if (file.exists()) file.delete();
@@ -35,7 +36,11 @@ public class FileSystemProvider implements FileStorageProvider {
 			} catch (Exception e) {
 				return Mono.error(e);
 			}
-			return StorageUtils.writeAndClose(content, out).then(Mono.just(""));
+			return StorageUtils.writeAndClose(content, out)
+				.then(Mono.fromCallable(() -> {
+					if (file.length() != expectedSize) throw new BadRequestException("invalid-size", "Given size is " + expectedSize + " but stored size is " + file.length());
+					return "";
+				}));
 		})
 		.subscribeOn(Schedulers.boundedElastic())
 		.publishOn(Schedulers.parallel());

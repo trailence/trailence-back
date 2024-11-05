@@ -32,6 +32,7 @@ public class InitDB {
 		new DatabaseMigration("0.7_shares_add_column_include_photos"),
 		new DatabaseMigration("0.7_preferences_remove_elevation_unit"),
 		new DatabaseMigration("0.7_preferences_add_photo_max"),
+		new DatabaseMigration("0.9_verification_codes_add_column_invalid_attempts"),
 	};
 	
 	public void init() {

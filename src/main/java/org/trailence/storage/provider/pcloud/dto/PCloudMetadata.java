@@ -14,5 +14,6 @@ public class PCloudMetadata {
 	private String name;
 	private Long folderid;
 	private Long fileid;
+	private Long size;
 	
 }

@@ -20,6 +20,7 @@ public class VerificationCodeEntity {
 	private String key;
 
 	private long expiresAt;
+	private int invalidAttempts;
 	
 	private Json data;
 	

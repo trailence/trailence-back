@@ -29,7 +29,7 @@ public class UserExtensionsService {
 		return repo.findByEmail(email).collectList()
 			.flatMapMany(existing -> {
 				List<Mono<?>> actions = new LinkedList<>();
-				for (var dto : list) {
+				for (var dto : list.stream().filter(this::valid).toList()) {
 					if (dto.getVersion() == 0) handleCreation(dto, existing, email, actions);
 					else if (dto.getVersion() == -1) handleDeletion(dto, existing, actions);
 					else handleUpdate(dto, existing, actions);
@@ -67,6 +67,7 @@ public class UserExtensionsService {
 		var optEntity = existing.stream().filter(entity -> entity.getExtension().equals(dto.getExtension())).findAny();
 		if (optEntity.isPresent()) {
 			var entity = optEntity.get();
+			if (entity.getVersion() != dto.getVersion()) return;
 			try {
 				String newData = TrailenceUtils.mapper.writeValueAsString(dto.getData());
 				String existingData = TrailenceUtils.mapper.writeValueAsString(TrailenceUtils.mapper.readValue(entity.getData().asString(), Map.class));
@@ -96,4 +97,16 @@ public class UserExtensionsService {
 		);
 	}
 	
+	@SuppressWarnings("java:S1301") // switch instead of if
+	private boolean valid(UserExtension dto) {
+		if (dto.getExtension() == null || dto.getExtension().isBlank()) return false;
+		switch (dto.getExtension()) {
+		case "thunderforest.com": {
+			if (dto.getData().size() != 1) return false;
+			var key = dto.getData().get("apiKey");
+			return key != null && !key.isBlank() && key.length() <= 128;
+		}
+		default: return false;
+		}
+	}
 }

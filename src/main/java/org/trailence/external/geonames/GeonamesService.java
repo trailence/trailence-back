@@ -18,11 +18,13 @@ public class GeonamesService {
 
 	@Value("${trailence.external.geonames.username:}")
 	private String username;
+	@Value("${trailence.external.geonames.url}")
+	private String url;
 	
 	@SuppressWarnings("unchecked")
 	public Mono<List<List<String>>> findNearbyPlaceName(double lat, double lng, String language) {
 		if (username.length() == 0) return Mono.just(List.of());
-		WebClient client = WebClient.builder().baseUrl("http://api.geonames.org").build();
+		WebClient client = WebClient.builder().baseUrl(url).build();
 		return client.get()
 		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}&radius=2", Map.of("lat", lat, "lng", lng, "lang", language, "username", username))
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
@@ -65,7 +67,7 @@ public class GeonamesService {
 		if (terms.length == 0) return Mono.just(List.of());
 		String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 1).toList());
 		if (name.length() < 3) return Mono.just(List.of());
-		WebClient client = WebClient.builder().baseUrl("http://api.geonames.org").build();
+		WebClient client = WebClient.builder().baseUrl(url).build();
 		return client.get()
 		.uri("/search?maxRows=10&featureClass=L&featureClass=P&featureClass=T&featureClass=H&fuzzy=0.6&orderby=relevance&type=json&username=" + username + "&name={name}&lang={lang}", name, language)
 		.exchangeToMono(response -> response.bodyToMono(Map.class))

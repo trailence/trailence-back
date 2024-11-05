@@ -195,12 +195,13 @@ public class ShareService {
 	
 	public Mono<Void> deleteShare(String id, String from, Authentication auth) {
 		String user = auth.getPrincipal().toString();
-		return shareRepo.findOneByUuidAndFromEmail(UUID.fromString(id), from)
+		String fromEmail = from.toLowerCase();
+		return shareRepo.findOneByUuidAndFromEmail(UUID.fromString(id), fromEmail)
 		.flatMap(entity -> {
 			if (!entity.getFromEmail().equals(user) && !entity.getToEmail().equals(user)) return Mono.empty();
-			Delete deleteElements = Delete.builder().from(ShareElementEntity.TABLE).where(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(id)).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(from)))).build();
+			Delete deleteElements = Delete.builder().from(ShareElementEntity.TABLE).where(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(id)).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(fromEmail)))).build();
 			return r2dbc.getDatabaseClient().sql(DbUtils.delete(deleteElements, null, r2dbc)).then()
-			.then(shareRepo.deleteAllByUuidInAndFromEmail(List.of(UUID.fromString(id)), from));
+			.then(shareRepo.deleteAllByUuidInAndFromEmail(List.of(UUID.fromString(id)), fromEmail));
 		});
 	}
 	

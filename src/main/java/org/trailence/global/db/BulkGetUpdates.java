@@ -45,7 +45,7 @@ public final class BulkGetUpdates {
         .doOnNext(entity -> {
             Optional<Versioned> knownOpt;
             synchronized (known) {
-                knownOpt = known.stream().filter(v -> v.getUuid().equals(entity.getUuid().toString()) && v.getOwner().equals(entity.getOwner())).findAny();
+                knownOpt = known.stream().filter(v -> v.getUuid().equals(entity.getUuid().toString()) && v.getOwner().toLowerCase().equals(entity.getOwner())).findAny();
             }
             if (knownOpt.isEmpty()) {
                 synchronized (newItems) {

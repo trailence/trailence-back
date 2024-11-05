@@ -9,6 +9,7 @@ import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.verificationcode.db.VerificationCodeEntity;
 import org.trailence.verificationcode.db.VerificationCodeRepository;
 
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -65,22 +67,35 @@ public class VerificationCodeService {
 	private Mono<Void> removeCodes(String key, String type, int maxCurrentCodes) {
 		if (maxCurrentCodes <= 0) return Mono.empty();
 		return repo.findByTypeAndKey(type, key, PageRequest.of(1, maxCurrentCodes, Direction.DESC, "expiresAt"))
-		.flatMap(repo::delete)
+		.flatMap(repo::delete, 2, 4)
 		.then();
 	}
 	
 	public <T> Mono<T> check(String code, String type, String key, Class<T> clazz) {
-		return repo.findOneByCodeAndTypeAndKeyAndExpiresAtGreaterThan(code, type, key, System.currentTimeMillis())
-			.switchIfEmpty(Mono.error(new RuntimeException("Invalid code")))
-			.flatMap(e -> {
-				T result;
-				try {
-					result = TrailenceUtils.mapper.readValue(e.getData().asString(), clazz);
-				} catch (Exception err) {
-					return Mono.error(err);
-				}
-				return repo.delete(e).thenReturn(result);
-			});
+		return repo.findByTypeAndKeyAndExpiresAtGreaterThan(type, key, System.currentTimeMillis())
+		.collectList()
+		.flatMap(codes -> {
+			if (codes.isEmpty()) return Mono.error(new BadRequestException("invalid-code", "Invalid code"));
+			var codeOpt = codes.stream().filter(entity -> entity.getCode().equals(code) && entity.getInvalidAttempts() < 3).findAny();
+			if (codeOpt.isEmpty()) {
+				return Flux.fromIterable(codes)
+				.flatMap(entity -> {
+					if (entity.getInvalidAttempts() < 3) {
+						entity.setInvalidAttempts(entity.getInvalidAttempts() + 1);
+						return repo.save(entity);
+					}
+					return repo.delete(entity);
+				}, 2, 4).then(Mono.error(new BadRequestException("invalid-code", "Invalid code")));
+			}
+			var entity = codeOpt.get();
+			T result;
+			try {
+				result = TrailenceUtils.mapper.readValue(entity.getData().asString(), clazz);
+			} catch (Exception err) {
+				return Mono.error(err);
+			}
+			return repo.delete(entity).thenReturn(result);
+		});
 	}
 	
 	public Mono<Void> cancelAll(String type, String key) {

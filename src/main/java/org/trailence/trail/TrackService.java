@@ -2,6 +2,7 @@ package org.trailence.trail;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.trailence.global.dto.UuidAndOwner;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrackEntity;
@@ -53,6 +55,7 @@ public class TrackService {
 	private static final long MAX_DATA_SIZE = 512L * 1024;
 	
 	public Mono<Track> createTrack(Track track, Authentication auth) {
+		validate(track);
 		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
 		.map(this::toDTO)
 		.switchIfEmpty(
@@ -66,28 +69,32 @@ public class TrackService {
 				data.s = track.getS();
 				data.wp = track.getWp();
 				entity.setData(compress(data));
-				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("Track data max size exceeded");
+				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
 				return entity;
 			})
 			.flatMap(r2dbc::insert)
-			.map(entity -> {
-				track.setVersion(entity.getVersion());
-				track.setOwner(entity.getOwner());
-				return track;
-			})
+			.map(this::toDTO)
 		);
 	}
 	
+	private void validate(Track dto) {
+		ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
+	}
+	
 	public Mono<Track> updateTrack(Track track, Authentication auth) {
+		validate(track);
 		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
-		.switchIfEmpty(Mono.error(new NotFoundException("track", track.getUuid())))
+		.switchIfEmpty(Mono.error(new TrackNotFound(auth.getPrincipal().toString(), track.getUuid())))
 		.flatMap(entity -> {
+			if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
 			try {
 				StoredData data = new StoredData();
 				data.s = track.getS();
 				data.wp = track.getWp();
-				entity.setData(compress(data));
-				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("Track data max size exceeded");
+				var newData = compress(data);
+				if (newData.length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + newData.length + " > " + MAX_DATA_SIZE + ")");
+				if (Arrays.equals(newData, entity.getData())) return Mono.just(entity);
+				entity.setData(newData);
 			} catch (Exception e) {
 				return Mono.error(e);
 			}
@@ -111,7 +118,7 @@ public class TrackService {
 		.doOnNext(version -> {
 			Optional<Versioned> knownOpt;
 			synchronized (known) {
-				knownOpt = known.stream().filter(v -> v.getUuid().equals(version.getT1().toString()) && v.getOwner().equals(version.getT2())).findAny();
+				knownOpt = known.stream().filter(v -> v.getUuid().equals(version.getT1().toString()) && v.getOwner().toLowerCase().equals(version.getT2())).findAny();
 			}
 			if (knownOpt.isEmpty()) {
 				synchronized (newItems) {
@@ -252,19 +259,22 @@ public class TrackService {
 	}
 
 	public Mono<Track> getTrack(String uuid, String owner, Authentication auth) {
-		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), owner).map(this::toDTO);
-		if (owner.equals(auth.getPrincipal().toString())) return getFromDB;
+		String email = owner.toLowerCase();
+		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email)
+			.map(this::toDTO)
+			.switchIfEmpty(Mono.error(new TrackNotFound(email, uuid)));
+		if (email.equals(auth.getPrincipal().toString())) return getFromDB;
 		String user = auth.getPrincipal().toString();
-		return isFromSharedTrail(uuid, owner, user)
+		return isFromSharedTrail(uuid, email, user)
 		.flatMap(sharedTrail -> {
 			if (sharedTrail.booleanValue()) return getFromDB;
-			return isFromSharedTag(uuid, owner, user)
+			return isFromSharedTag(uuid, email, user)
 			.flatMap(sharedTag -> {
 				if (sharedTag.booleanValue()) return getFromDB;
-				return isFromSharedCollection(uuid, owner, user)
+				return isFromSharedCollection(uuid, email, user)
 				.flatMap(sharedCollection -> {
 					if (sharedCollection.booleanValue()) return getFromDB;
-					return Mono.error(new NotFoundException("track", uuid));
+					return Mono.error(new TrackNotFound(email, uuid));
 				});
 			});
 		});
@@ -312,6 +322,15 @@ public class TrackService {
 	static class StoredData {
 		public Segment[] s;
 		public WayPoint[] wp;
+	}
+	
+	@SuppressWarnings("java:S110") // more than 5 parents
+	public static class TrackNotFound extends NotFoundException {
+		private static final long serialVersionUID = 1L;
+
+		public TrackNotFound(String owner, String uuid) {
+			super("track", owner + "/" + uuid);
+		}
 	}
 	
 }

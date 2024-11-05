@@ -1,0 +1,42 @@
+{
+    "totalResultsCount": 47,
+    "geonames": [
+        {
+            "adminCode1": "93",
+            "lng": "7.12487",
+            "geonameId": 3037456,
+            "toponymName": "Antibes",
+            "countryId": "3017382",
+            "fcl": "P",
+            "population": 76393,
+            "countryCode": "FR",
+            "name": "Antibes",
+            "fclName": "city, village,...",
+            "adminCodes1": {
+                "ISO3166_2": "PAC"
+            },
+            "countryName": "France",
+            "fcodeName": "populated place",
+            "adminName1": "Provence-Alpes-Côte d'Azur",
+            "lat": "43.58127",
+            "fcode": "PPL"
+        },
+        {
+            "adminCode1": "00",
+            "lng": "-69.15",
+            "geonameId": 3491552,
+            "toponymName": "Antilles",
+            "countryId": "8505032",
+            "fcl": "T",
+            "population": 42000000,
+            "countryCode": "AN",
+            "name": "Antilles",
+            "fclName": "mountain,hill,rock,... ",
+            "countryName": "",
+            "fcodeName": "islands",
+            "adminName1": "",
+            "lat": "18.73333",
+            "fcode": "ISLS"
+        }
+    ]
+}

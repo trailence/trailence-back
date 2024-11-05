@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 
 public interface VerificationCodeRepository extends ReactiveCrudRepository<VerificationCodeEntity, String> {
 	
-	Mono<VerificationCodeEntity> findOneByCodeAndTypeAndKeyAndExpiresAtGreaterThan(String code, String type, String key, long now);
+	Flux<VerificationCodeEntity> findByTypeAndKeyAndExpiresAtGreaterThan(String type, String key, long now);
 	
 	Mono<Void> deleteAllByExpiresAtLessThan(long now);
 	

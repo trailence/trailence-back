@@ -49,8 +49,8 @@ public class PhotoV1Controller {
 	}
 	
 	@PutMapping("/_bulkUpdate")
-	public Flux<Photo> bulkUpdate(@RequestBody List<Photo> trails, Authentication auth) {
-		return service.bulkUpdate(trails, auth);
+	public Flux<Photo> bulkUpdate(@RequestBody List<Photo> photos, Authentication auth) {
+		return service.bulkUpdate(photos, auth);
 	}
 	
 	@PostMapping("/_bulkDelete")

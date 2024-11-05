@@ -21,13 +21,19 @@ import reactor.core.scheduler.Schedulers;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @SuppressWarnings({"java:S899", "java:S4042"})
 public final class StorageUtils {
+	
+	public static File getTmpDir() {
+		File dir = new File("./tmp");
+		if (!dir.exists()) dir.mkdir();
+		return dir;
+	}
 
 	public static Mono<Pair<File, Map<String, byte[]>>> toTmpFileWithDigests(Flux<DataBuffer> buffers, String... digests) {
 		return Mono.defer(() -> {
 			File tmpFile = null;
 			OutputStream out;
 			try {
-				tmpFile = File.createTempFile("upload", "pcloud");
+				tmpFile = File.createTempFile("upload", "trailence", getTmpDir());
 				tmpFile.deleteOnExit();
 				out = new FileOutputStream(tmpFile);
 			} catch (Exception e) {

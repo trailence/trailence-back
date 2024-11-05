@@ -29,6 +29,7 @@ import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.UserPreferencesService;
@@ -60,9 +61,18 @@ public class AuthService {
 	private final UserService userService;
 	private final CaptchaService captchaService;
 	
+	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
+	private static final String ERROR_CODE_LOCKED = "locked";
+	private static final String ERROR_CODE_CAPTCHA_NEEDED = "captcha-needed";
+	
+	private static final int MAX_ATTEMPTS_BEFORE_CAPTCHA = 2;
+	private static final int MAX_ATTEMPTS_BEFORE_LOCK = 10;
+	private static final int MAX_ATTEMPTS_BEFORE_REMOVING_KEY = 3;
+	
 	public Mono<AuthResponse> login(LoginRequest request) {
+		ValidationUtils.field("publicKey", request.getPublicKey()).valid(key -> KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(key)));
 		return userRepo.findByEmail(request.getEmail().toLowerCase())
-			.switchIfEmpty(Mono.error(new ForbiddenException()))
+			.switchIfEmpty(Mono.error(new ForbiddenException(ERROR_CODE_INVALID_CREDENTIALS)))
 			.flatMap(user -> checkInvalidAttempts(user, request.getCaptchaToken()))
 			.flatMap(user -> checkPassword(user, request.getPassword()))
 			// ok, authenticate
@@ -88,12 +98,12 @@ public class AuthService {
 	}
 	
 	private Mono<UserEntity> checkInvalidAttempts(UserEntity user, String captchaToken) {
-		if (user.getInvalidAttempts() > 1 && captchaService.isActivated() && captchaToken == null)
-			return Mono.error(new ForbiddenException("captcha-needed"));
+		if (user.getInvalidAttempts() >= MAX_ATTEMPTS_BEFORE_CAPTCHA && captchaService.isActivated() && captchaToken == null)
+			return Mono.error(new ForbiddenException(ERROR_CODE_CAPTCHA_NEEDED));
 		if (captchaToken != null)
 			return captchaService.validate(captchaToken)
 				.flatMap(ok -> {
-					if (!ok.booleanValue()) return Mono.error(new ForbiddenException("captcha-needed"));
+					if (!ok.booleanValue()) return Mono.error(new ForbiddenException(ERROR_CODE_CAPTCHA_NEEDED));
 					return Mono.just(user);
 				});
 		return Mono.just(user);
@@ -101,12 +111,12 @@ public class AuthService {
 	
 	private Mono<UserEntity> checkPassword(UserEntity user, String password) {
 		if (user.getPassword() == null)
-			return Mono.error(new ForbiddenException(user.getInvalidAttempts() >= 10 ? "locked" : "forbidden"));
+			return Mono.error(new ForbiddenException(user.getInvalidAttempts() >= MAX_ATTEMPTS_BEFORE_LOCK ? ERROR_CODE_LOCKED : ERROR_CODE_INVALID_CREDENTIALS));
 		if (!TrailenceUtils.hashPassword(password).equals(user.getPassword())) {
 			user.setInvalidAttempts(user.getInvalidAttempts() + 1);
-			if (user.getInvalidAttempts() >= 10)
+			if (user.getInvalidAttempts() >= MAX_ATTEMPTS_BEFORE_LOCK)
 				user.setPassword(null);
-			return userRepo.save(user).then(Mono.error(new ForbiddenException(user.getPassword() == null ? "locked" : "forbidden")));
+			return userRepo.save(user).then(Mono.error(new ForbiddenException(user.getPassword() == null ? ERROR_CODE_LOCKED : ERROR_CODE_INVALID_CREDENTIALS)));
 		}
 		return Mono.just(user);
 	}
@@ -162,7 +172,7 @@ public class AuthService {
 			if (key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
 			if (!key.getRandom().equals(request.getRandom())) {
 				key.setInvalidAttempts(key.getInvalidAttempts() + 1);
-				if (key.getInvalidAttempts() > 3) {
+				if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
 					return keyRepo.delete(key).then(Mono.error(new ForbiddenException()));
 				}
 			}

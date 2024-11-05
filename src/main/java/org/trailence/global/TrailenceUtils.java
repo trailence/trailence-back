@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.codec.digest.DigestUtils;
-import org.trailence.init.InitDB;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -38,7 +37,7 @@ public class TrailenceUtils {
 	
 	public static Mono<String> readResource(String filename) {
 		return Mono.fromCallable(() -> {
-			try (InputStream in = InitDB.class.getClassLoader().getResourceAsStream(filename)) {
+			try (InputStream in = TrailenceUtils.class.getClassLoader().getResourceAsStream(filename)) {
 				return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			}
 		}).subscribeOn(Schedulers.boundedElastic()).publishOn(Schedulers.parallel());

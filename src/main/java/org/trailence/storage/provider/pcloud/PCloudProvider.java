@@ -48,7 +48,7 @@ public class PCloudProvider implements FileStorageProvider {
 	}
 
 	@Override
-	public Mono<String> storeFile(String path, Flux<DataBuffer> content) {
+	public Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize) {
 		String[] pathElements = path.split("/");
 		Mono<Long> folderId = pathElements.length > 1 ? getFolderId(Arrays.copyOfRange(pathElements, 0, pathElements.length - 1)) : Mono.just(rootFolderId);
 		String filename = pathElements[pathElements.length - 1];
@@ -66,20 +66,22 @@ public class PCloudProvider implements FileStorageProvider {
 				.exchangeToMono(response -> response.bodyToMono(PCloudUploadResponse.class))
 				.doOnNext(response -> log.info("File uploaded: {} in folder {}", filename, folderid))
 				.doOnError(error -> log.warn("Error uploading file {} in folder {}", filename, folderid, error))
-				.flatMap(response -> checkUploadResponse(response, fileAndDigests.getValue(), path))
+				.flatMap(response -> checkUploadResponse(response, fileAndDigests.getValue(), path, expectedSize))
 				.doFinally(s -> fileAndDigests.getKey().delete());
 			})
 		);
 	}
 	
-	private Mono<String> checkUploadResponse(PCloudUploadResponse response, Map<String, byte[]> expectedDigests, String path) {
+	private Mono<String> checkUploadResponse(PCloudUploadResponse response, Map<String, byte[]> expectedDigests, String path, long expectedSize) {
 		boolean valid = true;
 		String fileId = null;
 		try {
 			var checksums = response.getChecksums().getFirst();
 			valid = valid && Arrays.equals(Hex.decodeHex(checksums.getSha1()), expectedDigests.get("SHA1"));
 			valid = valid && Arrays.equals(Hex.decodeHex(checksums.getSha256()), expectedDigests.get("SHA256"));
-			fileId = Long.toString(response.getMetadata().get(0).getFileid());
+			var metadata = response.getMetadata().get(0);
+			fileId = Long.toString(metadata.getFileid());
+			if (metadata.getSize() != null && metadata.getSize().longValue() != expectedSize) valid = false;
 		} catch (Exception e) {
 			log.error("Error checking uploaded file result", e);
 			valid = false;

@@ -1,0 +1,54 @@
+{
+    "geonames": [
+        {
+            "distance": "2.77868",
+            "timezone": {
+                "gmtOffset": 1,
+                "timeZoneId": "Europe/Paris",
+                "dstOffset": 2
+            },
+            "asciiName": "Les Adrets-de-l'Esterel",
+            "astergdem": 303,
+            "countryId": "3017382",
+            "fcl": "P",
+            "srtm3": 302,
+            "adminId2": "2970749",
+            "adminId3": "3020849",
+            "countryCode": "FR",
+            "adminId4": "6617822",
+            "adminCodes2": {
+                "ISO3166_2": "83"
+            },
+            "adminCodes1": {
+                "ISO3166_2": "PAC"
+            },
+            "adminId1": "2985244",
+            "lat": "43.52055",
+            "fcode": "PPL",
+            "continentCode": "EU",
+            "adminCode2": "83",
+            "adminCode3": "831",
+            "adminCode1": "93",
+            "lng": "6.81195",
+            "geonameId": 3002228,
+            "toponymName": "Les Adrets-de-l'Estérel",
+            "adminCode4": "83001",
+            "population": 0,
+            "adminName5": "",
+            "adminName4": "Les Adrets-de-l'Estérel",
+            "adminName3": "Draguignan",
+            "alternateNames": [
+                {
+                    "name": "83600",
+                    "lang": "post"
+                }
+            ],
+            "adminName2": "Var",
+            "name": "Les Adrets-de-l'Estérel",
+            "fclName": "city, village,...",
+            "countryName": "France",
+            "fcodeName": "populated place",
+            "adminName1": "Provence-Alpes-Côte d'Azur"
+        }
+    ]
+}

@@ -10,15 +10,15 @@ spring:
 
   mail:
     host: ${SMTP_HOST}
-    port: ${SMTP_PORT}
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
-          auth: ${SMTP_AUTH_ENABLED}
+          auth: ${SMTP_AUTH_ENABLED:true}
           starttls:
-            enable: ${SMTP_TLS_ENABLED}
+            enable: ${SMTP_TLS_ENABLED:true}
 
 trailence:
   jwt:
@@ -28,8 +28,10 @@ trailence:
   linkpath: ${TRAILENCE_LINK_PATH:/link/}
   external:
     geonames:
+      url: "http://api.geonames.org"
       username: ${GEONAMES_USER:}
     captcha:
+      url: "https://www.google.com/recaptcha/api/siteverify"
       clientKey: ${CAPTCHA_CLIENT_KEY:}
       secretKey: ${CAPTCHA_SECRET_KEY:}
   storage:

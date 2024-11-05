@@ -8,6 +8,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.storage.db.FileEntity;
 import org.trailence.storage.db.FileRepository;
 import org.trailence.storage.provider.fs.FileSystemProvider;
@@ -27,6 +28,8 @@ public class FileService {
 	
 	private Mono<FileStorageProvider> provider;
 	
+	private static final long MAX_FILE_SIZE = 25L * 1024 * 1024;
+	
 	@PostConstruct
 	@SuppressWarnings("java:S112") // RuntimeException
 	public void init() {
@@ -42,6 +45,8 @@ public class FileService {
 	}
 
 	public Mono<Long> storeFile(long size, Flux<DataBuffer> content) {
+		if (size > MAX_FILE_SIZE) return Mono.error(new BadRequestException("maximum-size-exceeded", "File is too large"));
+		if (size < 0) return Mono.error(new BadRequestException("invalid-size", "Size cannot be negative"));
 		return provider.flatMap(storage -> {
 			FileEntity entity = new FileEntity();
 			entity.setCreatedAt(System.currentTimeMillis());
@@ -49,7 +54,7 @@ public class FileService {
 			entity.setTmp(true);
 			return repo.save(entity).flatMap(entityTmp -> {
 				long id = entityTmp.getId();
-				return storage.storeFile(getPath(id), content)
+				return storage.storeFile(getPath(id), content, size)
 				.flatMap(storageId -> {
 					entityTmp.setStorageId(storageId);
 					entityTmp.setTmp(false);

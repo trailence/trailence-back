@@ -7,7 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface FileStorageProvider {
 
-	Mono<String> storeFile(String path, Flux<DataBuffer> content);
+	Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize);
 	
 	Flux<DataBuffer> getFile(String fileId, String path);
 	

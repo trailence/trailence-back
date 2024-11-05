@@ -34,7 +34,8 @@ public class UserService {
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 
 	public Mono<Void> createUser(String email, String password) {
-		UserEntity entity = new UserEntity(email.toLowerCase(), password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0);
+		email = email.toLowerCase();
+		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0);
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
@@ -65,11 +66,14 @@ public class UserService {
 	
 	public Mono<Void> changePassword(String email, String code, String newPassword, String previousPassword) {
 		if (email == null) return Mono.error(new ForbiddenException());
-		return userRepo.findByEmail(email.toLowerCase())
+		if (code == null) return Mono.error(new ForbiddenException());
+		if (newPassword == null || newPassword.length() < TrailenceUtils.MIN_PASSWORD_SIZE) return Mono.error(new ForbiddenException());
+		String userMail = email.toLowerCase();
+		return userRepo.findByEmail(userMail)
 		.flatMap(user -> {
-			if (user.getPassword() != null && !user.getPassword().equals(previousPassword))
+			if (user.getPassword() != null && !user.getPassword().equals(TrailenceUtils.hashPassword(previousPassword)))
 				return Mono.error(new ForbiddenException());
-			return verificationCodeService.check(code, CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, email, String.class)
+			return verificationCodeService.check(code, CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, userMail, String.class)
 			.flatMap(check -> {
 				user.setPassword(TrailenceUtils.hashPassword(newPassword));
 				user.setInvalidAttempts(0);

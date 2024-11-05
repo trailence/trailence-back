@@ -41,6 +41,7 @@ public class EmailService {
 	
 	@SuppressWarnings("java:S1301") // switch instead of if
 	private String getLanguage(String lang) {
+		if (lang == null) return "en";
 		switch (lang.toLowerCase()) {
 		case "fr": return "fr";
 		default: return "en";

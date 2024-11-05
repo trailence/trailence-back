@@ -15,6 +15,18 @@
 		<java-jwt.version>4.4.0</java-jwt.version>
 		
 		<maven-jacoco.version>0.8.12</maven-jacoco.version>
+		<maven-compiler.version>3.13.0</maven-compiler.version>
+		<maven-surefire.version>3.2.5</maven-surefire.version>
+		<wiremock.version>3.9.2</wiremock.version>
+		
+		<!-- sonar -->
+		<sonar.coverage.exclusions>**/test/**</sonar.coverage.exclusions>
+	    <sonar.cpd.exclusions>**/test/**,**/dto/*.*,**/db/*Entity.*</sonar.cpd.exclusions>
+	    
+	    <sonar.issue.ignore.multicriteria>e1</sonar.issue.ignore.multicriteria>
+	    <!-- ignore: too many assertions.... -->
+	    <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S5961</sonar.issue.ignore.multicriteria.e1.ruleKey>
+	    <sonar.issue.ignore.multicriteria.e1.resourceKey>**/src/test/**/*.java</sonar.issue.ignore.multicriteria.e1.resourceKey>
 	</properties>
 
 	<dependencyManagement>
@@ -80,13 +92,87 @@
 			<groupId>commons-codec</groupId>
 			<artifactId>commons-codec</artifactId>
 		</dependency>
+		
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.assertj</groupId>
+			<artifactId>assertj-core</artifactId>
+			<scope>test</scope>
+		</dependency>
+		
+		<dependency>
+		    <groupId>io.rest-assured</groupId>
+		    <artifactId>rest-assured</artifactId>
+		    <scope>test</scope>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+		    <groupId>org.testcontainers</groupId>
+		    <artifactId>postgresql</artifactId>
+		    <scope>test</scope>
+		</dependency>
+		
+		<dependency>
+		    <groupId>org.wiremock</groupId>
+		    <artifactId>wiremock-jetty12</artifactId>
+		    <version>${wiremock.version}</version>
+		    <scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
 	</dependencies>
 	
 	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>${maven-compiler.version}</version>
+				</plugin>
+				<plugin>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>${maven-surefire.version}</version>
+					<configuration>
+						<excludes>
+							<exclude />
+						</excludes>
+						<argLine>${argLine}</argLine>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.jacoco</groupId>
+					<artifactId>jacoco-maven-plugin</artifactId>
+					<version>${maven-jacoco.version}</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>${spring-boot.version}</version>
 				<executions>
 					<execution>
 						<goals>
@@ -103,17 +189,11 @@
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>${maven-jacoco.version}</version>
 				<executions>
 					<execution>
 						<goals>
 							<goal>prepare-agent</goal>
 						</goals>
-						<configuration>
-							<includes>
-								<include>org/trailence/**/*.*</include>
-							</includes>
-						</configuration>
 					</execution>
 					<execution>
 						<id>report</id>

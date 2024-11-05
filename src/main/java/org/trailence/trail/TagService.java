@@ -19,6 +19,8 @@ import org.trailence.global.db.BulkGetUpdates;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.trail.db.TagEntity;
 import org.trailence.trail.db.TagRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
@@ -30,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
+import reactor.util.function.Tuple4;
 import reactor.util.function.Tuples;
 
 @Service
@@ -43,59 +46,120 @@ public class TagService {
 	private final R2dbcEntityTemplate r2dbc;
 	private final ShareService shareService;
 	
+	@SuppressWarnings("java:S3776")
 	public Mono<List<Tag>> bulkCreate(List<Tag> dtos, Authentication auth) {
-		String owner = auth.getPrincipal().toString();
+		List<Tag> valid = new LinkedList<>();
 		Set<UUID> collectionsUuids = new HashSet<>();
-		dtos.forEach(dto -> collectionsUuids.add(UUID.fromString(dto.getCollectionUuid())));
+		List<Throwable> errors = new LinkedList<>();
+		dtos.forEach(dto -> {
+			try {
+				validateCreate(dto);
+				valid.add(dto);
+				collectionsUuids.add(UUID.fromString(dto.getCollectionUuid()));
+			} catch (Exception e) {
+				errors.add(e);
+			}
+		});
+		if (valid.isEmpty()) {
+			if (errors.isEmpty()) return Mono.just(List.of());
+			return Mono.error(errors.getFirst());
+		}
+		String owner = auth.getPrincipal().toString();
 		// check collectionUuid
 		return collectionRepo.findAllByUuidInAndOwner(collectionsUuids, owner)
 		.map(AbstractEntityUuidOwner::getUuid)
 		.collectList()
-		.map(existingCollections -> {
+		.flatMap(existingCollections -> {
 			Set<UUID> uuids = new HashSet<>();
-			dtos.forEach(dto -> {
-				if (existingCollections.stream().noneMatch(uuid -> uuid.toString().equals(dto.getCollectionUuid()))) return;
-				uuids.add(UUID.fromString(dto.getUuid()));
-				if (dto.getParentUuid() != null) uuids.add(UUID.fromString(dto.getParentUuid()));
-			});
-			return uuids;
+			for (var it = valid.iterator(); it.hasNext(); ) {
+				var dto = it.next();
+				if (existingCollections.stream().noneMatch(uuid -> uuid.toString().equals(dto.getCollectionUuid()))) {
+					errors.add(new NotFoundException("collection", dto.getCollectionUuid()));
+					it.remove();
+				} else {
+					uuids.add(UUID.fromString(dto.getUuid()));
+					if (dto.getParentUuid() != null) uuids.add(UUID.fromString(dto.getParentUuid()));
+				}
+			}
+			if (uuids.isEmpty()) return Mono.error(errors.getFirst());
+			return Mono.just(uuids);
 		})
-		.flatMapMany(uuids ->
+		.flatMap(uuids ->
 			repo.findAllByUuidInAndOwner(uuids, owner)
 			.collectList()
-	        .zipWhen(known -> Mono.just(dtos.stream().filter(dto ->
-	        	// has existing collection
-	        	uuids.stream().anyMatch(uuid -> uuid.toString().equals(dto.getUuid())) &&
-	        	// not in known list
-	            known.stream().noneMatch(entity -> entity.getUuid().toString().equals(dto.getUuid()))
-	        ).toList()))
+			.map(known -> {
+				List<TagEntity> created = new LinkedList<>();
+				List<Tag> toCreate = new LinkedList<>();
+				valid.forEach(dto -> {
+					var existing = known.stream().filter(entity -> entity.getUuid().toString().equals(dto.getUuid())).findAny();
+					if (existing.isPresent()) {
+						created.add(existing.get());
+					} else {
+						toCreate.add(dto);
+					}
+				});
+				return Tuples.of(known, created, toCreate, List.<Throwable>of());
+			})
 	    )
 		// recursively create when parentUuid is created or null
         .expand(tuple -> createTags(tuple, owner))
         .last()
-        .map(tuple -> tuple.getT1().stream().map(this::toDTO).toList());
+        .flatMap(tuple -> {
+        	var created = tuple.getT2().stream().map(this::toDTO).toList();
+        	if (!created.isEmpty()) return Mono.just(created);
+        	var errors2 = tuple.getT4();
+        	if (!errors2.isEmpty()) return Mono.error(errors2.getFirst());
+        	if (!errors.isEmpty()) return Mono.error(errors.getFirst());
+        	return Mono.just(List.of());
+        });
     }
 	
-	private Mono<Tuple2<List<TagEntity>, List<Tag>>> createTags(Tuple2<List<TagEntity>, List<Tag>> tuple, String owner) {
-		if (tuple.getT2().isEmpty())
+	private void validateCreate(Tag dto) {
+		validate(dto);
+		ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
+	}
+	
+	private void validate(Tag dto) {
+		ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
+		ValidationUtils.field("name", dto.getName()).nullable().maxLength(50);
+		ValidationUtils.field("parentUuid", dto.getParentUuid()).nullable().isUuid();
+	}
+	
+	private Mono<Tuple4<List<TagEntity>, List<TagEntity>, List<Tag>, List<Throwable>>> createTags(Tuple4<List<TagEntity>, List<TagEntity>, List<Tag>, List<Throwable>> tuple, String owner) {
+		if (tuple.getT3().isEmpty())
 			return Mono.empty();
     	List<Tag> canCreate = new LinkedList<>();
     	List<Tag> remaining = new LinkedList<>();
-    	tuple.getT2().forEach(dto -> {
-    		if (dto.getParentUuid() == null || tuple.getT1().stream().anyMatch(entity -> entity.getUuid().toString().equals(dto.getParentUuid())))
+    	tuple.getT3().forEach(dto -> {
+    		if (dto.getParentUuid() == null || tuple.getT1().stream().anyMatch(
+    				entity -> entity.getUuid().toString().equals(dto.getParentUuid()) && entity.getCollectionUuid().toString().equals(dto.getCollectionUuid())
+    		))
     			canCreate.add(dto);
     		else
     			remaining.add(dto);
     	});
-    	if (canCreate.isEmpty()) return Mono.empty();
+    	if (canCreate.isEmpty()) {
+    		if (remaining.isEmpty())
+    			return Mono.empty();
+    		return Mono.just(Tuples.of(tuple.getT1(), tuple.getT2(), List.of(), TrailenceUtils.merge(tuple.getT4(),
+    			remaining.stream().map(dto -> (Throwable) new NotFoundException("tag", "parent " + dto.getParentUuid() + " on collection " + dto.getCollectionUuid())).toList()
+    		)));
+    	}
     	return Flux.fromIterable(canCreate).flatMap(dto ->
     		createNotExisting(dto, owner)
-    		.doOnError(e -> log.error("Error creating tag", e))
-    		.onErrorComplete()
+    		.map(e -> (Object) e)
+    		.onErrorResume(e -> {
+    			log.error("Error creating tag", e);
+    			return Mono.just((Object) e);
+    		})
     		, 3, 6
     	)
     	.collectList()
-    	.map(created -> Tuples.of(TrailenceUtils.merge(tuple.getT1(), created), remaining));
+    	.map(results -> {
+    		var created = results.stream().filter(TagEntity.class::isInstance).map(e -> (TagEntity) e).toList();
+    		var errors = results.stream().filter(Throwable.class::isInstance).map(e -> (Throwable) e).toList();
+    		return Tuples.of(TrailenceUtils.merge(tuple.getT1(), created), TrailenceUtils.merge(tuple.getT2(), created), remaining, TrailenceUtils.merge(tuple.getT4(), errors));
+    	});
 	}
 	
 	private Mono<TagEntity> createNotExisting(Tag dto, String owner) {
@@ -113,7 +177,7 @@ public class TagService {
 	public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
 		return delete(
-			repo.findAllByUuidInAndOwner(uuids.stream().map(UUID::fromString).toList(), owner)
+			repo.findAllByUuidInAndOwner(new HashSet<>(uuids.stream().map(UUID::fromString).toList()), owner)
 				.expandDeep(entity -> repo.findAllByParentUuidAndOwner(entity.getUuid(), owner)),
 			owner
 		);
@@ -133,9 +197,27 @@ public class TagService {
 		});
 	}
 	
+	@SuppressWarnings("java:S3776")
 	public Flux<Tag> bulkUpdate(Collection<Tag> dtos, Authentication auth) {
-		return repo.findAllByUuidInAndOwner(dtos.stream().map(dto -> UUID.fromString(dto.getUuid())).toList(), auth.getPrincipal().toString())
-		.flatMap(entity -> associateEntityWithDto(entity, dtos))
+		String owner = auth.getPrincipal().toString();
+		List<Tag> valid = new LinkedList<>();
+		List<Throwable> errors = new LinkedList<>();
+		Set<UUID> uuids = new HashSet<>();
+		dtos.forEach(dto -> {
+			try {
+				validate(dto);
+				valid.add(dto);
+				uuids.add(UUID.fromString(dto.getUuid()));
+			} catch (Exception e) {
+				errors.add(e);
+			}
+		});
+		if (uuids.isEmpty()) {
+			if (errors.isEmpty()) return Flux.empty();
+			return Flux.error(errors.getFirst());
+		}
+		return repo.findAllByUuidInAndOwner(uuids, owner)
+		.flatMap(entity -> associateEntityWithDto(entity, valid))
 		.collectList()
 		.flatMapMany(tuples -> {
 			Set<UUID> newParents = new HashSet<>();
@@ -144,14 +226,21 @@ public class TagService {
 					newParents.add(UUID.fromString(tuple.getT1().getParentUuid()));
 				}
 			});
-			Mono<List<TagEntity>> getEistingParents =
-				newParents.isEmpty() ? Mono.just(Collections.<TagEntity>emptyList()) : repo.findAllByUuidInAndOwner(newParents, auth.getPrincipal().toString()).collectList();
-			return getEistingParents.flatMapMany(existingParents ->
+			Mono<List<TagEntity>> getExistingParents =
+				newParents.isEmpty() ? Mono.just(Collections.<TagEntity>emptyList()) : repo.findAllByUuidInAndOwner(newParents, owner).collectList();
+			return getExistingParents.flatMapMany(existingParents ->
 				Flux.fromIterable(tuples)
 				.flatMap(tuple -> doUpdate(tuple.getT2(), tuple.getT1(), existingParents), 3, 6)
 			)
 			.collectList()
-			.flatMapMany(uuids -> repo.findAllByUuidInAndOwner(uuids, auth.getPrincipal().toString()))
+			.flatMapMany(results -> {
+				var updatedUuids = results.stream().filter(UUID.class::isInstance).map(o -> (UUID) o).toList();
+				if (!updatedUuids.isEmpty()) return repo.findAllByUuidInAndOwner(updatedUuids, owner);
+				var errors2 = results.stream().filter(Throwable.class::isInstance).map(o -> (Throwable) o).toList();
+				if (!errors2.isEmpty()) return Flux.error(errors2.getFirst());
+				if (!errors.isEmpty()) return Flux.error(errors.getFirst());
+				return Flux.empty();
+			})
 			.map(this::toDTO);
 		});
 	}
@@ -162,18 +251,22 @@ public class TagService {
 		return Mono.just(Tuples.of(dtoOpt.get(), entity));
 	}
 	
-	private Mono<UUID> doUpdate(TagEntity entity, Tag dto, List<TagEntity> existingParents) {
+	private Mono<Object> doUpdate(TagEntity entity, Tag dto, List<TagEntity> existingParents) {
+		if (dto.getVersion() != entity.getVersion()) return Mono.just(entity.getUuid());
 		boolean updated = false;
 		if (!entity.getName().equals(dto.getName())) {
 			entity.setName(dto.getName());
 			updated = true;
 		}
 		UUID newParent = dto.getParentUuid() != null ? UUID.fromString(dto.getParentUuid()) : null;
-		if (!Objects.equals(entity.getParentUuid(), newParent) && (newParent == null || existingParents.stream().anyMatch(e -> e.getUuid().equals(newParent)))) {
+		if (!Objects.equals(entity.getParentUuid(), newParent)) {
+			if (newParent != null && existingParents.stream().noneMatch(e -> e.getUuid().equals(newParent))) {
+				return Mono.just(new NotFoundException("tag", newParent.toString()));
+			}
 			entity.setParentUuid(newParent);
 			updated = true;
 		}
-		if (!updated) return Mono.empty();
+		if (!updated) return Mono.just(entity.getUuid());
 		return DbUtils.updateByUuidAndOwner(r2dbc, entity).thenReturn(entity.getUuid());
 	}
 	
