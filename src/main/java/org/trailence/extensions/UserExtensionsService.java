@@ -103,7 +103,7 @@ public class UserExtensionsService {
 		switch (dto.getExtension()) {
 		case "thunderforest.com": {
 			if (dto.getData().size() != 1) return false;
-			var key = dto.getData().get("apiKey");
+			var key = dto.getData().get("apikey");
 			return key != null && !key.isBlank() && key.length() <= 128;
 		}
 		default: return false;

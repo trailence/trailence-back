@@ -19,44 +19,44 @@ class TestExtensions extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.getBody().as(UserExtension[].class)).isEmpty();
 		
-		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apiKey", "1234"))));
+		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apikey", "1234"))));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apiKey", "1234")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apikey", "1234")));
 		
-		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apiKey", "1234"))));
+		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apikey", "1234"))));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apiKey", "1234")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apikey", "1234")));
 		
-		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apiKey", "12345"))));
+		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apikey", "12345"))));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apiKey", "1234")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(1, "thunderforest.com", Map.of("apikey", "1234")));
 		
-		response = user.post("/api/extensions/v1", List.of(new UserExtension(1, "thunderforest.com", Map.of("apiKey", "12345"))));
+		response = user.post("/api/extensions/v1", List.of(new UserExtension(1, "thunderforest.com", Map.of("apikey", "12345"))));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(2, "thunderforest.com", Map.of("apiKey", "12345")));
-		
-		response = user.post("/api/extensions/v1", List.of(
-			new UserExtension(2, "thunderforest.com", Map.of("apiKey", "123456")),
-			new UserExtension(0, "unknown", Map.of("apiKey", "123456"))
-		));
-		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apiKey", "123456")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(2, "thunderforest.com", Map.of("apikey", "12345")));
 		
 		response = user.post("/api/extensions/v1", List.of(
-			new UserExtension(3, "thunderforest.com", Map.of("apiKey2", "1234567")),
-			new UserExtension(0, "unknown", Map.of("apiKey", "123456"))
+			new UserExtension(2, "thunderforest.com", Map.of("apikey", "123456")),
+			new UserExtension(0, "unknown", Map.of("apikey", "123456"))
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apiKey", "123456")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apikey", "123456")));
 		
 		response = user.post("/api/extensions/v1", List.of(
-			new UserExtension(3, "thunderforest.com", Map.of("apiKey", "12345678", "wrong", "value")),
-			new UserExtension(0, "unknown", Map.of("apiKey", "123456"))
+			new UserExtension(3, "thunderforest.com", Map.of("apikey2", "1234567")),
+			new UserExtension(0, "unknown", Map.of("apikey", "123456"))
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apiKey", "123456")));
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apikey", "123456")));
+		
+		response = user.post("/api/extensions/v1", List.of(
+			new UserExtension(3, "thunderforest.com", Map.of("apikey", "12345678", "wrong", "value")),
+			new UserExtension(0, "unknown", Map.of("apikey", "123456"))
+		));
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(response.getBody().as(UserExtension[].class)).singleElement().isEqualTo(new UserExtension(3, "thunderforest.com", Map.of("apikey", "123456")));
 
-		response = user.post("/api/extensions/v1", List.of(new UserExtension(-1, "thunderforest.com", Map.of("apiKey", "12345"))));
+		response = user.post("/api/extensions/v1", List.of(new UserExtension(-1, "thunderforest.com", Map.of("apikey", "12345"))));
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.getBody().as(UserExtension[].class)).isEmpty();
 	}
