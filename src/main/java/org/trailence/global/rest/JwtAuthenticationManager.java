@@ -13,18 +13,19 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 import org.trailence.global.TrailenceUtils;
-import org.trailence.global.exceptions.UnauthorizedException;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
 
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
 @Component
+@Slf4j
 public class JwtAuthenticationManager implements ReactiveAuthenticationManager, InitializingBean {
 
 	@Value("${trailence.jwt.secret}")
@@ -43,17 +44,18 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 	
 	@Override
 	public Mono<Authentication> authenticate(Authentication authentication) {
-		return Mono.fromCallable(() -> {
+		return Mono.defer(() -> {
 			String token = authentication.getCredentials().toString();
 			DecodedJWT decoded = JWT.decode(token);
 			try {
 				verifier.verify(token);
 			} catch (Exception e) {
-				throw new UnauthorizedException();
+				log.info("Invalid token: {}", e.getMessage());
+				return Mono.empty();
 			}
 			Boolean isComplete = decoded.getClaim("complete").asBoolean();
 			List<GrantedAuthority> authorities = Boolean.TRUE.equals(isComplete) ? List.of(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER)) : List.of();
-			return new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities);
+			return Mono.just(new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities));
 		});
 	}
 	
