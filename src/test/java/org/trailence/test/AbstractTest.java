@@ -45,7 +45,7 @@ public abstract class AbstractTest {
 	@SuppressWarnings("resource")
 	static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine").withUsername("postgres").withPassword("postgres").withDatabaseName("trailence");
 	@SuppressWarnings({ "rawtypes", "resource" })
-	static GenericContainer smtp = new GenericContainer<>("mailhog/mailhog").withExposedPorts(1025, 8025);
+	static GenericContainer smtp = new GenericContainer<>("mailhog/mailhog:v1.0.1").withExposedPorts(1025, 8025);
 	public static WireMockServer wireMockServer = null;
 	
 	private static void start() {

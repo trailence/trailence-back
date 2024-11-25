@@ -237,22 +237,19 @@ public class AuthService {
 	}
 	
 	public Mono<Void> forgotPassword(ForgotPasswordRequest request) {
-		if (!captchaService.isActivated()) return Mono.error(new ForbiddenException());
-		if (request.getCaptchaToken() == null) return Mono.error(new ForbiddenException());
+		if (captchaService.isActivated() && request.getCaptchaToken() == null) return Mono.error(new ForbiddenException());
 		if (request.getEmail() == null) return Mono.error(new ForbiddenException());
 		String email = request.getEmail().toLowerCase();
 		String lang = request.getLang();
 		return userRepo.findByEmail(email)
-		.switchIfEmpty(Mono.error(new ForbiddenException()))
 		.flatMap(user -> 
-			captchaService.validate(request.getCaptchaToken())
+			(captchaService.isActivated() ? captchaService.validate(request.getCaptchaToken()) : Mono.just(true))
 			.flatMap(ok -> {
 				if (!ok.booleanValue()) return Mono.error(new ForbiddenException());
-				user.setPassword(null);
-				return userRepo.save(user);
+				return Mono.just(user);
 			})
 		)
-		.flatMap(user -> userService.sendChangePasswordCode(email, lang))
+		.flatMap(user -> userService.sendChangePasswordCode(email, lang, true))
 		.then();
 	}
 	

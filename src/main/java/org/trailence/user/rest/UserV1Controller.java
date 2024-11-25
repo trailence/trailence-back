@@ -25,7 +25,7 @@ public class UserV1Controller {
 	
 	@GetMapping("sendChangePasswordCode")
 	public Mono<Void> sendChangePasswordCode(@RequestParam("lang") String lang, Authentication auth) {
-		return service.sendChangePasswordCode(auth.getPrincipal().toString(), lang);
+		return service.sendChangePasswordCode(auth.getPrincipal().toString(), lang, false);
 	}
 	
 	@DeleteMapping("changePassword")
@@ -35,12 +35,12 @@ public class UserV1Controller {
 	
 	@PostMapping("changePassword")
 	public Mono<Void> changePassword(@RequestBody @Valid ChangePasswordRequest request, Authentication auth) {
-		return service.changePassword(auth.getPrincipal().toString(), request.getCode(), request.getNewPassword(), request.getPreviousPassword());
+		return service.changePassword(auth.getPrincipal().toString(), request.getCode(), request.getNewPassword(), request.getPreviousPassword(), false);
 	}
 	
 	@PostMapping("resetPassword")
 	public Mono<Void> changePassword(@RequestBody ResetPasswordRequest request) {
-		return service.changePassword(request.getEmail(), request.getCode(), request.getNewPassword(), null);
+		return service.changePassword(request.getEmail(), request.getCode(), request.getNewPassword(), null, true);
 	}
 	
 }

@@ -21,6 +21,10 @@ public class GeonamesService {
 	@Value("${trailence.external.geonames.url}")
 	private String url;
 	
+	public boolean isConfigured() {
+		return username.length() > 0;
+	}
+	
 	@SuppressWarnings("unchecked")
 	public Mono<List<List<String>>> findNearbyPlaceName(double lat, double lng, String language) {
 		if (username.length() == 0) return Mono.just(List.of());
