@@ -73,7 +73,7 @@ public class TrailTagService {
 				if (tag.isEmpty()) return false;
 				return trail.get().getCollectionUuid().equals(tag.get().getCollectionUuid());
 			}).toList();
-			if (valid.isEmpty()) return Flux.error(new BadRequestException("invalid-input", "trailUuid or tagUuid not found, or do not belong to the same collection"));
+			if (valid.isEmpty()) return Flux.error(new BadRequestException("invalid-input", "trailUuid or tagUuid not found, or they do not belong to the same collection"));
 			return Flux.fromIterable(valid);
 		}).map(tuple -> {
 			var dto = dtos.stream().filter(d -> tuple.getT1().toString().equals(d.getTagUuid()) && tuple.getT2().toString().equals(d.getTrailUuid())).findAny();
