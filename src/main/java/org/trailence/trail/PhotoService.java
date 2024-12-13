@@ -170,7 +170,8 @@ public class PhotoService {
     private Mono<Void> delete(Flux<PhotoEntity> toDelete) {
     	return toDelete.flatMap(
     		entity -> repo.deleteByUuidAndOwner(entity.getUuid(), entity.getOwner())
-    			.then(fileService.deleteFile(entity.getFileId()))
+    			.then(fileService.deleteFile(entity.getFileId())),
+    		3, 6
     	).then();
     }
 	
