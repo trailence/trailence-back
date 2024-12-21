@@ -22,12 +22,12 @@ public class GeonamesService {
 	private String url;
 	
 	public boolean isConfigured() {
-		return username.length() > 0;
+		return !username.isEmpty();
 	}
 	
 	@SuppressWarnings("unchecked")
 	public Mono<List<List<String>>> findNearbyPlaceName(double lat, double lng, String language) {
-		if (username.length() == 0) return Mono.just(List.of());
+		if (username.isEmpty()) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl(url).build();
 		return client.get()
 		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}&radius=2", Map.of("lat", lat, "lng", lng, "lang", language, "username", username))
@@ -57,7 +57,7 @@ public class GeonamesService {
 	private void getPlaceElement(List<String> place, Map<String, Object> elementMap, String attributeName) {
 		Object attribute = elementMap.get(attributeName);
 		if (attribute instanceof String s) {
-			if (s.trim().length() == 0) return;
+			if (s.trim().isEmpty()) return;
 			if (!place.isEmpty() && s.equals(place.get(place.size() - 1))) return;
 			place.add(s);
 		}
@@ -66,7 +66,7 @@ public class GeonamesService {
 	// doc: https://www.geonames.org/export/geonames-search.html
 	@SuppressWarnings("unchecked")
 	public Mono<List<Place>> searchPlace(String searchTerm, String language) {
-		if (username.length() == 0) return Mono.just(List.of());
+		if (username.isEmpty()) return Mono.just(List.of());
 		String[] terms = searchTerm.split(" ");
 		if (terms.length == 0) return Mono.just(List.of());
 		String name = String.join(" ", Arrays.asList(terms).stream().filter(s -> s.length() > 1).toList());

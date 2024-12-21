@@ -24,6 +24,9 @@ spring:
           starttls:
             enable: ${SMTP_TLS_ENABLED:true}
 
+  codec:
+    max-in-memory-size: 1MB
+
 trailence:
   jwt:
     secret: ${TRAILENCE_JWT_SECRET}
@@ -38,6 +41,8 @@ trailence:
       url: "https://www.google.com/recaptcha/api/siteverify"
       clientKey: ${CAPTCHA_CLIENT_KEY:}
       secretKey: ${CAPTCHA_SECRET_KEY:}
+    outdooractive:
+      clientKey: ${OUTDOOR_ACTIVE_KEY:}
   storage:
     type: ${TRAILENCE_STORAGE_TYPE:fs}
     username: ${TRAILENCE_STORAGE_USERNAME:}

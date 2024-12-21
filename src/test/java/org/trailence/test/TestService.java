@@ -250,7 +250,7 @@ public class TestService {
 		}
 		
 		public void deleteTrails(Trail... trails) {
-			var response = post("/api/trail/v1/_bulkDelete", Stream.of(trails).map(trail -> trail.getUuid()).toList());
+			var response = post("/api/trail/v1/_bulkDelete", Stream.of(trails).map(Trail::getUuid).toList());
 			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		

@@ -9,6 +9,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.external.geonames.GeonamesService;
+import org.trailence.external.outdooractive.OutdoorActiveService;
 import org.trailence.init.InitDB;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,11 @@ public class TrailenceApp {
 			log.info(" ✔ Geonames service configured");
 		} else {
 			log.warn(" ❌ Geonames service not configured, it will always returns empty responses.");
+		}
+		if (ctx.getBean(OutdoorActiveService.class).available()) {
+			log.info(" ✔ Outdoor Active API configured");
+		} else {
+			log.warn(" ❌ Outdoor Active API not configured, it will not be available.");
 		}
 	}
 	

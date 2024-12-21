@@ -23,6 +23,7 @@ public class VisorandoService {
 		private String url;
 	}
 
+	@SuppressWarnings({"java:S3776", "java:S3740"})
 	public Mono<List<Rando>> searchBbox(String bbox) {
 		WebClient client = WebClient.builder().baseUrl("https://www.visorando.com").build();
 		return client.get()
@@ -43,7 +44,9 @@ public class VisorandoService {
 							try {
 								long idn = Long.parseLong(ids);
 								items.add(new Rando(idn, "https://www.visorando.com/randonnee-" + s + "/"));
-							} catch (Exception e) {}
+							} catch (Exception e) {
+								// ignore
+							}
 						}
 					}
 				}
