@@ -28,7 +28,7 @@ public class OutdoorActiveService {
 	private String key;
 	
 	public boolean available() {
-		return key != null && key.length() > 0;
+		return key != null && !key.isEmpty();
 	}
 	
 	public Mono<List<String>> search(double lat, double lng, int radius, int limit) {
@@ -168,7 +168,7 @@ public class OutdoorActiveService {
 			}
 		}
 		if (map.get("texts") instanceof Map texts) {
-			if (texts.get("short") instanceof String s && s.trim().length() > 0)
+			if (texts.get("short") instanceof String s && !s.trim().isEmpty())
 				rando.description = s;
 			if (texts.get("long") instanceof String s) {
 				if (rando.description == null)
