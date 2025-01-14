@@ -39,7 +39,7 @@ class TestTracks extends AbstractTest {
 		track2.setWp(new WayPoint[] {
 			new WayPoint(
 				random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
-				RandomStringUtils.randomAlphanumeric(0, 100), RandomStringUtils.randomAlphanumeric(0, 100)
+				RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100)
 			)
 		});
 		var response = user.put("/api/track/v1", track2);
@@ -226,7 +226,7 @@ class TestTracks extends AbstractTest {
 		for (var i = 0; i < wayPoints.length; ++i) {
 			wayPoints[i] = new WayPoint(
 				i * 2L, i + 20L, (i + 10) * i + 12L, i + 2L,
-				RandomStringUtils.randomAlphanumeric(75), RandomStringUtils.randomAlphanumeric(50)
+				RandomStringUtils.insecure().nextAlphanumeric(75), RandomStringUtils.insecure().nextAlphanumeric(50)
 			);
 		}
 		return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints);

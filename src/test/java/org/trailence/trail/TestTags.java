@@ -119,7 +119,7 @@ class TestTags extends AbstractTest {
 		
 		// create on collection of another user
 		var response = user1.post("/api/tag/v1/_bulkCreate", List.of(new Tag(
-			UUID.randomUUID().toString(), user1.getEmail(),	0, 0, 0, RandomStringUtils.randomAlphanumeric(0, 51),
+			UUID.randomUUID().toString(), user1.getEmail(),	0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			mytrails2.getUuid()
 		)));
@@ -129,7 +129,7 @@ class TestTags extends AbstractTest {
 		
 		// create with parent from another user
 		response = user1.post("/api/tag/v1/_bulkCreate", List.of(new Tag(
-			UUID.randomUUID().toString(), user1.getEmail(),	0, 0, 0, RandomStringUtils.randomAlphanumeric(0, 51),
+			UUID.randomUUID().toString(), user1.getEmail(),	0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			tag2.getUuid(),
 			mytrails1.getUuid()
 		)));
@@ -191,7 +191,7 @@ class TestTags extends AbstractTest {
 			null,
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			mytrails.getUuid()
 		)));
@@ -201,7 +201,7 @@ class TestTags extends AbstractTest {
 			"1234",
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			mytrails.getUuid()
 		)));
@@ -211,7 +211,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(51),
+			RandomStringUtils.insecure().nextAlphanumeric(51),
 			null,
 			mytrails.getUuid()
 		)));
@@ -221,7 +221,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			"1234",
 			mytrails.getUuid()
 		)));
@@ -231,7 +231,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			UUID.randomUUID().toString(),
 			mytrails.getUuid()
 		)));
@@ -241,7 +241,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			"1234"
 		)));
@@ -251,7 +251,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			null
 		)));
@@ -261,7 +261,7 @@ class TestTags extends AbstractTest {
 			UUID.randomUUID().toString(),
 			user.getEmail(),
 			0, 0, 0,
-			RandomStringUtils.randomAlphanumeric(0, 51),
+			RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 			null,
 			UUID.randomUUID().toString()
 		)));
@@ -274,7 +274,7 @@ class TestTags extends AbstractTest {
 		var mytrails = user.getMyTrails();
 		var tag = user.createTag(mytrails, null);
 		
-		tag.setName(RandomStringUtils.randomAlphanumeric(51));
+		tag.setName(RandomStringUtils.insecure().nextAlphanumeric(51));
 		var response = user.put("/api/tag/v1/_bulkUpdate", List.of(tag));
 		TestUtils.expectError(response, 400, "invalid-name-too-long");
 	}

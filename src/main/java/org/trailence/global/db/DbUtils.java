@@ -4,6 +4,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
@@ -36,27 +37,19 @@ import reactor.core.publisher.Mono;
 public final class DbUtils {
 
 	public static PreparedOperation<Select> select(Select select, Bindings bindings, R2dbcEntityTemplate r2dbc) {
-		return new PreparedOperation<Select>() {
-			@Override
-			public void bindTo(BindTarget target) {
-				if (bindings != null)
-					bindings.apply(target);
-			}
-			
-			@Override
-			public Select getSource() {
-				return select;
-			}
-			
-			@Override
-			public String toQuery() {
-				return getRenderer(r2dbc).render(select);
-			}
-		};
+		return preparedOperation(select, bindings, () -> getRenderer(r2dbc).render(select));
 	}
 
 	public static PreparedOperation<Delete> delete(Delete delete, Bindings bindings, R2dbcEntityTemplate r2dbc) {
-		return new PreparedOperation<Delete>() {
+		return preparedOperation(delete, bindings, () -> getRenderer(r2dbc).render(delete));
+	}
+	
+	public static PreparedOperation<String> operation(String sql, Bindings bindings) {
+		return preparedOperation(sql, bindings, () -> sql);
+	}
+	
+	private static <T> PreparedOperation<T> preparedOperation(T source, Bindings bindings, Supplier<String> toQuery) {
+		return new PreparedOperation<T>() {
 			@Override
 			public void bindTo(BindTarget target) {
 				if (bindings != null)
@@ -64,13 +57,13 @@ public final class DbUtils {
 			}
 			
 			@Override
-			public Delete getSource() {
-				return delete;
+			public T getSource() {
+				return source;
 			}
 			
 			@Override
 			public String toQuery() {
-				return getRenderer(r2dbc).render(delete);
+				return toQuery.get();
 			}
 		};
 	}

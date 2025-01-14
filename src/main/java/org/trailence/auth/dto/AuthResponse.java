@@ -17,5 +17,6 @@ public class AuthResponse {
 	private String keyId;
 	private UserPreferences preferences;
 	private boolean isComplete;
+	private boolean isAdmin;
 	
 }

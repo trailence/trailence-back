@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.sql.Column;
 
 import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
@@ -30,4 +31,8 @@ public class UserKeyEntity {
 	
 	private int invalidAttempts;
 	
+	public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("user_keys");
+	public static final Column COL_EMAIL = Column.create("email", TABLE);
+	public static final Column COL_LAST_USAGE = Column.create("last_usage", TABLE);
+
 }

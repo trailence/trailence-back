@@ -20,7 +20,10 @@ public class TrailenceUtils {
 	public static final ObjectMapper mapper = new ObjectMapper();
 	
 	public static final String AUTHORITY_COMPLETE_USER = "complete";
+	public static final String AUTHORITY_ADMIN_USER = "admin";
+
 	public static final String PREAUTHORIZE_COMPLETE = "hasAuthority('" + AUTHORITY_COMPLETE_USER + "')";
+	public static final String PREAUTHORIZE_ADMIN = "hasAuthority('" + AUTHORITY_ADMIN_USER + "')";
 	
 	public static final int MIN_PASSWORD_SIZE = 6;
 

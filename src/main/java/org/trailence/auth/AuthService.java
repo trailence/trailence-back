@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.trailence.auth.db.UserKeyEntity;
@@ -77,7 +78,7 @@ public class AuthService {
 			.flatMap(user -> checkPassword(user, request.getPassword()))
 			// ok, authenticate
 			.flatMap(user -> {
-				var token = auth.generateToken(user.getEmail(), true);
+				var token = auth.generateToken(user.getEmail(), true, user.isAdmin());
 				
 				UserKeyEntity key = new UserKeyEntity();
 				key.setId(UUID.randomUUID());
@@ -87,7 +88,7 @@ public class AuthService {
 				key.setLastUsage(System.currentTimeMillis());
 				toDeviceInfo(request.getDeviceInfo(), key);
 				
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true);
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true, user.isAdmin());
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
@@ -127,13 +128,13 @@ public class AuthService {
 			userRepo.findById(tokenData.getEmail())
 			.switchIfEmpty(Mono.defer(() ->
 				// first time the user use a share link -> create his account without password
-				userService.createUser(tokenData.getEmail().toLowerCase(), null)
+				userService.createUser(tokenData.getEmail().toLowerCase(), null, false)
 				.then(userRepo.findById(tokenData.getEmail()))
 			))
 			.flatMap(user -> {
 				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
 				
-				var token = auth.generateToken(user.getEmail(), false);
+				var token = auth.generateToken(user.getEmail(), false, false);
 				
 				UserKeyEntity key = new UserKeyEntity();
 				key.setId(UUID.randomUUID());
@@ -144,7 +145,7 @@ public class AuthService {
 				key.setInvalidAttempts(0);
 				toDeviceInfo(request.getDeviceInfo(), key);
 				
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, false);
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, false, false);
 				
 				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
 			})
@@ -188,12 +189,12 @@ public class AuthService {
 			return userRepo.findById(key.getEmail())
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
 			.flatMap(user -> {	
-				var token = auth.generateToken(key.getEmail(), user.getPassword() != null);
+				var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin());
 				key.setLastUsage(System.currentTimeMillis());
 				toDeviceInfo(request.getDeviceInfo(), key);
 				key.setRandom(null);
 				key.setRandomExpires(0L);
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null, user.getPassword() != null);
+				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null, user.getPassword() != null, user.isAdmin());
 				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
 			});
 		});
@@ -216,7 +217,16 @@ public class AuthService {
 	}
 	
 	public Flux<UserKey> getMyKeys(Authentication auth) {
-		return keyRepo.findByEmail(auth.getPrincipal().toString()).map(entity -> {
+		return internalGetUserKeys(auth.getPrincipal().toString());
+	}
+	
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Flux<UserKey> getUserKeys(String userEmail) {
+		return internalGetUserKeys(userEmail.toLowerCase());
+	}
+	
+	private Flux<UserKey> internalGetUserKeys(String email) {
+		return keyRepo.findByEmail(email).map(entity -> {
 			Map<String, Object> info;
 			try {
 				info = TrailenceUtils.mapper.readValue(entity.getDeviceInfo().asString(), new TypeReference<Map<String, Object>>() {});

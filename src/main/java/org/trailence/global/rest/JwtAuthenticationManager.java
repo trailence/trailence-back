@@ -2,6 +2,7 @@ package org.trailence.global.rest;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.springframework.beans.factory.InitializingBean;
@@ -36,6 +37,9 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 	private Algorithm algo;
 	private JWTVerifier verifier;
 	
+	private static final String CLAIM_COMPLETE = "cpl";
+	private static final String CLAIM_ADMIN = "adm";
+	
 	@Override
 	public void afterPropertiesSet() throws Exception {
 		algo = Algorithm.HMAC512(secret);
@@ -53,18 +57,22 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 				log.info("Invalid token: {}", e.getMessage());
 				return Mono.empty();
 			}
-			Boolean isComplete = decoded.getClaim("complete").asBoolean();
-			List<GrantedAuthority> authorities = Boolean.TRUE.equals(isComplete) ? List.of(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER)) : List.of();
+			Integer isComplete = decoded.getClaim(CLAIM_COMPLETE).asInt();
+			Integer isAdmin = decoded.getClaim(CLAIM_ADMIN).asInt();
+			List<GrantedAuthority> authorities = new LinkedList<>();
+			if (Integer.valueOf(1).equals(isComplete)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER));
+			if (Integer.valueOf(1).equals(isAdmin)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_ADMIN_USER));
 			return Mono.just(new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities));
 		});
 	}
 	
-	public Tuple2<String, Instant> generateToken(String email, boolean isComplete) {
+	public Tuple2<String, Instant> generateToken(String email, boolean isComplete, boolean isAdmin) {
 		var expires = Instant.now().plus(tokenValidity);
 		var token = JWT.create()
 			.withSubject(email)
 			.withExpiresAt(expires)
-			.withClaim("complete", isComplete)
+			.withClaim(CLAIM_COMPLETE, isComplete ? 1 : 0)
+			.withClaim(CLAIM_ADMIN, isAdmin ? 1 : 0)
 			.sign(algo);
 		return Tuples.of(token, expires);
 	}

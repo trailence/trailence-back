@@ -54,17 +54,21 @@ public class TestService {
 	private static Set<String> usedEmails = new HashSet<>();
 	
 	public TestUser createUser() {
+		return createUser(false);
+	}
+	
+	public TestUser createUser(boolean admin) {
 		String email = email();
-		String password = RandomStringUtils.randomAlphanumeric(8, 20);
+		String password = RandomStringUtils.insecure().nextAlphanumeric(8, 20);
 		StepVerifier.create(
-			userService.createUser(email, password)
+			userService.createUser(email, password, admin)
 		).verifyComplete();
 		return new TestUser(email, password);
 	}
 	
 	public String email() {
 		do {
-			String email = RandomStringUtils.randomAlphanumeric(3, 20) + '@' + RandomStringUtils.randomAlphanumeric(3, 10) + '.' + RandomStringUtils.randomAlphanumeric(2, 4);
+			String email = RandomStringUtils.insecure().nextAlphanumeric(3, 20) + '@' + RandomStringUtils.insecure().nextAlphanumeric(3, 10) + '.' + RandomStringUtils.insecure().nextAlphanumeric(2, 4);
 			if (usedEmails.add(email.toLowerCase())) return email;
 		} while (true);
 	}
@@ -85,7 +89,11 @@ public class TestService {
 	}
 	
 	public TestUserLoggedIn createUserAndLogin() {
-		var user = createUser();
+		return createUserAndLogin(false);
+	}
+	
+	public TestUserLoggedIn createUserAndLogin(boolean admin) {
+		var user = createUser(admin);
 		var keyPair = generateKeyPair();
 		var response = RestAssured.given()
 			.contentType(ContentType.JSON)
@@ -135,7 +143,7 @@ public class TestService {
 		}
 		
 		public TrailCollection createCollection() {
-			var dto = new TrailCollection(UUID.randomUUID().toString(), email, 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
+			var dto = new TrailCollection(UUID.randomUUID().toString(), email, 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
 			var response = post("/api/trail-collection/v1/_bulkCreate", List.of(dto));
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(TrailCollection[].class);
@@ -170,7 +178,7 @@ public class TestService {
 			for (var i = 0; i < wayPoints.length; ++i) {
 				wayPoints[i] = new WayPoint(
 					random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
-					RandomStringUtils.randomAlphanumeric(0, 100), RandomStringUtils.randomAlphanumeric(0, 100)
+					RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100)
 				);
 			}
 			return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints);
@@ -223,10 +231,10 @@ public class TestService {
 			var track2 = sameCurrentAndOriginalTracks ? track1 : createTrack();
 			var trail = new Trail(
 				UUID.randomUUID().toString(), email, 0, 0, 0,
-				RandomStringUtils.randomAlphanumeric(0, 201),
-				RandomStringUtils.randomAlphanumeric(0, 50001),
-				RandomStringUtils.randomAlphanumeric(0, 101),
-				RandomStringUtils.randomAlphanumeric(0, 3),
+				RandomStringUtils.insecure().nextAlphanumeric(0, 201),
+				RandomStringUtils.insecure().nextAlphanumeric(0, 50001),
+				RandomStringUtils.insecure().nextAlphanumeric(0, 101),
+				RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 				track1.getUuid(),
 				track2.getUuid(),
 				collection.getUuid()
@@ -277,7 +285,7 @@ public class TestService {
 				UUID.randomUUID().toString(),
 				email,
 				0, 0, 0,
-				RandomStringUtils.randomAlphanumeric(0, 51),
+				RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 				parent == null ? null : parent.getUuid(),
 				collection.getUuid()
 			);

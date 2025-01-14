@@ -2,6 +2,7 @@ package org.trailence.global.rest;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -76,6 +77,12 @@ public class RestExceptions {
 		var result = new ApiError(status, body.getTitle(), body.getDetail());
 		log.warn("Framework error returned by {} {}: {} - {} - {} => {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI(), error.getClass().getSimpleName(), status, error.getMessage(), result);
 		return Mono.fromSupplier(() -> ResponseEntity.status(status).body(result));
+	}
+	
+	@ExceptionHandler(AccessDeniedException.class)
+	public Mono<ResponseEntity<ApiError>> handleAccessDenied(AccessDeniedException error, ServerWebExchange exchange) {
+		log.warn("Access denied for {} {}: {} - {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI(), error.getClass().getSimpleName(), error.getMessage());
+		return Mono.fromSupplier(() -> ResponseEntity.status(403).body(new ApiError(403, "forbidden", "Access denied")));
 	}
 	
 	@ExceptionHandler(Exception.class)

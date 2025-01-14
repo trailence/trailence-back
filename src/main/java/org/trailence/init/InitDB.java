@@ -33,13 +33,14 @@ public class InitDB {
 		new DatabaseMigration("0.7_preferences_remove_elevation_unit"),
 		new DatabaseMigration("0.7_preferences_add_photo_max"),
 		new DatabaseMigration("0.9_verification_codes_add_column_invalid_attempts"),
+		new DatabaseMigration("0.12_users_add_column_is_admin"),
 	};
 	
 	public void init() {
 		for (var table : TABLES) createTable(table);
 		doMigrations();
 		if (System.getenv("TRAILENCE_INIT_USER") != null && System.getenv("TRAILENCE_INIT_PASSWORD") != null)
-			userService.createUser(System.getenv("TRAILENCE_INIT_USER"), System.getenv("TRAILENCE_INIT_PASSWORD"))
+			userService.createUser(System.getenv("TRAILENCE_INIT_USER"), System.getenv("TRAILENCE_INIT_PASSWORD"), true)
 					.onErrorComplete(DuplicateKeyException.class)
 					.block();
 	}

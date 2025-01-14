@@ -2,6 +2,8 @@ package org.trailence.trail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
+import java.security.Signature;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
@@ -9,7 +11,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.auth.dto.AuthResponse;
+import org.trailence.auth.dto.InitRenewRequest;
+import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginShareRequest;
+import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestService.TestUserLoggedIn;
 import org.trailence.trail.dto.CreateShareRequest;
@@ -23,7 +28,7 @@ import io.restassured.http.ContentType;
 class TestShares extends AbstractTest {
 
 	@Test
-	void shareCollectionToNewUser() {
+	void shareCollectionToNewUser() throws Exception {
 		var user = test.createUserAndLogin();
 		var mytrails = user.getMyTrails();
 		var col2 = user.createCollection();
@@ -73,6 +78,7 @@ class TestShares extends AbstractTest {
 			.post("/api/auth/v1/share");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
+		assertThat(auth.isComplete()).isFalse();
 		var friend = new TestUserLoggedIn(request.getTo(), null, keyPair, auth);
 		
 		assertThat(friend.getCollections()).singleElement().extracting(c -> c.getType()).isEqualTo(TrailCollectionType.MY_TRAILS);
@@ -89,6 +95,31 @@ class TestShares extends AbstractTest {
 		assertThat(friend.getShares()).isEmpty();
 		assertThat(friend.getTracks()).isEmpty();
 		assertThat(friend.getTrails()).isEmpty();
+		
+		// renew token
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new InitRenewRequest(auth.getEmail(), auth.getKeyId()))
+			.post("/api/auth/v1/init_renew");
+		assertThat(response.statusCode()).isEqualTo(200);
+		var initRenew = response.getBody().as(InitRenewResponse.class);
+		assertThat(initRenew.getRandom()).isNotNull();
+			
+		Signature signer = Signature.getInstance("SHA256withRSA");
+		signer.initSign(keyPair.getPrivate());
+		signer.update((auth.getEmail() + initRenew.getRandom()).getBytes(StandardCharsets.UTF_8));
+		var signature = signer.sign();
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>()))
+			.post("/api/auth/v1/renew");
+		assertThat(response.statusCode()).isEqualTo(200);
+		var authRenew = response.getBody().as(AuthResponse.class);
+		assertThat(authRenew.getAccessToken()).isNotNull();
+		assertThat(authRenew.getEmail()).isEqualTo(friend.getEmail().toLowerCase());
+		assertThat(authRenew.getPreferences()).isNotNull();
+		assertThat(authRenew.getKeyId()).isEqualTo(auth.getKeyId());
+		assertThat(authRenew.isComplete()).isFalse();
 	}
 	
 	@Test

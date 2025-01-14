@@ -5,6 +5,8 @@ import java.security.SecureRandom;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.ReactivePageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
@@ -17,6 +19,8 @@ import org.springframework.security.config.web.server.ServerHttpSecurity.HttpBas
 import org.springframework.security.config.web.server.ServerHttpSecurity.LogoutSpec;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.web.reactive.config.WebFluxConfigurer;
+import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.server.session.WebSessionManager;
 import org.trailence.global.rest.JwtFilter;
 import org.trailence.storage.StorageProperties;
@@ -26,7 +30,7 @@ import reactor.core.publisher.Mono;
 @Configuration
 @EnableReactiveMethodSecurity
 @EnableConfigurationProperties(StorageProperties.class)
-public class TrailenceConfiguration {
+public class TrailenceConfiguration implements WebFluxConfigurer {
 
 	@Bean
 	WebSessionManager webSessionManager() {
@@ -71,6 +75,13 @@ public class TrailenceConfiguration {
 	@Bean
 	SecureRandom secureRandom() {
 		return new SecureRandom();
+	}
+	
+	@Override
+	public void configureArgumentResolvers(ArgumentResolverConfigurer configurer) {
+		var resolver = new ReactivePageableHandlerMethodArgumentResolver();
+		resolver.setFallbackPageable(Pageable.unpaged());
+		configurer.addCustomResolver(resolver);
 	}
 	
 }

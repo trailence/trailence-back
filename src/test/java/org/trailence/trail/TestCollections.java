@@ -39,12 +39,12 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		// create 6 collections
 		var create = List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM)
 		);
 		var beforeCreate = System.currentTimeMillis();
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", create);
@@ -92,7 +92,7 @@ class TestCollections extends AbstractTest {
 			.satisfiesOnlyOnce(col -> assertThat(col.getType()).isEqualTo(TrailCollectionType.MY_TRAILS));
 
 		// update collections at index 3 and 5
-		var updateRequest = List.of(create.get(3), create.get(5)).stream().map(col -> new TrailCollection(col.getUuid(), user.getEmail(), 1L, 0, 0, "updated" + RandomStringUtils.random(5), TrailCollectionType.CUSTOM)).toList();
+		var updateRequest = List.of(create.get(3), create.get(5)).stream().map(col -> new TrailCollection(col.getUuid(), user.getEmail(), 1L, 0, 0, "updated" + RandomStringUtils.insecure().next(5), TrailCollectionType.CUSTOM)).toList();
 		response = user.put("/api/trail-collection/v1/_bulkUpdate", updateRequest);
 		assertThat(response.statusCode()).isEqualTo(200);
 		var updated = response.getBody().as(TrailCollection[].class);
@@ -121,7 +121,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.MY_TRAILS)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.MY_TRAILS)
 		));
 		TestUtils.expectError(response, 400, "invalid-type-value");
 
@@ -137,12 +137,12 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
 		));
 		TestUtils.expectError(response, 400, "invalid-name-too-long");
 		
 		var mytrails = getCollections(user, List.of()).getCreated().getFirst();
-		mytrails.setName(RandomStringUtils.randomAlphanumeric(51));
+		mytrails.setName(RandomStringUtils.insecure().nextAlphanumeric(51));
 		response = user.put("/api/trail-collection/v1/_bulkUpdate", List.of(mytrails));
 		TestUtils.expectError(response, 400, "invalid-name-too-long");
 	}
@@ -152,12 +152,12 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
 		));
 		TestUtils.expectError(response, 400, "invalid-uuid");
 
 		response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(null, user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection(null, user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
 		));
 		TestUtils.expectError(response, 400, "missing-uuid");
 	}
@@ -167,7 +167,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), "not me", 0, 0, 0, RandomStringUtils.randomAlphanumeric(10), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), "not me", 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM)
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
@@ -184,7 +184,7 @@ class TestCollections extends AbstractTest {
 		
 		var beforeCreate = System.currentTimeMillis();
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 10L, 20L, 30L, RandomStringUtils.randomAlphanumeric(10), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 10L, 20L, 30L, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM)
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
@@ -218,7 +218,7 @@ class TestCollections extends AbstractTest {
 	@Test
 	void createTwiceTheSameCreateOnlyFirst() {
 		var user = test.createUserAndLogin();
-		var create = new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.randomAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
+		var create = new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(create, create));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
