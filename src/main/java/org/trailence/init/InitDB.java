@@ -34,6 +34,7 @@ public class InitDB {
 		new DatabaseMigration("0.7_preferences_add_photo_max"),
 		new DatabaseMigration("0.9_verification_codes_add_column_invalid_attempts"),
 		new DatabaseMigration("0.12_users_add_column_is_admin"),
+		new DatabaseMigration("0.12_user_keys_add_columns_deleted_at_expires_after"),
 	};
 	
 	public void init() {

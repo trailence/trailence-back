@@ -9,5 +9,7 @@ CREATE TABLE IF NOT EXISTS public.user_keys
     random_expires bigint,
     device_info jsonb NOT NULL,
     invalid_attempts smallint NOT NULL DEFAULT 0,
+    deleted_at bigint,
+    expires_after bigint DEFAULT 16070400000,
     CONSTRAINT user_keys_pkey PRIMARY KEY (id)
 )

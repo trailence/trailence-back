@@ -74,7 +74,7 @@ class TestShares extends AbstractTest {
 		var keyPair = test.generateKeyPair();
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
-			.body(new LoginShareRequest(token, keyPair.getPublic().getEncoded(), new HashMap<String, Object>()))
+			.body(new LoginShareRequest(token, keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>()))
 			.post("/api/auth/v1/share");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
@@ -111,7 +111,7 @@ class TestShares extends AbstractTest {
 		var signature = signer.sign();
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
-			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>()))
+			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var authRenew = response.getBody().as(AuthResponse.class);

@@ -16,18 +16,40 @@ public class SqlBuilder {
 	
 	private final StringBuilder sql = new StringBuilder();
 	
-	public SqlBuilder select(@NonNull Table table, Expression... fields) {
+	public SqlBuilder select(Expression... fields) {
 		sql.append("SELECT ");
 		append(fields);
+		return this;
+	}
+	
+	public SqlBuilder from(@NonNull Table table) {
 		sql.append(" FROM ");
 		sql.append(table.toString());
 		return this;
 	}
 	
-	public SqlBuilder leftJoin(@NonNull String joinSql, @NonNull Condition on, @Nullable String alias) {
-		sql.append(" LEFT JOIN ").append(joinSql);
+	public SqlBuilder from(@NonNull Table table, @Nullable String alias) {
+		sql.append(" FROM ");
+		sql.append(table.toString());
+		if (alias != null) sql.append(" AS ").append(alias);
+		return this;
+	}
+	
+	public SqlBuilder from(@NonNull String innerSql, @Nullable String alias) {
+		sql.append(" FROM (").append(innerSql).append(")");
+		if (alias != null) sql.append(" AS ").append(alias);
+		return this;
+	}
+	
+	public SqlBuilder leftJoin(@NonNull String innerSql, @NonNull Condition on, @Nullable String alias) {
+		sql.append(" LEFT JOIN (").append(innerSql).append(')');
 		if (alias != null) sql.append(" AS ").append(alias);
 		sql.append(" ON ").append(on.toString());
+		return this;
+	}
+	
+	public SqlBuilder where(Condition condition) {
+		sql.append(" WHERE ").append(condition.toString());
 		return this;
 	}
 	

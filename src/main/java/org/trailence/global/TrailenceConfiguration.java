@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.ReactivePageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono;
 
 @Configuration
 @EnableReactiveMethodSecurity
+@EnableScheduling
 @EnableConfigurationProperties(StorageProperties.class)
 public class TrailenceConfiguration implements WebFluxConfigurer {
 

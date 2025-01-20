@@ -16,6 +16,7 @@ public class LoginShareRequest {
 	private String token;
 	@NotNull
 	private byte[] publicKey;
+	private Long expiresAfter;
 	
 	private Map<String, Object> deviceInfo;
 	

@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.r2dbc.dialect.DialectResolver;
 import org.springframework.data.relational.core.mapping.RelationalPersistentEntity;
@@ -23,10 +22,9 @@ import org.springframework.data.relational.core.sql.Update;
 import org.springframework.data.relational.core.sql.render.RenderContext;
 import org.springframework.data.relational.core.sql.render.SqlRenderer;
 import org.springframework.r2dbc.core.PreparedOperation;
-import org.springframework.r2dbc.core.binding.BindMarker;
-import org.springframework.r2dbc.core.binding.BindMarkers;
 import org.springframework.r2dbc.core.binding.BindTarget;
 import org.springframework.r2dbc.core.binding.Bindings;
+import org.springframework.r2dbc.core.binding.MutableBindings;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -42,6 +40,10 @@ public final class DbUtils {
 
 	public static PreparedOperation<Delete> delete(Delete delete, Bindings bindings, R2dbcEntityTemplate r2dbc) {
 		return preparedOperation(delete, bindings, () -> getRenderer(r2dbc).render(delete));
+	}
+
+	public static PreparedOperation<Update> update(Update update, Bindings bindings, R2dbcEntityTemplate r2dbc) {
+		return preparedOperation(update, bindings, () -> getRenderer(r2dbc).render(update));
 	}
 	
 	public static PreparedOperation<String> operation(String sql, Bindings bindings) {
@@ -89,8 +91,7 @@ public final class DbUtils {
 			where = where.and(Conditions.isEqual(Column.create(versionProperty.get().getColumnName(), table), SQL.literalOf((Long) accessor.getProperty(versionProperty.get()))));
 		
 		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
-		BindMarkers markers = dialect.getBindMarkersFactory().create();
-		List<Pair<BindMarker, Object>> bindings = new LinkedList<>();
+		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create()); 
 		
 		List<Assignment> assignments = new LinkedList<>();
 		type.forEach(p -> {
@@ -99,8 +100,7 @@ public final class DbUtils {
 			if (p.equals(versionProperty.orElse(null))) {
 				assignments.add(Assignments.value(Column.create(versionProperty.get().getColumnName(), table), SQL.literalOf(((Long) accessor.getProperty(versionProperty.get()) + 1))));
 			} else if (p.getName().equals("updatedAt")) {
-				BindMarker marker = markers.next();
-				bindings.add(Pair.of(marker, r2dbc.getConverter().writeValue(System.currentTimeMillis(), p.getTypeInformation())));
+				var marker = bindings.bind(r2dbc.getConverter().writeValue(System.currentTimeMillis(), p.getTypeInformation()));
 				assignments.add(Assignments.value(Column.create(p.getColumnName(), table), SQL.bindMarker(marker.getPlaceholder())));
 			} else {
 				Object val = accessor.getProperty(p);
@@ -108,8 +108,7 @@ public final class DbUtils {
 				if (val == null)
 					assignments.add(Assignments.value(Column.create(p.getColumnName(), table), SQL.nullLiteral()));
 				else {
-					BindMarker marker = markers.next();
-					bindings.add(Pair.of(marker, val));
+					var marker = bindings.bind(val);
 					assignments.add(Assignments.value(Column.create(p.getColumnName(), table), SQL.bindMarker(marker.getPlaceholder())));
 				}
 			}
@@ -121,24 +120,7 @@ public final class DbUtils {
 		.where(where)
 		.build();
 		
-		var operation = new PreparedOperation<Update>() {
-			@Override
-			public void bindTo(BindTarget target) {
-				for (Pair<BindMarker, Object> binding : bindings)
-					binding.getKey().bind(target, binding.getValue());
-			}
-			
-			@Override
-			public Update getSource() {
-				return update;
-			}
-			
-			@Override
-			public String toQuery() {
-				return getRenderer(r2dbc).render(update);
-			}
-		};
-		
+		var operation = update(update, bindings, r2dbc);
 		return r2dbc.getDatabaseClient().sql(operation).fetch().rowsUpdated();
 	}
 	

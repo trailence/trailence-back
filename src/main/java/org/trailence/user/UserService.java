@@ -12,6 +12,7 @@ import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expressions;
 import org.springframework.data.relational.core.sql.SimpleFunction;
+import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.trailence.auth.db.UserKeyEntity;
@@ -114,8 +115,11 @@ public class UserService {
 		.then();
 	}
 
-	private static final Column COL_MIN_VERSION = Column.create("min_version", UserKeyEntity.TABLE);
-	private static final Column COL_MAX_VERSION = Column.create("max_version", UserKeyEntity.TABLE);
+	private static final Table ALIAS_APP_VERSION = Table.create("app_versions");
+	private static final String MIN_VERSION = "min_version";
+	private static final String MAX_VERSION = "max_version";
+	private static final Column COL_MIN_VERSION = Column.create(MIN_VERSION, ALIAS_APP_VERSION);
+	private static final Column COL_MAX_VERSION = Column.create(MAX_VERSION, ALIAS_APP_VERSION);
 	private static final String COL_COMPLETE = "complete";
 	private static final Map<String, Object> userDtoFieldMapping = new HashMap<>();
 	
@@ -132,9 +136,9 @@ public class UserService {
 
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
 	public Mono<PageResult<User>> getUsers(Pageable pageable) {
+		Table userVersionsTable = Table.create("user_versions");
 		String sql = new SqlBuilder()
 		.select(
-			UserEntity.TABLE,
 			UserEntity.COL_EMAIL,
 			UserEntity.COL_CREATED_AT,
 			new AliasedExpression(Conditions.not(Conditions.isNull(UserEntity.COL_PASSWORD)), COL_COMPLETE),
@@ -144,20 +148,42 @@ public class UserService {
 			COL_MIN_VERSION,
 			COL_MAX_VERSION
 		)
-		.leftJoin("(" + 
-				new SqlBuilder()
-				.select(
-					UserKeyEntity.TABLE,
-					UserKeyEntity.COL_EMAIL,
-					SimpleFunction.create("MAX", List.of(UserKeyEntity.COL_LAST_USAGE)).as(UserKeyEntity.COL_LAST_USAGE.getName()),
-					SimpleFunction.create("MIN", List.of(Expressions.just("(device_info ->> 'versionCode')::bigint"))).as(COL_MIN_VERSION.getName()),
-					SimpleFunction.create("MAX", List.of(Expressions.just("(device_info ->> 'versionCode')::bigint"))).as(COL_MAX_VERSION.getName())
-				)
-				.groupBy(UserKeyEntity.COL_EMAIL)
-				.build()
-			+ ")",
+		.from(UserEntity.TABLE)
+		.leftJoin(new SqlBuilder()
+			.select(
+				UserKeyEntity.COL_EMAIL,
+				SimpleFunction.create("MAX", List.of(UserKeyEntity.COL_LAST_USAGE)).as(UserKeyEntity.COL_LAST_USAGE.getName())
+			)
+			.from(UserKeyEntity.TABLE)
+			.groupBy(UserKeyEntity.COL_EMAIL)
+			.build(),
 			Conditions.isEqual(UserKeyEntity.COL_EMAIL, UserEntity.COL_EMAIL),
 			UserKeyEntity.TABLE.toString()
+		)
+		.leftJoin(
+			new SqlBuilder()
+			.select(
+				Column.create(UserEntity.COL_EMAIL.getName(), userVersionsTable),
+				SimpleFunction.create("MIN", List.of(Column.create(MIN_VERSION, userVersionsTable))).as(MIN_VERSION),
+				SimpleFunction.create("MAX", List.of(Column.create(MAX_VERSION, userVersionsTable))).as(MAX_VERSION)
+			)
+			.from(
+				new SqlBuilder()
+				.select(
+					Column.create(UserEntity.COL_EMAIL.getName(), Table.create("tmp_versions")),
+					Expressions.just("tmp_versions.device_info ->> 'deviceId' as device_id"),
+					Expressions.just("min((tmp_versions.device_info ->> 'versionCode')::bigint) as " + MIN_VERSION),
+					Expressions.just("max((tmp_versions.device_info ->> 'versionCode')::bigint) as " + MAX_VERSION)
+				)
+				.from(UserKeyEntity.TABLE, "tmp_versions")
+				.groupBy(Expressions.just("tmp_versions." + UserEntity.COL_EMAIL.getName().toString()), Expressions.just("tmp_versions.device_info ->> 'deviceId'"))
+				.build(),
+				"user_versions"
+			)
+			.groupBy(Column.create(UserEntity.COL_EMAIL.getName(), userVersionsTable))
+			.build(),
+			Conditions.isEqual(Column.create(UserEntity.COL_EMAIL.getName(), ALIAS_APP_VERSION), UserEntity.COL_EMAIL),
+			ALIAS_APP_VERSION.getName().toString()
 		)
 		.pageable(pageable, userDtoFieldMapping)
 		.build();

@@ -15,6 +15,8 @@ public class AuthResponse {
 	private long expires;
 	private String email;
 	private String keyId;
+	private long keyCreatedAt;
+	private long keyExpiresAt;
 	private UserPreferences preferences;
 	private boolean isComplete;
 	private boolean isAdmin;

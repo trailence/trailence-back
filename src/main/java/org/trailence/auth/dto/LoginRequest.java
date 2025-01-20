@@ -24,6 +24,7 @@ public class LoginRequest {
 	private String password;
 	@NotNull
 	private byte[] publicKey;
+	private Long expiresAfter;
 	
 	private Map<String, Object> deviceInfo;
 	

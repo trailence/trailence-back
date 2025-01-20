@@ -14,7 +14,7 @@ class TestAdminUsers extends AbstractTest {
 
 	@Test
 	void testGetUsersAndKeysWithAdminAccount() {
-		var user = test.createUserAndLogin(true);
+		var user = test.createUserAndLogin(true, null);
 		
 		var response = user.get("/api/admin/users/v1");
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -46,7 +46,7 @@ class TestAdminUsers extends AbstractTest {
 
 	@Test
 	void testGetUsersAndKeysWithoutAdminAccount() {
-		var user = test.createUserAndLogin(false);
+		var user = test.createUserAndLogin(false, null);
 		
 		var response = user.get("/api/admin/users/v1");
 		TestUtils.expectError(response, 403, "forbidden");

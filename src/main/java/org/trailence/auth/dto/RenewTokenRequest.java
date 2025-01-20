@@ -2,6 +2,8 @@ package org.trailence.auth.dto;
 
 import java.util.Map;
 
+import org.springframework.lang.Nullable;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,5 +28,10 @@ public class RenewTokenRequest {
 	private byte[] signature;
 	
 	private Map<String, Object> deviceInfo;
+	
+	@Nullable
+	private byte[] newPublicKey;
+	@Nullable
+	private Long newKeyExpiresAfter;
 	
 }

@@ -9,11 +9,20 @@ import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.sql.Assignments;
+import org.springframework.data.relational.core.sql.Conditions;
+import org.springframework.data.relational.core.sql.Delete;
+import org.springframework.data.relational.core.sql.Expressions;
+import org.springframework.data.relational.core.sql.SQL;
+import org.springframework.data.relational.core.sql.SimpleFunction;
+import org.springframework.data.relational.core.sql.Update;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -29,11 +38,15 @@ import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.db.DbUtils;
+import org.trailence.global.db.PlusExpression;
+import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.UserPreferencesService;
+import org.trailence.preferences.dto.UserPreferences;
 import org.trailence.user.UserService;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
@@ -46,6 +59,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -69,6 +84,7 @@ public class AuthService {
 	private static final int MAX_ATTEMPTS_BEFORE_CAPTCHA = 2;
 	private static final int MAX_ATTEMPTS_BEFORE_LOCK = 10;
 	private static final int MAX_ATTEMPTS_BEFORE_REMOVING_KEY = 3;
+	private static final long DEFAULT_KEY_EXPIRES_AFTER = 16070400000L; // 6 * 31 days
 	
 	public Mono<AuthResponse> login(LoginRequest request) {
 		ValidationUtils.field("publicKey", request.getPublicKey()).valid(key -> KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(key)));
@@ -80,15 +96,9 @@ public class AuthService {
 			.flatMap(user -> {
 				var token = auth.generateToken(user.getEmail(), true, user.isAdmin());
 				
-				UserKeyEntity key = new UserKeyEntity();
-				key.setId(UUID.randomUUID());
-				key.setEmail(user.getEmail());
-				key.setPublicKey(request.getPublicKey());
-				key.setCreatedAt(System.currentTimeMillis());
-				key.setLastUsage(System.currentTimeMillis());
-				toDeviceInfo(request.getDeviceInfo(), key);
+				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 				
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, true, user.isAdmin());
+				var response = response(token, user, key, null);
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
@@ -96,6 +106,26 @@ public class AuthService {
 				.thenReturn(response)
 				.flatMap(this::withPreferences);
 			});
+	}
+	
+	private UserKeyEntity createKey(String email, byte[] publicKey, Long expiresAfter, Map<String, Object> deviceInfo) {
+		UserKeyEntity key = new UserKeyEntity();
+		key.setId(UUID.randomUUID());
+		key.setEmail(email);
+		key.setPublicKey(publicKey);
+		key.setCreatedAt(System.currentTimeMillis());
+		key.setLastUsage(key.getCreatedAt());
+		key.setExpiresAfter(getExpiresAfter(expiresAfter));
+		key.setInvalidAttempts(0);
+		toDeviceInfo(deviceInfo, key);
+		return key;
+	}
+	
+	private long getExpiresAfter(Long received) {
+		if (received == null) return DEFAULT_KEY_EXPIRES_AFTER;
+		long v = received.longValue();
+		if (v < 1L) return DEFAULT_KEY_EXPIRES_AFTER;
+		return v;
 	}
 	
 	private Mono<UserEntity> checkInvalidAttempts(UserEntity user, String captchaToken) {
@@ -135,18 +165,9 @@ public class AuthService {
 				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
 				
 				var token = auth.generateToken(user.getEmail(), false, false);
-				
-				UserKeyEntity key = new UserKeyEntity();
-				key.setId(UUID.randomUUID());
-				key.setEmail(user.getEmail());
-				key.setPublicKey(request.getPublicKey());
-				key.setCreatedAt(System.currentTimeMillis());
-				key.setLastUsage(System.currentTimeMillis());
-				key.setInvalidAttempts(0);
-				toDeviceInfo(request.getDeviceInfo(), key);
-				
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), user.getEmail(), key.getId().toString(), null, false, false);
-				
+				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
+
+				var response = response(token, user, key, null);
 				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
 			})
 		);
@@ -156,6 +177,7 @@ public class AuthService {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
 		.switchIfEmpty(Mono.error(new ForbiddenException()))
 		.flatMap(key -> {
+			if (key.getDeletedAt() != null) return Mono.error(new ForbiddenException());
 			byte[] bytes = new byte[33];
 			random.nextBytes(bytes);
 			String randomBase64 = Base64.encodeBase64String(bytes);
@@ -170,34 +192,66 @@ public class AuthService {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
 		.switchIfEmpty(Mono.error(new ForbiddenException()))
 		.flatMap(key -> {
-			if (key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
-			if (!key.getRandom().equals(request.getRandom())) {
+			if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
+			boolean isValid = key.getRandom().equals(request.getRandom());
+			if (isValid && !isValidSignature(key.getPublicKey(), request.getEmail(), key.getRandom(), request.getSignature())) isValid = false;
+			if (!isValid) {
 				key.setInvalidAttempts(key.getInvalidAttempts() + 1);
 				if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
-					return keyRepo.delete(key).then(Mono.error(new ForbiddenException()));
+					key.setDeletedAt(System.currentTimeMillis());
 				}
-			}
-			try {
-				PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(key.getPublicKey()));
-				Signature signer = Signature.getInstance("SHA256withRSA");
-				signer.initVerify(publicKey);
-				signer.update((request.getEmail() + request.getRandom()).getBytes(StandardCharsets.UTF_8));
-				if (!signer.verify(request.getSignature())) return Mono.error(new ForbiddenException());
-			} catch (Exception e) {
-				return Mono.error(new ForbiddenException());
+				return keyRepo.save(key).then(Mono.error(new ForbiddenException()));
 			}
 			return userRepo.findById(key.getEmail())
 			.switchIfEmpty(Mono.error(new ForbiddenException()))
-			.flatMap(user -> {	
-				var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin());
+			.flatMap(user -> {
 				key.setLastUsage(System.currentTimeMillis());
 				toDeviceInfo(request.getDeviceInfo(), key);
 				key.setRandom(null);
 				key.setRandomExpires(0L);
-				var response = new AuthResponse(token.getT1(), token.getT2().toEpochMilli(), key.getEmail(), key.getId().toString(), null, user.getPassword() != null, user.isAdmin());
-				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
+				key.setInvalidAttempts(0);
+				if (request.getNewPublicKey() == null) {
+					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin());
+					var response = response(token, user, key, null);
+					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
+				}
+				// new key
+				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
+				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin());
+				var response = response(token, user, newKey, null);
+				key.setDeletedAt(System.currentTimeMillis());
+				return keyRepo.save(key)
+					.then(r2dbc.insert(newKey))
+					.thenReturn(response)
+					.flatMap(this::withPreferences);
 			});
 		});
+	}
+	
+	private boolean isValidSignature(byte[] publicKeyBytes, String email, String random, byte[] signature) {
+		try {
+			PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(publicKeyBytes));
+			Signature signer = Signature.getInstance("SHA256withRSA");
+			signer.initVerify(publicKey);
+			signer.update((email + random).getBytes(StandardCharsets.UTF_8));
+			return signer.verify(signature);
+		} catch (Exception e) {
+			return false;
+		}
+	}
+	
+	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences) {
+		return new AuthResponse(
+			token.getT1(),
+			token.getT2().toEpochMilli(),
+			user.getEmail(),
+			key.getId().toString(),
+			key.getCreatedAt(),
+			key.getCreatedAt() + key.getExpiresAfter(),
+			preferences,
+			user.getPassword() != null,
+			user.isAdmin()
+		);
 	}
 	
 	private void toDeviceInfo(Map<String, Object> map, UserKeyEntity entity) {
@@ -217,16 +271,18 @@ public class AuthService {
 	}
 	
 	public Flux<UserKey> getMyKeys(Authentication auth) {
-		return internalGetUserKeys(auth.getPrincipal().toString());
+		return internalGetUserKeys(auth.getPrincipal().toString(), false);
 	}
 	
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
 	public Flux<UserKey> getUserKeys(String userEmail) {
-		return internalGetUserKeys(userEmail.toLowerCase());
+		return internalGetUserKeys(userEmail.toLowerCase(), true);
 	}
 	
-	private Flux<UserKey> internalGetUserKeys(String email) {
-		return keyRepo.findByEmail(email).map(entity -> {
+	private Flux<UserKey> internalGetUserKeys(String email, boolean includeDeleted) {
+		return keyRepo.findByEmail(email)
+		.filter(entity -> includeDeleted || entity.getDeletedAt() == null)
+		.map(entity -> {
 			Map<String, Object> info;
 			try {
 				info = TrailenceUtils.mapper.readValue(entity.getDeviceInfo().asString(), new TypeReference<Map<String, Object>>() {});
@@ -234,12 +290,17 @@ public class AuthService {
 				log.error("Error decoding device info", e);
 				info = new HashMap<>();
 			}
-			return new UserKey(entity.getId().toString(), entity.getCreatedAt(), entity.getLastUsage(), info);
+			return new UserKey(entity.getId().toString(), entity.getCreatedAt(), entity.getLastUsage(), info, entity.getDeletedAt());
 		});
 	}
 	
 	public Mono<Void> deleteMyKey(String id, Authentication auth) {
-		return keyRepo.deleteByIdAndEmail(UUID.fromString(id), auth.getPrincipal().toString());
+		return keyRepo.findByIdAndEmail(UUID.fromString(id), auth.getPrincipal().toString())
+		.flatMap(entity -> {
+			if (entity.getDeletedAt() != null) return Mono.empty();
+			entity.setDeletedAt(System.currentTimeMillis());
+			return keyRepo.save(entity).then();
+		});
 	}
 	
 	public Mono<String> getCaptchaKey() {
@@ -261,6 +322,91 @@ public class AuthService {
 		)
 		.flatMap(user -> userService.sendChangePasswordCode(email, lang, true))
 		.then();
+	}
+	
+	@Scheduled(initialDelayString = "10m", fixedDelayString = "1d")
+	public Mono<Void> handleExpiredKeys() {
+		return Mono.defer(() -> {
+			log.info("Deleting expired keys");
+			var now = SQL.literalOf(System.currentTimeMillis());
+			var update = Update.builder().table(UserKeyEntity.TABLE)
+				.set(Assignments.value(UserKeyEntity.COL_DELETED_AT, now))
+				.where(
+					Conditions.isNull(UserKeyEntity.COL_DELETED_AT)
+					.and(
+						Conditions.isLess(
+							new PlusExpression(UserKeyEntity.COL_CREATED_AT, UserKeyEntity.COL_EXPIRES_AFTER),
+							now
+						)
+					)
+				)
+				.build();
+			var operation = DbUtils.update(update, null, r2dbc);
+			return r2dbc.getDatabaseClient().sql(operation).fetch().rowsUpdated()
+			.flatMap(nb -> {
+				log.info("Deleted expired keys: {}", nb);
+				return Mono.empty();
+			});
+		});
+	}
+	
+	@Scheduled(initialDelayString = "12m", fixedDelayString = "1d")
+	public Mono<Void> cleanKeys() {
+		return Mono.defer(() -> {
+			log.info("Cleaning deleted keys since more than 15 months");
+			var delete = Delete.builder()
+			.from(UserKeyEntity.TABLE)
+			.where(
+				Conditions.isLess(UserKeyEntity.COL_DELETED_AT, SQL.literalOf(System.currentTimeMillis() - 15L * 31 * 24 * 60 * 60 * 1000))
+				.and(Conditions.not(Conditions.isNull(UserKeyEntity.COL_DELETED_AT)))
+			).build();
+			return r2dbc.getDatabaseClient().sql(DbUtils.delete(delete, null, r2dbc)).fetch().rowsUpdated()
+			.map(nb -> {
+				log.info("Deleted keys: {}", nb);
+				return nb;
+			});
+		}).then(Mono.defer(() -> {
+			// definitely remove keys having a more recent key for the same user and same deviceId, except keys without a deviceId
+			log.info("Cleaning deleted keys having a more recent key for the same user and device id");
+			var select = DbUtils.operation(
+				new SqlBuilder()
+				.select(
+					UserKeyEntity.COL_EMAIL,
+					Expressions.just("device_info ->> 'deviceId' as device_id"),
+					SimpleFunction.create("MAX", List.of(UserKeyEntity.COL_CREATED_AT))
+				)
+				.from(UserKeyEntity.TABLE)
+				.where(
+					Conditions.not(Conditions.isNull(Expressions.just("device_info ->> 'deviceId'")))
+				)
+				.groupBy(UserKeyEntity.COL_EMAIL, Expressions.just("device_id"))
+				.build(),
+				null
+			);
+			return r2dbc.getDatabaseClient().sql(select)
+			.map((row, meta) -> Tuples.of(row.get(0, String.class), row.get(1, String.class), row.get(2, Long.class)))
+			.all()
+			.concatMap(row -> {
+				var delete = Delete.builder()
+				.from(UserKeyEntity.TABLE)
+				.where(
+					Conditions.isEqual(UserKeyEntity.COL_EMAIL, SQL.literalOf(row.getT1()))
+					.and(Conditions.isEqual(Expressions.just("device_info ->> 'deviceId'"), SQL.literalOf(row.getT2())))
+					.and(Conditions.isLess(UserKeyEntity.COL_CREATED_AT, SQL.literalOf(row.getT3())))
+					.and(Conditions.not(Conditions.isNull(UserKeyEntity.COL_DELETED_AT)))
+				).build();
+				return r2dbc.getDatabaseClient().sql(DbUtils.delete(delete, null, r2dbc)).fetch().rowsUpdated()
+					.map(nb -> {
+						if (nb > 0) log.info("Deleted keys for user {} device id {}: {}", row.getT1(), row.getT2(), nb);
+						return Tuples.of(1L, nb);
+					});
+			})
+			.reduce(Tuples.of(0L, 0L), (p, n) -> Tuples.of(p.getT1() + n.getT1(), p.getT2() + n.getT2()))
+			.flatMap(tuple -> {
+				log.info("Cleaning deleted keys done: {} users/devices processed, {} keys removed", tuple.getT1(), tuple.getT2());
+				return Mono.empty();
+			});
+		}));
 	}
 	
 }

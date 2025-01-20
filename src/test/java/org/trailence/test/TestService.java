@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -89,15 +90,19 @@ public class TestService {
 	}
 	
 	public TestUserLoggedIn createUserAndLogin() {
-		return createUserAndLogin(false);
+		return createUserAndLogin(false, null);
 	}
 	
-	public TestUserLoggedIn createUserAndLogin(boolean admin) {
+	public TestUserLoggedIn createUserAndLogin(boolean admin, Long keyExpiresAfter) {
 		var user = createUser(admin);
+		return login(user, keyExpiresAfter, new HashMap<String, Object>());
+	}
+	
+	public TestUserLoggedIn login(TestUser user, Long keyExpiresAfter, Map<String, Object> deviceInfo) {
 		var keyPair = generateKeyPair();
 		var response = RestAssured.given()
 			.contentType(ContentType.JSON)
-			.body(new LoginRequest(user.getEmail(), user.getPassword(), keyPair.getPublic().getEncoded(), new HashMap<String, Object>(), null))
+			.body(new LoginRequest(user.getEmail(), user.getPassword(), keyPair.getPublic().getEncoded(), keyExpiresAfter, deviceInfo, null))
 			.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);

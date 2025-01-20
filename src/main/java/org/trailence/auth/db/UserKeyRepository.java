@@ -13,6 +13,4 @@ public interface UserKeyRepository extends ReactiveCrudRepository<UserKeyEntity,
 	
 	Flux<UserKeyEntity> findByEmail(String email);
 	
-	Mono<Void> deleteByIdAndEmail(UUID id, String email);
-	
 }

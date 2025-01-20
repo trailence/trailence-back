@@ -34,7 +34,7 @@ class TestChangePassword extends AbstractTest {
 		var keyPair = test.generateKeyPair();
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
-			.body(new LoginRequest(user.getEmail(), "new_password", keyPair.getPublic().getEncoded(), new HashMap<String, Object>(), null))
+			.body(new LoginRequest(user.getEmail(), "new_password", keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>(), null))
 			.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 	}
