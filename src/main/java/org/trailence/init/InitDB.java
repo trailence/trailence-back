@@ -9,6 +9,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.trailence.quotas.db.UserQuotaInit;
 import org.trailence.user.UserService;
 
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class InitDB {
 		"collections", "tracks", "trails", "tags", "trails_tags", "shares",
 		"jobs_queue", "verification_codes",
 		"files", "photos",
+		"user_quotas",
 		"migrations"
 	};
 	
@@ -35,6 +37,7 @@ public class InitDB {
 		new DatabaseMigration("0.9_verification_codes_add_column_invalid_attempts"),
 		new DatabaseMigration("0.12_users_add_column_is_admin"),
 		new DatabaseMigration("0.12_user_keys_add_columns_deleted_at_expires_after"),
+		new UserQuotaInit(),
 	};
 	
 	public void init() {
@@ -62,7 +65,6 @@ public class InitDB {
 		List<String> done = db.getDatabaseClient().sql("SELECT id FROM migrations ORDER BY id").map((row,meta) -> row.get(0, String.class)).all().collectList().block();
 		List<Migration> todo = new LinkedList<>(Arrays.asList(migrations).stream().filter(m -> !done.contains(m.id())).toList());
 		log.info("Migrations done: {}, to be executed: {}", done.size(), todo.size());
-		todo.sort((m1, m2) -> m1.id().compareToIgnoreCase(m2.id()));
 		for (var migration : todo) {
 			try {
 				log.info("Doing migration {}", migration.id());

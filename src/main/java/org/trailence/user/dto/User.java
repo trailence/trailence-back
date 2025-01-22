@@ -1,5 +1,7 @@
 package org.trailence.user.dto;
 
+import org.trailence.quotas.dto.UserQuotas;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -20,5 +22,7 @@ public class User {
 	
 	private Long minAppVersion;
 	private Long maxAppVersion;
+	
+	private UserQuotas quotas;
 	
 }

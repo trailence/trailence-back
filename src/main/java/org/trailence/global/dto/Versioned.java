@@ -13,4 +13,17 @@ public class Versioned {
 	private String owner;
 	private long version;
 	
+	public static interface Interface {
+		
+		public String getUuid();
+		public void setUuid(String uuid);
+		
+		public String getOwner();
+		public void setOwner(String owner);
+		
+		public long getVersion();
+		public void setVersion(long version);
+		
+	}
+	
 }

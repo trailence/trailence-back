@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.Conditions;
@@ -13,13 +15,17 @@ import org.springframework.data.relational.core.sql.Delete;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.data.relational.core.sql.SimpleFunction;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.email.EmailService;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.ShareRepository;
@@ -50,10 +56,13 @@ public class ShareService {
 	private final R2dbcEntityTemplate r2dbc;
 	private final EmailService emailService;
 	private final TokenService tokenService;
+	private final QuotaService quotaService;
 	
+	@Autowired @Lazy @SuppressWarnings("java:S6813")
+	private ShareService self;
+	
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_COMPLETE)
 	public Mono<Share> createShare(CreateShareRequest request, Authentication auth) {
-		if (request.getElements().isEmpty()) return Mono.empty();
-		
 		// check all elements belongs to the caller
 		List<UUID> elements = request.getElements().stream().map(UUID::fromString).toList();
 		String user = auth.getPrincipal().toString();
@@ -72,11 +81,7 @@ public class ShareService {
 			for (UUID uuid : elements) {
 				entities.add(new ShareElementEntity(share.getUuid(), uuid, user));
 			}
-			return r2dbc.insert(share)
-			.thenMany(
-				Flux.fromIterable(entities).flatMap(r2dbc::insert, 3, 6)
-				.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
-			)
+			return self.createShareWithQuota(share, entities)
 			.then(Mono.defer(() ->
 				userRepo.findByEmail(request.getTo().toLowerCase())
 				.singleOptional()
@@ -117,6 +122,17 @@ public class ShareService {
 			if (nb.longValue() != elements.size()) return Mono.error(new BadRequestException("Some elements are invalid or not found"));
 			return Mono.empty();
 		});
+	}
+	
+	@Transactional
+	public Mono<Void> createShareWithQuota(ShareEntity share, List<ShareElementEntity> elements) {
+		return quotaService.addShares(share.getFromEmail(), 1)
+		.then(r2dbc.insert(share))
+		.thenMany(
+			Flux.fromIterable(elements).flatMap(r2dbc::insert, 3, 6)
+			.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
+		)
+		.then();
 	}
 	
 	private Mono<Share> getShare(String id, String owner) {
@@ -193,6 +209,7 @@ public class ShareService {
 	}
 	
 	
+	@Transactional
 	public Mono<Void> deleteShare(String id, String from, Authentication auth) {
 		String user = auth.getPrincipal().toString();
 		String fromEmail = from.toLowerCase();
@@ -201,23 +218,25 @@ public class ShareService {
 			if (!entity.getFromEmail().equals(user) && !entity.getToEmail().equals(user)) return Mono.empty();
 			Delete deleteElements = Delete.builder().from(ShareElementEntity.TABLE).where(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, SQL.literalOf(id)).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(fromEmail)))).build();
 			return r2dbc.getDatabaseClient().sql(DbUtils.delete(deleteElements, null, r2dbc)).then()
-			.then(shareRepo.deleteAllByUuidInAndFromEmail(List.of(UUID.fromString(id)), fromEmail));
+			.then(shareRepo.deleteAllByUuidInAndFromEmail(List.of(UUID.fromString(id)), fromEmail))
+			.then(quotaService.sharesDeleted(fromEmail, 1));
 		});
 	}
 	
 	public Mono<Void> trailsDeleted(Collection<UUID> trailsUuids, String owner) {
-		return deleteShares(ShareElementType.TRAIL, trailsUuids, owner);
+		return self.deleteSharesWithQuota(ShareElementType.TRAIL, trailsUuids, owner);
 	}
 	
 	public Mono<Void> tagsDeleted(Collection<UUID> tagsUuids, String owner) {
-		return deleteShares(ShareElementType.TAG, tagsUuids, owner);
+		return self.deleteSharesWithQuota(ShareElementType.TAG, tagsUuids, owner);
 	}
 	
 	public Mono<Void> collectionsDeleted(Collection<UUID> collectionsUuids, String owner) {
-		return deleteShares(ShareElementType.COLLECTION, collectionsUuids, owner);
+		return self.deleteSharesWithQuota(ShareElementType.COLLECTION, collectionsUuids, owner);
 	}
 	
-	private Mono<Void> deleteShares(ShareElementType type, Collection<UUID> elements, String owner) {
+	@Transactional
+	public Mono<Void> deleteSharesWithQuota(ShareElementType type, Collection<UUID> elements, String owner) {
 		Select selectSharesIds = Select.builder()
 			.select(ShareEntity.COL_UUID)
 			.from(ShareElementEntity.TABLE)
@@ -255,7 +274,8 @@ public class ShareService {
 				.flatMap(existingUuids -> {
 					List<UUID> toDelete = sharesIds.stream().filter(uuid -> !existingUuids.contains(uuid)).toList();
 					if (toDelete.isEmpty()) return Mono.empty();
-					return shareRepo.deleteAllByUuidInAndFromEmail(toDelete, owner);
+					return shareRepo.deleteAllByUuidInAndFromEmail(toDelete, owner)
+					.flatMap(removed -> quotaService.sharesDeleted(owner, removed));
 				});
 			}));
 		});

@@ -25,7 +25,7 @@ public class TrailCollectionV1Controller {
 	private final TrailCollectionService service;
 	
 	@PostMapping("/_bulkCreate")
-	public Flux<TrailCollection> bulkCreate(@RequestBody List<TrailCollection> collections, Authentication auth) {
+	public Mono<List<TrailCollection>> bulkCreate(@RequestBody List<TrailCollection> collections, Authentication auth) {
 		return service.bulkCreate(collections, auth);
 	}
 	

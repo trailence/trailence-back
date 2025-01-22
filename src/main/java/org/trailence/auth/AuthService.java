@@ -47,6 +47,8 @@ import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.UserPreferencesService;
 import org.trailence.preferences.dto.UserPreferences;
+import org.trailence.quotas.QuotaService;
+import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.user.UserService;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
@@ -76,6 +78,7 @@ public class AuthService {
 	private final TokenService tokenService;
 	private final UserService userService;
 	private final CaptchaService captchaService;
+	private final QuotaService quotaService;
 	
 	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
 	private static final String ERROR_CODE_LOCKED = "locked";
@@ -98,13 +101,13 @@ public class AuthService {
 				
 				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 				
-				var response = response(token, user, key, null);
+				var response = response(token, user, key, null, null);
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
 				.then(r2dbc.insert(key))
 				.thenReturn(response)
-				.flatMap(this::withPreferences);
+				.flatMap(this::withPreferences).flatMap(this::withQuotas);
 			});
 	}
 	
@@ -167,8 +170,8 @@ public class AuthService {
 				var token = auth.generateToken(user.getEmail(), false, false);
 				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 
-				var response = response(token, user, key, null);
-				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences);
+				var response = response(token, user, key, null, null);
+				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 			})
 		);
 	}
@@ -212,18 +215,19 @@ public class AuthService {
 				key.setInvalidAttempts(0);
 				if (request.getNewPublicKey() == null) {
 					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin());
-					var response = response(token, user, key, null);
-					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences);
+					var response = response(token, user, key, null, null);
+					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 				}
 				// new key
 				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
 				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin());
-				var response = response(token, user, newKey, null);
+				var response = response(token, user, newKey, null, null);
 				key.setDeletedAt(System.currentTimeMillis());
 				return keyRepo.save(key)
 					.then(r2dbc.insert(newKey))
 					.thenReturn(response)
-					.flatMap(this::withPreferences);
+					.flatMap(this::withPreferences)
+					.flatMap(this::withQuotas);
 			});
 		});
 	}
@@ -240,7 +244,7 @@ public class AuthService {
 		}
 	}
 	
-	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences) {
+	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas) {
 		return new AuthResponse(
 			token.getT1(),
 			token.getT2().toEpochMilli(),
@@ -250,7 +254,8 @@ public class AuthService {
 			key.getCreatedAt() + key.getExpiresAfter(),
 			preferences,
 			user.getPassword() != null,
-			user.isAdmin()
+			user.isAdmin(),
+			quotas
 		);
 	}
 	
@@ -266,6 +271,14 @@ public class AuthService {
 		return userPreferencesService.getPreferences(response.getEmail())
 		.map(pref -> {
 			response.setPreferences(pref);
+			return response;
+		});
+	}
+	
+	private Mono<AuthResponse> withQuotas(AuthResponse response) {
+		return quotaService.getUserQuotas(response.getEmail())
+		.map(quotas -> {
+			response.setQuotas(quotas);
 			return response;
 		});
 	}

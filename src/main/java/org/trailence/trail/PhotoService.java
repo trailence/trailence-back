@@ -1,13 +1,14 @@
 package org.trailence.trail;
 
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
@@ -16,13 +17,17 @@ import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.db.BulkGetUpdates;
+import org.trailence.global.db.BulkUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.storage.FileService;
+import org.trailence.storage.db.FileEntity;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
 import org.trailence.trail.db.ShareElementEntity;
@@ -45,6 +50,10 @@ public class PhotoService {
 	private final PhotoRepository repo;
 	private final TrailRepository trailRepo;
 	private final R2dbcEntityTemplate r2dbc;
+	private final QuotaService quotaService;
+	
+	@Autowired @Lazy @SuppressWarnings("java:S6813")
+	private PhotoService self;
 
 	@SuppressWarnings("java:S107") // number of parameters
 	public Mono<Photo> storePhoto(
@@ -74,7 +83,11 @@ public class PhotoService {
 			if (existing.getT2().isEmpty()) {
 				return Mono.error(new NotFoundException("trail", trailUuid));
 			}
-			return fileService.storeFile(size, content).flatMap(fileId -> {
+			return quotaService.addPhoto(owner, size)
+			.then(
+				fileService.storeFile(size, content)
+				.onErrorResume(error -> quotaService.photoDeleted(owner, size).then(Mono.error(error)))
+			).flatMap(fileId -> {
 				PhotoEntity entity = new PhotoEntity();
 				entity.setUuid(UUID.fromString(uuid));
 				entity.setOwner(owner);
@@ -87,48 +100,29 @@ public class PhotoService {
 				entity.setLongitude(longitude);
 				entity.setCover(isCover);
 				entity.setIndex(index);
-				return r2dbc.insert(entity);
+				return r2dbc.insert(entity)
+				.onErrorResume(error ->
+					quotaService.photoDeleted(owner, size)
+					.then(fileService.deleteFile(fileId))
+					.then(Mono.error(error))
+				);
 			});			
 		}).map(this::toDto);
 	}
 	
     public Flux<Photo> bulkUpdate(List<Photo> dtos, Authentication auth) {
-        String owner = auth.getPrincipal().toString();
-        List<Throwable> errors = new LinkedList<>();
-        List<Photo> valid = new LinkedList<>();
-        Set<UUID> uuids = new HashSet<>();
-        dtos.forEach(dto -> {
-        	try {
-	        	ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
+    	return BulkUtils.bulkUpdate(
+    		dtos, auth.getPrincipal().toString(),
+    		dto -> {
+    			ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
 	        	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
-	        	valid.add(dto);
-	        	uuids.add(UUID.fromString(dto.getUuid()));
-        	} catch (Exception e) {
-        		errors.add(e);
-        	}
-        });
-        if (uuids.isEmpty()) {
-        	if (errors.isEmpty()) return Flux.empty();
-        	return Flux.error(errors.getFirst());
-        }
-        return repo.findAllByUuidInAndOwner(uuids, owner)
-        .flatMap(entity -> {
-            var dtoOpt = valid.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString())).findAny();
-            if (dtoOpt.isEmpty()) return Mono.empty();
-            var dto = dtoOpt.get();
-            return updateEntity(entity, dto);
-        }, 3, 6)
-        .collectList()
-        .flatMapMany(updatedUuids -> {
-        	if (!updatedUuids.isEmpty()) return repo.findAllByUuidInAndOwner(updatedUuids, owner);
-        	if (!errors.isEmpty()) return Flux.error(errors.getFirst());
-        	return Flux.empty();
-        })
-        .map(this::toDto);
+    		},
+    		(entity, dto, checksAndActions) -> updateEntity(entity, dto),
+    		repo, r2dbc
+    	).map(this::toDto);
     }
 
-    private Mono<UUID> updateEntity(PhotoEntity entity, Photo dto) {
-        if (dto.getVersion() != entity.getVersion()) return Mono.just(entity.getUuid());
+    private boolean updateEntity(PhotoEntity entity, Photo dto) {
     	boolean changed = false;
         if (!Objects.equals(entity.getDescription(), dto.getDescription())) {
             entity.setDescription(dto.getDescription());
@@ -154,25 +148,31 @@ public class PhotoService {
         	entity.setIndex(dto.getIndex());
         	changed = true;
         }
-        if (!changed) return Mono.just(entity.getUuid());
-        return DbUtils.updateByUuidAndOwner(r2dbc, entity).thenReturn(entity.getUuid());
+        return changed;
     }
     
-    public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
+    public Mono<Long> bulkDelete(List<String> uuids, Authentication auth) {
         String owner = auth.getPrincipal().toString();
         return delete(repo.findAllByUuidInAndOwner(new HashSet<>(uuids.stream().map(UUID::fromString).toList()), owner));
     }
     
-    public Mono<Void> trailsDeleted(Set<UUID> trailsUuids, String owner) {
+    public Mono<Long> trailsDeleted(Set<UUID> trailsUuids, String owner) {
     	return delete(repo.findAllByTrailUuidInAndOwner(trailsUuids, owner));
     }
     
-    private Mono<Void> delete(Flux<PhotoEntity> toDelete) {
-    	return toDelete.flatMap(
-    		entity -> repo.deleteByUuidAndOwner(entity.getUuid(), entity.getOwner())
-    			.then(fileService.deleteFile(entity.getFileId())),
-    		3, 6
-    	).then();
+    private Mono<Long> delete(Flux<PhotoEntity> toDelete) {
+    	return toDelete.flatMap(self::deletePhotoWithFileAndQuota, 3, 6)
+    	.reduce(0L, (size, previous) -> size + previous);
+    }
+    
+    @Transactional
+    public Mono<Long> deletePhotoWithFileAndQuota(PhotoEntity entity) {
+    	return repo.deleteByUuidAndOwner(entity.getUuid(), entity.getOwner())
+		.flatMap(nb -> nb == 0 ? Mono.empty() :
+			fileService.deleteFile(entity.getFileId()).map(FileEntity::getSize)
+			.onErrorResume(e -> Mono.just(0L))
+			.flatMap(size -> quotaService.photoDeleted(entity.getOwner(), size).thenReturn(size))
+		);
     }
 	
 	private Photo toDto(PhotoEntity entity) {

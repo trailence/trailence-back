@@ -14,6 +14,6 @@ public interface ShareRepository extends ReactiveCrudRepository<ShareEntity, Lon
 	
 	Mono<ShareEntity> findOneByUuidAndFromEmail(UUID uuid, String fromEmail);
 	
-	Mono<Void> deleteAllByUuidInAndFromEmail(Collection<UUID> uuids, String fromEmail);
+	Mono<Long> deleteAllByUuidInAndFromEmail(Collection<UUID> uuids, String fromEmail);
 	
 }

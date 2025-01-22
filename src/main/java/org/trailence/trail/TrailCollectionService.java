@@ -1,11 +1,12 @@
 package org.trailence.trail;
 
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Column;
@@ -15,11 +16,14 @@ import org.springframework.data.relational.core.sql.Select;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.db.BulkGetUpdates;
+import org.trailence.global.db.BulkUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.TrailCollectionEntity;
 import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.dto.TrailCollection;
@@ -39,44 +43,38 @@ public class TrailCollectionService {
     private final TrailService trailService;
     private final TagService tagService;
     private final ShareService shareService;
+    private final QuotaService quotaService;
+    
+    @Autowired @Lazy @SuppressWarnings("java:S6813")
+    private TrailCollectionService self;
 
-    public Mono<TrailCollection> create(TrailCollection dto, Authentication auth) {
-        UUID id = UUID.fromString(dto.getUuid());
-        String owner = auth.getPrincipal().toString();
-        return repo.findByUuidAndOwner(id, owner)
-            .switchIfEmpty(Mono.defer(() -> {
-                TrailCollectionEntity entity = new TrailCollectionEntity();
-                entity.setUuid(id);
-                entity.setOwner(owner);
-                entity.setName(dto.getName());
-                entity.setType(dto.getType());
-                entity.setCreatedAt(System.currentTimeMillis());
-                entity.setUpdatedAt(entity.getCreatedAt());
-                return r2dbc.insert(entity);
-            }))
-            .map(this::toDTO);
+    public Mono<List<TrailCollection>> bulkCreate(List<TrailCollection> dtos, Authentication auth) {
+    	String owner = auth.getPrincipal().toString();
+    	return BulkUtils.bulkCreate(
+    		dtos, owner,
+    		this::validateCreate,
+    		dto -> {
+    			TrailCollectionEntity entity = new TrailCollectionEntity();
+	            entity.setUuid(UUID.fromString(dto.getUuid()));
+	            entity.setOwner(owner);
+	            entity.setName(dto.getName());
+	            entity.setType(dto.getType());
+	            entity.setCreatedAt(System.currentTimeMillis());
+	            entity.setUpdatedAt(entity.getCreatedAt());
+	            return entity;
+    		},
+    		entities -> self.createCollectionsWithQuota(entities, owner),
+    		repo
+    	).map(list -> list.stream().map(this::toDTO).toList());
     }
 
-    public Flux<TrailCollection> bulkCreate(List<TrailCollection> dtos, Authentication auth) {
-    	List<TrailCollection> valid = new LinkedList<>();
-    	List<Throwable> errors = new LinkedList<>();
-    	Set<UUID> uuids = new HashSet<>();
-    	dtos.forEach(dto -> {
-    		try {
-    			validateCreate(dto);
-    			if (uuids.add(UUID.fromString(dto.getUuid())))
-    				valid.add(dto);
-    		} catch (Exception e) {
-    			errors.add(e);
-    		}
+    @Transactional
+    public Mono<List<TrailCollectionEntity>> createCollectionsWithQuota(List<TrailCollectionEntity> entities, String owner) {
+    	return quotaService.addCollections(owner, entities.size())
+    	.flatMap(nb -> {
+    		var toCreate = nb == entities.size() ? entities : entities.subList(0, nb);
+    		return DbUtils.insertMany(r2dbc, toCreate);
     	});
-    	if (valid.isEmpty()) {
-    		if (errors.isEmpty()) return Flux.empty();
-    		return Flux.error(errors.getFirst());
-    	}
-        return Flux.fromIterable(valid)
-                .publishOn(Schedulers.parallel())
-                .flatMap(dto -> create(dto, auth), 3, 6);
     }
     
     private void validateCreate(TrailCollection dto) {
@@ -93,40 +91,19 @@ public class TrailCollectionService {
     	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessibleCollections(auth.getPrincipal().toString()), TrailCollectionEntity.class, known, this::toDTO);
     }
 
-    @SuppressWarnings("java:S3776")
     public Flux<TrailCollection> bulkUpdate(List<TrailCollection> collections, Authentication auth) {
-    	List<TrailCollection> valid = new LinkedList<>();
-    	Set<UUID> uuids = new HashSet<>();
-    	List<Throwable> errors = new LinkedList<>();
-    	collections.forEach(dto -> {
-    		try {
-    			validate(dto);
-    			valid.add(dto);
-    			uuids.add(UUID.fromString(dto.getUuid()));
-    		} catch (Exception e) {
-    			errors.add(e);
-    		}
-    	});
-    	if (uuids.isEmpty()) {
-    		if (errors.isEmpty()) return Flux.empty();
-    		return Flux.error(errors.getFirst());
-    	}
-        return repo.findAllByUuidInAndOwner(uuids, auth.getPrincipal().toString())
-            .flatMap(entity -> {
-                var dtoOpt = valid.stream().filter(c -> c.getUuid().equals(entity.getUuid().toString())).findAny();
-                if (dtoOpt.isEmpty()) return Mono.empty();
-                var dto = dtoOpt.get();
-                if (dto.getVersion() != entity.getVersion()) return Mono.just(entity);
-                if (entity.getName().equals(dto.getName()))  return Mono.just(entity);
+    	return BulkUtils.bulkUpdate(
+    		collections,
+    		auth.getPrincipal().toString(),
+    		this::validate,
+    		(entity, dto, checksAndActions) -> {
+                if (entity.getName().equals(dto.getName())) return false;
                 entity.setName(dto.getName());
-                return DbUtils.updateByUuidAndOwner(r2dbc, entity)
-                        .flatMap(nb -> nb == 0 ? Mono.empty() : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()));
-            }, 3, 6)
-            .switchIfEmpty(Flux.defer(() -> {
-            	if (!errors.isEmpty()) return Flux.error(errors.getFirst());
-            	return Flux.empty();
-            }))
-            .map(this::toDTO);
+                return true;
+    		},
+    		repo,
+    		r2dbc
+    	).map(this::toDTO);
     }
 
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
@@ -140,40 +117,46 @@ public class TrailCollectionService {
         		tagService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
         		shareService.collectionsDeleted(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel())
         	)
-        	.then(repo.deleteAllByUuidInAndOwner(deletable, owner))
+        	.then(self.deleteCollectionsWithQuota(deletable, owner))
         );
+    }
+    
+    @Transactional
+    public Mono<Void> deleteCollectionsWithQuota(List<UUID> uuids, String owner) {
+    	return repo.deleteAllByUuidInAndOwner(uuids, owner)
+		.flatMap(nb -> quotaService.collectionsDeleted(owner, nb));
     }
     
     private Select buildSelectDeletable(Set<UUID> uuids, String owner) {
     	Table table = Table.create("collections");
     	return Select.builder()
-    		.select(Column.create("uuid", table))
-    		.from(table)
-    		.where(
-    			Conditions.in(Column.create("uuid", table), uuids.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
-    			.and(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(owner)))
-    			.and(Conditions.isEqual(Column.create("type", table), SQL.literalOf(TrailCollectionType.CUSTOM.name())))
-    		).build();
+		.select(Column.create("uuid", table))
+		.from(table)
+		.where(
+			Conditions.in(Column.create("uuid", table), uuids.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
+			.and(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(owner)))
+			.and(Conditions.isEqual(Column.create("type", table), SQL.literalOf(TrailCollectionType.CUSTOM.name())))
+		).build();
     }
 
     private Select buildSelectAccessibleCollections(String email) {
         Table table = Table.create("collections");
         return Select.builder()
-            .select(AsteriskFromTable.create(table))
-            .from(table)
-            .where(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(email)))
-            .build();
+        .select(AsteriskFromTable.create(table))
+        .from(table)
+        .where(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(email)))
+        .build();
     }
 
     private TrailCollection toDTO(TrailCollectionEntity entity) {
         return new TrailCollection(
-                entity.getUuid().toString(),
-                entity.getOwner(),
-                entity.getVersion(),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt(),
-                entity.getName(),
-                entity.getType()
+            entity.getUuid().toString(),
+            entity.getOwner(),
+            entity.getVersion(),
+            entity.getCreatedAt(),
+            entity.getUpdatedAt(),
+            entity.getName(),
+            entity.getType()
         );
     }
 }

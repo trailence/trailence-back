@@ -67,6 +67,15 @@ class TestTrails extends AbstractTest {
 	}
 	
 	@Test
+	void bulkEmpty() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		assertThat(user.createTrails(mytrails, 0, true)).isEmpty();
+		assertThat(user.updateTrails()).isEmpty();
+		user.deleteTrails();
+	}
+	
+	@Test
 	void moveToAnotherCollection() {
 		var user = test.createUserAndLogin();
 		
@@ -225,6 +234,12 @@ class TestTrails extends AbstractTest {
 		trail.setCurrentTrackUuid(track2.getUuid());
 		response = user1.put("/api/trail/v1/_bulkUpdate", List.of(trail));
 		TestUtils.expectError(response, 404, "track-not-found");
+		
+		// update with both collection and track from another user
+		trail.setCollectionUuid(col2.getUuid());
+		trail.setCurrentTrackUuid(track2.getUuid());
+		response = user1.put("/api/trail/v1/_bulkUpdate", List.of(trail));
+		TestUtils.expectError(response, 404, "collection-not-found");
 	}
 	
 	@Test

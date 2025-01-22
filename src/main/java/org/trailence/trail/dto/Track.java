@@ -22,6 +22,8 @@ public class Track {
 	private Segment[] s;
 	private WayPoint[] wp;
 	
+	private Integer sizeUsed;
+	
 	@Data
 	@NoArgsConstructor
 	@AllArgsConstructor

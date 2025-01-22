@@ -2,6 +2,7 @@ package org.trailence.trail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -79,6 +80,9 @@ class TestPhotos extends AbstractTest {
 		assertThat(updates.getDeleted()).isEmpty();
 		assertThat(updates.getUpdated()).isEmpty();
 		assertThat(updates.getCreated()).singleElement().isEqualTo(photo);
+
+		response = user.post("/api/photo/v1/_bulkDelete", List.of());
+		assertThat(response.statusCode()).isEqualTo(200);
 		
 		response = user.post("/api/photo/v1/_bulkDelete", List.of(photo.getUuid()));
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -320,6 +324,86 @@ class TestPhotos extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		updated = response.getBody().as(Photo[].class);
 		assertThat(updated).singleElement().isEqualTo(update1);
+	}
+	
+	@Test
+	void testQuotaPhotoNumber() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		var trail = user.createTrail(mytrails, true);
+		
+		var quotas = user.getAuth().getQuotas();
+		quotas.setPhotosMax(5);
+		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		
+		var photos = new LinkedList<Photo>();
+		photos.add(user.createPhoto(trail).getT1());
+		photos.add(user.createPhoto(trail).getT1());
+		photos.add(user.createPhoto(trail).getT1());
+		photos.add(user.createPhoto(trail).getT1());
+		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isEqualTo(4);
+		photos.add(user.createPhoto(trail).getT1());
+		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isEqualTo(5);
+		user.createPhoto(trail, 10, 10, 403, "quota-exceeded-photos");
+		
+		user.deletePhotos(photos.subList(0, 2));
+		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isEqualTo(3);
+		photos.removeFirst();
+		photos.removeFirst();
+
+		photos.add(user.createPhoto(trail).getT1());
+		photos.add(user.createPhoto(trail).getT1());
+		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isEqualTo(5);
+		user.createPhoto(trail, 10, 10, 403, "quota-exceeded-photos");
+		
+		user.deletePhotos(photos);
+		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isZero();
+	}
+	
+	@Test
+	void testQuotaPhotoSize() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		var trail = user.createTrail(mytrails, true);
+		
+		var quotas = user.getAuth().getQuotas();
+		quotas.setPhotosSizeMax(10000);
+		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		
+		var photo1 = user.createPhoto(trail, 9000, 9000, -1, null);
+		assertThat(user.renewToken().getQuotas().getPhotosSizeUsed()).isEqualTo(9000);
+
+		user.createPhoto(trail, 2000, 2000, 403, "quota-exceeded-photos-size");
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isEqualTo(9000);
+		assertThat(quotas.getPhotosUsed()).isEqualTo(1);
+
+		var photo2 = user.createPhoto(trail, 1000, 1000, -1, null);
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isEqualTo(10000);
+		assertThat(quotas.getPhotosUsed()).isEqualTo(2);
+
+		user.createPhoto(trail, 1, 1, 403, "quota-exceeded-photos-size");
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isEqualTo(10000);
+		assertThat(quotas.getPhotosUsed()).isEqualTo(2);
+		
+		long sizeRemoved = user.deletePhotos(photo2.getT1());
+		assertThat(sizeRemoved).isEqualTo(1000);
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isEqualTo(9000);
+		assertThat(quotas.getPhotosUsed()).isEqualTo(1);
+
+		photo2 = user.createPhoto(trail, 1, 1, -1, null);
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isEqualTo(9001);
+		assertThat(quotas.getPhotosUsed()).isEqualTo(2);
+		
+		sizeRemoved = user.deletePhotos(photo1.getT1(), photo2.getT1());
+		assertThat(sizeRemoved).isEqualTo(9001);
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getPhotosSizeUsed()).isZero();
+		assertThat(quotas.getPhotosUsed()).isZero();
 	}
 	
 	private Photo copy(Photo p) {

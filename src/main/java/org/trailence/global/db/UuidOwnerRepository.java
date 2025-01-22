@@ -16,9 +16,9 @@ public interface UuidOwnerRepository<T extends AbstractEntityUuidOwner> extends 
 
     Flux<T> findAllByUuidInAndOwner(Collection<UUID> uuids, String owner);
     
-    Mono<Void> deleteByUuidAndOwner(UUID uuid, String owner);
+    Mono<Long> deleteByUuidAndOwner(UUID uuid, String owner);
     
-    Mono<Void> deleteAllByUuidInAndOwner(Collection<UUID> uuids, String owner);
+    Mono<Long> deleteAllByUuidInAndOwner(Collection<UUID> uuids, String owner);
 
     Mono<Boolean> existsByUuidAndOwner(UUID uuid, String owner);
 

@@ -8,13 +8,16 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AliasedExpression;
+import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expressions;
+import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.SimpleFunction;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.auth.db.UserKeyEntity;
 import org.trailence.email.EmailService;
 import org.trailence.global.TrailenceUtils;
@@ -25,6 +28,8 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.quotas.db.UserQuotasEntity;
+import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.trail.db.TrailCollectionEntity;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.user.db.UserEntity;
@@ -53,6 +58,7 @@ public class UserService {
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 	private static final String FORGOT_PASSWORD_VERIFICATION_CODE_TYPE = "forgot_password";
 
+	@Transactional
 	public Mono<Void> createUser(String email, String password, boolean isAdmin) {
 		log.info("Creating new user: {}", email);
 		email = email.toLowerCase();
@@ -63,8 +69,9 @@ public class UserService {
 		myTrails.setType(TrailCollectionType.MY_TRAILS);
 		myTrails.setName("");
 		return r2dbc.insert(entity)
-				.then(r2dbc.insert(myTrails))
-				.then();
+		.then(r2dbc.insert(myTrails))
+		.then(r2dbc.getDatabaseClient().sql("INSERT INTO user_quotas (email,collections_used) VALUES (" + SQL.literalOf(email) + ",1)").fetch().rowsUpdated())
+		.then();
 	}
 	
 	public Mono<Void> sendChangePasswordCode(String email, String lang, boolean isForgot) {
@@ -132,6 +139,15 @@ public class UserService {
 		userDtoFieldMapping.put("lastLogin", UserKeyEntity.COL_LAST_USAGE);
 		userDtoFieldMapping.put("minAppVersion", COL_MIN_VERSION);
 		userDtoFieldMapping.put("maxAppVersion", COL_MAX_VERSION);
+		userDtoFieldMapping.put("quotas.collectionsUsed", UserQuotasEntity.COL_COLLECTIONS_USED);
+		userDtoFieldMapping.put("quotas.trailsUsed", UserQuotasEntity.COL_TRAILS_USED);
+		userDtoFieldMapping.put("quotas.tracksUsed", UserQuotasEntity.COL_TRACKS_USED);
+		userDtoFieldMapping.put("quotas.tracksSizeUsed", UserQuotasEntity.COL_TRACKS_SIZE_USED);
+		userDtoFieldMapping.put("quotas.tagsUsed", UserQuotasEntity.COL_TAGS_USED);
+		userDtoFieldMapping.put("quotas.trailTagsUsed", UserQuotasEntity.COL_TRAIL_TAGS_USED);
+		userDtoFieldMapping.put("quotas.photosUsed", UserQuotasEntity.COL_PHOTOS_USED);
+		userDtoFieldMapping.put("quotas.photosSizeUsed", UserQuotasEntity.COL_PHOTOS_SIZE_USED);
+		userDtoFieldMapping.put("quotas.sharesUsed", UserQuotasEntity.COL_SHARES_USED);
 	}
 
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
@@ -146,10 +162,14 @@ public class UserService {
 			UserEntity.COL_INVALID_ATTEMPTS,
 			UserKeyEntity.COL_LAST_USAGE,
 			COL_MIN_VERSION,
-			COL_MAX_VERSION
+			COL_MAX_VERSION,
+			AsteriskFromTable.create(UserQuotasEntity.TABLE)
 		)
 		.from(UserEntity.TABLE)
-		.leftJoin(new SqlBuilder()
+		// user quotas
+		.leftJoinTable(UserQuotasEntity.TABLE, Conditions.isEqual(UserQuotasEntity.COL_EMAIL, UserEntity.COL_EMAIL), null)
+		// last usage from keys
+		.leftJoinSubSelect(new SqlBuilder()
 			.select(
 				UserKeyEntity.COL_EMAIL,
 				SimpleFunction.create("MAX", List.of(UserKeyEntity.COL_LAST_USAGE)).as(UserKeyEntity.COL_LAST_USAGE.getName())
@@ -160,7 +180,8 @@ public class UserService {
 			Conditions.isEqual(UserKeyEntity.COL_EMAIL, UserEntity.COL_EMAIL),
 			UserKeyEntity.TABLE.toString()
 		)
-		.leftJoin(
+		// min and max version from keys
+		.leftJoinSubSelect(
 			new SqlBuilder()
 			.select(
 				Column.create(UserEntity.COL_EMAIL.getName(), userVersionsTable),
@@ -203,7 +224,27 @@ public class UserService {
 			row.get(UserEntity.COL_INVALID_ATTEMPTS.getName().toString(), Integer.class),
 			row.get(UserKeyEntity.COL_LAST_USAGE.getName().toString(), Long.class),
 			row.get(COL_MIN_VERSION.getName().toString(), Long.class),
-			row.get(COL_MAX_VERSION.getName().toString(), Long.class)
+			row.get(COL_MAX_VERSION.getName().toString(), Long.class),
+			new UserQuotas(
+				row.get(UserQuotasEntity.COL_COLLECTIONS_USED.getName().toString(), Short.class),
+				row.get(UserQuotasEntity.COL_COLLECTIONS_MAX.getName().toString(), Short.class),
+				row.get(UserQuotasEntity.COL_TRAILS_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRAILS_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRACKS_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRACKS_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRACKS_SIZE_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRACKS_SIZE_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_PHOTOS_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_PHOTOS_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_PHOTOS_SIZE_USED.getName().toString(), Long.class),
+				row.get(UserQuotasEntity.COL_PHOTOS_SIZE_MAX.getName().toString(), Long.class),
+				row.get(UserQuotasEntity.COL_TAGS_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TAGS_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRAIL_TAGS_USED.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_TRAIL_TAGS_MAX.getName().toString(), Integer.class),
+				row.get(UserQuotasEntity.COL_SHARES_USED.getName().toString(), Short.class),
+				row.get(UserQuotasEntity.COL_SHARES_MAX.getName().toString(), Short.class)
+			)
 		);
 	}
 	

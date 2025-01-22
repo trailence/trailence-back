@@ -223,4 +223,55 @@ class TestShares extends AbstractTest {
 		
 		assertThat(user.getShares()).singleElement().extracting("id").isEqualTo(share.getId());
 	}
+	
+	@Test
+	void shareThenDeleteTrailsShouldRemoveTheEmptyShare() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		var trail1 = user.createTrail(mytrails, true);
+		var trail2 = user.createTrail(mytrails, true);
+		
+		var request = new CreateShareRequest(
+			UUID.randomUUID().toString(),
+			RandomStringUtils.randomAlphanumeric(1, 51),
+			"notReallyAFriend@trailence.org",
+			ShareElementType.TRAIL,
+			List.of(trail1.getUuid(), trail2.getUuid()),
+			"en",
+			false
+		);
+		var response = user.post("/api/share/v1", request);
+		assertThat(response.statusCode()).isEqualTo(200);
+		var share = response.getBody().as(Share.class);
+		assertThat(share.getId()).isEqualTo(request.getId());
+		assertThat(share.getName()).isEqualTo(request.getName());
+		assertThat(share.getFrom()).isEqualTo(user.getEmail().toLowerCase());
+		assertThat(share.getTo()).isEqualTo(request.getTo().toLowerCase());
+		assertThat(share.getType()).isEqualTo(ShareElementType.TRAIL);
+		assertThat(share.getElements()).isEqualTo(request.getElements());
+		assertThat(share.getTrails()).isNull();
+		
+		assertThat(user.getShares()).singleElement().extracting("id").isEqualTo(share.getId());
+		
+		user.deleteTrails(trail1, trail2);
+		assertThat(user.getShares()).isEmpty();
+	}
+	
+	@Test
+	void emptyShareIsNotCreated() {
+		var user = test.createUserAndLogin();
+		var request = new CreateShareRequest(
+			UUID.randomUUID().toString(),
+			RandomStringUtils.randomAlphanumeric(1, 51),
+			"someone@trailence.org",
+			ShareElementType.COLLECTION,
+			List.of(),
+			"en",
+			false
+		);
+		var response = user.post("/api/share/v1", request);
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(user.getShares()).isEmpty();
+		assertMailNotSent("trailence@trailence.org", "someone@trailence.org");
+	}
 }

@@ -64,10 +64,12 @@ public class FileService {
 		});
 	}
 	
-	public Mono<Void> deleteFile(long fileId) {
-		return repo.findById(fileId).flatMap(entity ->
+	public Mono<FileEntity> deleteFile(long fileId) {
+		return repo.findById(fileId)
+		.flatMap(entity ->
 			provider.flatMap(storage -> storage.deleteFile(entity.getStorageId(), getPath(fileId)))
 			.then(repo.deleteById(fileId))
+			.thenReturn(entity)
 		);
 	}
 	

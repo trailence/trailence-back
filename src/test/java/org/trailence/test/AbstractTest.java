@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import org.springframework.util.FileSystemUtils;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.trailence.mailhog.MailHogDtos;
+import org.trailence.mailhog.MailHogDtos.Message;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -115,14 +117,7 @@ public abstract class AbstractTest {
 	protected Tuple2<String, String> assertMailSent(String from, String to) {
 		MailHogDtos.Message message = null;
 		for (var trial = 0; trial < 300; trial++) {
-			var response = mailHogRequest().get("/v2/messages");
-			assertThat(response.statusCode()).isEqualTo(200);
-			var messages = response.getBody().as(MailHogDtos.Messages.class);
-			var messageOpt = messages.getItems().stream().filter(m -> {
-				if (!from.toLowerCase().equals(m.getFrom().getMailbox().toLowerCase() + "@" + m.getFrom().getDomain().toLowerCase())) return false;
-				if (!to.toLowerCase().equals(m.getTo().getFirst().getMailbox().toLowerCase() + "@" + m.getTo().getFirst().getDomain().toLowerCase())) return false;
-				return true;
-			}).findAny();
+			var messageOpt = searchMail(from, to);
 			if (messageOpt.isPresent()) {
 				message = messageOpt.get();
 				break;
@@ -147,5 +142,27 @@ public abstract class AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		
 		return result;
+	}
+	
+	@SuppressWarnings("java:S2925")
+	protected void assertMailNotSent(String from, String to) {
+		assertThat(searchMail(from, to)).isEmpty();
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			// ignore
+		}
+		assertThat(searchMail(from, to)).isEmpty();
+	}
+	
+	protected Optional<Message> searchMail(String from, String to) {
+		var response = mailHogRequest().get("/v2/messages");
+		assertThat(response.statusCode()).isEqualTo(200);
+		var messages = response.getBody().as(MailHogDtos.Messages.class);
+		return messages.getItems().stream().filter(m -> {
+			if (!from.toLowerCase().equals(m.getFrom().getMailbox().toLowerCase() + "@" + m.getFrom().getDomain().toLowerCase())) return false;
+			if (!to.toLowerCase().equals(m.getTo().getFirst().getMailbox().toLowerCase() + "@" + m.getTo().getFirst().getDomain().toLowerCase())) return false;
+			return true;
+		}).findAny();
 	}
 }

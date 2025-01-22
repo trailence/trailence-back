@@ -12,10 +12,10 @@ public interface TrailTagRepository extends ReactiveCrudRepository<TrailTagEntit
 
 	Flux<TrailTagEntity> findAllByOwner(String owner);
 	
-	Mono<Void> deleteAllByTrailUuidInAndOwner(Set<UUID> uuids, String owner);
+	Mono<Long> deleteAllByTrailUuidInAndOwner(Set<UUID> uuids, String owner);
 	
-	Mono<Void> deleteAllByTagUuidInAndOwner(Set<UUID> uuids, String owner);
+	Mono<Long> deleteAllByTagUuidInAndOwner(Set<UUID> uuids, String owner);
 	
-	Mono<Void> deleteByTagUuidAndTrailUuidAndOwner(UUID tagUuid, UUID trailUuid, String owner);
+	Mono<Long> deleteByTagUuidAndTrailUuidAndOwner(UUID tagUuid, UUID trailUuid, String owner);
 	
 }

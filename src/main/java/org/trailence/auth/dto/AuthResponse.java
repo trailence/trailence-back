@@ -1,6 +1,7 @@
 package org.trailence.auth.dto;
 
 import org.trailence.preferences.dto.UserPreferences;
+import org.trailence.quotas.dto.UserQuotas;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -20,5 +21,6 @@ public class AuthResponse {
 	private UserPreferences preferences;
 	private boolean isComplete;
 	private boolean isAdmin;
+	private UserQuotas quotas;
 	
 }

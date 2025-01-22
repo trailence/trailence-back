@@ -2,6 +2,7 @@ package org.trailence.trail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -48,6 +49,7 @@ class TestTracks extends AbstractTest {
 		assertThat(newTrack2.getUpdatedAt()).isGreaterThan(track2.getCreatedAt());
 		track2.setUpdatedAt(newTrack2.getUpdatedAt());
 		track2.setVersion(2);
+		track2.setSizeUsed(newTrack2.getSizeUsed());
 		assertThat(newTrack2).isEqualTo(track2);
 		
 		user.expectTracks(track1, track2, track3, track4);
@@ -154,6 +156,7 @@ class TestTracks extends AbstractTest {
 		assertThat(updated.getVersion()).isEqualTo(2);
 		track2.setVersion(2);
 		track2.setUpdatedAt(updated.getUpdatedAt());
+		track2.setSizeUsed(updated.getSizeUsed());
 		assertThat(updated).isEqualTo(track2);
 		
 		var track3 = user.generateRandomTrack();
@@ -211,6 +214,59 @@ class TestTracks extends AbstractTest {
 		TestUtils.expectError(response, 400, "track-too-large");
 	}
 	
+	@Test
+	void testQuotaTrackNumber() {
+		var user = test.createUserAndLogin();
+		var quotas = user.getAuth().getQuotas();
+		quotas.setTracksMax(5);
+		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		
+		var tracks = new LinkedList<Track>();
+		tracks.add(user.createTrack());
+		tracks.add(user.createTrack());
+		tracks.add(user.createTrack());
+		tracks.add(user.createTrack());
+		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(4);
+		tracks.add(user.createTrack());
+		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(5);
+		user.createTrack(user.generateRandomTrack(), 403, "quota-exceeded-tracks");
+		
+		user.deleteTracks(tracks.subList(0, 2));
+		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(3);
+		tracks.removeFirst();
+		tracks.removeFirst();
+
+		tracks.add(user.createTrack());
+		tracks.add(user.createTrack());
+		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(5);
+		user.createTrack(user.generateRandomTrack(), 403, "quota-exceeded-tracks");
+		
+		user.deleteTracks(tracks);
+		assertThat(user.renewToken().getQuotas().getTracksUsed()).isZero();
+	}
+	
+	@Test
+	void testQuotaTrackSize() {
+		var user = test.createUserAndLogin();
+		var quotas = user.getAuth().getQuotas();
+		quotas.setTracksSizeMax(10000);
+		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		
+		var track = user.createTrack(user.generateRandomTrack(new Random(), 1, 1, 1, 1, 1, 1), -1, null);
+		var size = user.renewToken().getQuotas().getTracksSizeUsed();
+		assertThat(size).isPositive().isEqualTo(track.getSizeUsed());
+
+		user.createTrack(user.generateRandomTrack(new Random(), 20, 20, 100, 100, 1, 1), 403, "quota-exceeded-tracks-size");
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getTracksSizeUsed()).isEqualTo(size);
+		assertThat(quotas.getTracksUsed()).isEqualTo(1);
+		
+		user.deleteTracks(track);
+		quotas = user.renewToken().getQuotas();
+		assertThat(quotas.getTracksSizeUsed()).isZero();
+		assertThat(quotas.getTracksUsed()).isZero();
+	}
+	
 	private Track createTooLargeTrack(String email) {
 		var segments = new Segment[30];
 		for (var i = 0; i < segments.length; ++i) {
@@ -229,7 +285,7 @@ class TestTracks extends AbstractTest {
 				RandomStringUtils.insecure().nextAlphanumeric(75), RandomStringUtils.insecure().nextAlphanumeric(50)
 			);
 		}
-		return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints);
+		return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints, 0);
 	}
 	
 }

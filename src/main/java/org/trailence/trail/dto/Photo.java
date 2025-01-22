@@ -1,5 +1,7 @@
 package org.trailence.trail.dto;
 
+import org.trailence.global.dto.Versioned;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -7,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Photo {
+public class Photo implements Versioned.Interface {
 
 	private String uuid;
     private String owner;

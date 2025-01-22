@@ -7,12 +7,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.trailence.global.db.BulkUtils;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.TagRepository;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.db.TrailTagEntity;
@@ -34,12 +39,16 @@ public class TrailTagService {
 	private final TrailRepository trailRepo;
 	private final TagRepository tagRepo;
 	private final R2dbcEntityTemplate r2dbc;
+	private final QuotaService quotaService;
+	
+	@Autowired @Lazy @SuppressWarnings("java:S6813")
+	private TrailTagService self;
 	
 	public Flux<TrailTag> getAll(Authentication auth) {
 		return repo.findAllByOwner(auth.getPrincipal().toString()).map(this::toDto);
 	}
 	
-	public Flux<TrailTag> bulkCreate(Collection<TrailTag> dtos, Authentication auth) {
+	public Mono<List<TrailTag>> bulkCreate(Collection<TrailTag> dtos, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
 		Set<UUID> tagsUuids = new HashSet<>();
 		Set<UUID> trailsUuids = new HashSet<>();
@@ -59,10 +68,10 @@ public class TrailTagService {
 			}
 		});
 		if (pairs.isEmpty()) {
-			if (errors.isEmpty()) return Flux.empty();
-			return Flux.error(errors.getFirst());
+			if (errors.isEmpty()) return Mono.just(List.of());
+			return Mono.error(errors.getFirst());
 		}
-		return Mono.zip(
+		Flux<TrailTagEntity> entities = Mono.zip(
 			trailRepo.findAllByUuidInAndOwner(trailsUuids, owner).collectList().publishOn(Schedulers.parallel()),
 			tagRepo.findAllByUuidInAndOwner(tagsUuids, owner).collectList().publishOn(Schedulers.parallel())
 		).flatMapMany(existing -> {
@@ -78,19 +87,45 @@ public class TrailTagService {
 		}).map(tuple -> {
 			var dto = dtos.stream().filter(d -> tuple.getT1().toString().equals(d.getTagUuid()) && tuple.getT2().toString().equals(d.getTrailUuid())).findAny();
 			return toEntity(dto.get(), owner);
-		})
-		.flatMap(toCreate ->
-			r2dbc.insert(toCreate)
-			.onErrorResume(DuplicateKeyException.class, e -> Mono.just(toCreate)),
-			3, 6
+		});
+		return BulkUtils.handleOperationsResult(
+			BulkUtils.parallelSingleOperations(
+				entities,
+				entity -> self.createWithQuota(entity).onErrorResume(DuplicateKeyException.class, e -> Mono.just(entity))
+			),
+			List.<TrailTagEntity>of(),
+			errors
 		)
-		.map(this::toDto);
+		.map(list -> list.stream().map(this::toDto).toList());
 	}
 	
+	@Transactional
+	public Mono<TrailTagEntity> createWithQuota(TrailTagEntity entity) {
+		return quotaService.addTrailTags(entity.getOwner(), 1)
+		.flatMap(nb -> r2dbc.insert(entity));
+	}
+	
+	@Transactional
 	public Mono<Void> bulkDelete(Collection<TrailTag> dtos, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
 		return Flux.fromIterable(new HashSet<>(dtos.stream().map(dto -> Tuples.of(UUID.fromString(dto.getTagUuid()), UUID.fromString(dto.getTrailUuid()))).toList()))
 		.flatMap(tuple -> repo.deleteByTagUuidAndTrailUuidAndOwner(tuple.getT1(), tuple.getT2(), owner), 3, 6)
+		.reduce(0L, (p, n) -> p + n)
+		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
+		.then();
+	}
+	
+	@Transactional
+	public Mono<Void> trailsDeleted(Set<UUID> trailsUuids, String owner) {
+		return repo.deleteAllByTrailUuidInAndOwner(trailsUuids, owner)
+		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
+		.then();
+	}
+	
+	@Transactional
+	public Mono<Void> tagsDeleted(Set<UUID> tagsUuids, String owner) {
+		return repo.deleteAllByTagUuidInAndOwner(tagsUuids, owner)
+		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
 		.then();
 	}
 	

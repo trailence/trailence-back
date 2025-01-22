@@ -5,10 +5,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.stream.StreamSupport;
 
+import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.r2dbc.dialect.DialectResolver;
 import org.springframework.data.relational.core.mapping.RelationalPersistentEntity;
+import org.springframework.data.relational.core.mapping.RelationalPersistentProperty;
 import org.springframework.data.relational.core.sql.Assignment;
 import org.springframework.data.relational.core.sql.Assignments;
 import org.springframework.data.relational.core.sql.Column;
@@ -122,6 +125,43 @@ public final class DbUtils {
 		
 		var operation = update(update, bindings, r2dbc);
 		return r2dbc.getDatabaseClient().sql(operation).fetch().rowsUpdated();
+	}
+	
+	public static <T> Mono<List<T>> insertMany(R2dbcEntityTemplate r2dbc, List<T> entities) {
+		if (entities.isEmpty()) return Mono.just(entities);
+		if (entities.size() == 1) return r2dbc.insert(entities.getFirst()).map(List::of);
+		RelationalPersistentEntity<?> type = r2dbc.getConverter().getMappingContext().getRequiredPersistentEntity(entities.getFirst().getClass());
+		
+		StringBuilder sql = new StringBuilder();
+		sql.append("INSERT INTO ").append(type.getQualifiedTableName().toString());
+		sql.append(" (");
+		sql.append(String.join(",", StreamSupport.stream(type.spliterator(), false).map(property -> property.getColumnName().toString()).toList()));
+		sql.append(") VALUES ");
+		
+		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
+		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create());
+		sql.append(String.join(",", entities.stream().map(entity -> insertValues(entity, type, r2dbc, bindings)).toList()));
+		
+		var operation = operation(sql.toString(), bindings);
+		return r2dbc.getDatabaseClient().sql(operation).fetch().all().then(Mono.just(entities));
+	}
+	
+	private static <T> String insertValues(T entity, RelationalPersistentEntity<?> type, R2dbcEntityTemplate r2dbc, MutableBindings bindings) {
+		var accessor = type.getPropertyAccessor(entity);
+		return "(" + String.join(",", StreamSupport.stream(type.spliterator(), false).map(property -> insertValue(property, accessor, r2dbc, bindings)).toList()) + ")";
+	}
+	
+	private static String insertValue(RelationalPersistentProperty property, PersistentPropertyAccessor<?> accessor, R2dbcEntityTemplate r2dbc, MutableBindings bindings) {
+		if (property.isVersionProperty()) {
+			accessor.setProperty(property, 1L);
+			return "1";
+		}
+		Object value = accessor.getProperty(property);
+		if (value == null) return "NULL";
+		value = r2dbc.getConverter().writeValue(value, property.getTypeInformation());
+		if (value == null) return "NULL";
+		var marker = bindings.bind(value);
+		return marker.getPlaceholder();
 	}
 	
 	private static SqlRenderer getRenderer(R2dbcEntityTemplate r2dbc) {

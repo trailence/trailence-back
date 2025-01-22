@@ -47,6 +47,7 @@ class TestAuth extends AbstractTest {
 		assertThat(auth.getAccessToken()).isNotNull();
 		assertThat(auth.getEmail()).isEqualTo(user.getEmail().toLowerCase());
 		assertThat(auth.getPreferences()).isNotNull();
+		assertThat(auth.getQuotas()).isNotNull();
 	}
 	
 	@Test
@@ -82,6 +83,7 @@ class TestAuth extends AbstractTest {
 		assertThat(authRenew.getAccessToken()).isNotNull();
 		assertThat(authRenew.getEmail()).isEqualTo(user.getEmail().toLowerCase());
 		assertThat(authRenew.getPreferences()).isNotNull();
+		assertThat(authRenew.getQuotas()).isNotNull();
 		assertThat(authRenew.getKeyId()).isEqualTo(auth.getKeyId());
 		
 		response = RestAssured.given()
@@ -492,7 +494,7 @@ class TestAuth extends AbstractTest {
 	}
 	
 	@Test
-	void testCleanDeletedKeys() throws Exception {
+	void testCleanDeletedKeys() {
 		var user = test.createUser(false);
 		var login1 = test.login(user, 60000L, Map.of("deviceId", "1"));
 		var login2 = test.login(user, 60000L, Map.of("deviceId", "2"));

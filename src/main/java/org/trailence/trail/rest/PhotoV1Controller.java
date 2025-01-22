@@ -54,7 +54,7 @@ public class PhotoV1Controller {
 	}
 	
 	@PostMapping("/_bulkDelete")
-	public Mono<Void> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
+	public Mono<Long> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
 		return service.bulkDelete(uuids, auth);
 	}
 	

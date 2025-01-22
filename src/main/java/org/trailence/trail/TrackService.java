@@ -7,10 +7,14 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Conditions;
@@ -18,6 +22,7 @@ import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.AccessibleByteArrayOutputStream;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
@@ -26,6 +31,7 @@ import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrackEntity;
@@ -51,42 +57,53 @@ public class TrackService {
 
 	private final TrackRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
+	private final QuotaService quotaService;
+	
+	@Autowired @Lazy @SuppressWarnings("java:S6813")
+	private TrackService self;
 	
 	private static final long MAX_DATA_SIZE = 512L * 1024;
 	
 	public Mono<Track> createTrack(Track track, Authentication auth) {
-		validate(track);
-		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
-		.map(this::toDTO)
-		.switchIfEmpty(
-			Mono.fromCallable(() -> {
-				TrackEntity entity = new TrackEntity();
-				entity.setUuid(UUID.fromString(track.getUuid()));
-				entity.setOwner(auth.getPrincipal().toString());
-				entity.setCreatedAt(System.currentTimeMillis());
-				entity.setUpdatedAt(entity.getCreatedAt());
-				StoredData data = new StoredData();
-				data.s = track.getS();
-				data.wp = track.getWp();
-				entity.setData(compress(data));
-				if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
-				return entity;
-			})
-			.flatMap(r2dbc::insert)
-			.map(this::toDTO)
-		);
+		return Mono.fromCallable(() -> {
+			validate(track);
+			TrackEntity entity = new TrackEntity();
+			entity.setUuid(UUID.fromString(track.getUuid()));
+			entity.setOwner(auth.getPrincipal().toString());
+			entity.setCreatedAt(System.currentTimeMillis());
+			entity.setUpdatedAt(entity.getCreatedAt());
+			StoredData data = new StoredData();
+			data.s = track.getS();
+			data.wp = track.getWp();
+			entity.setData(compress(data));
+			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
+			return entity;
+		})
+		.flatMap(self::createTrackWithQuota)
+		.map(this::toDTO);
+	}
+	
+	@Transactional
+	public Mono<TrackEntity> createTrackWithQuota(TrackEntity entity) {
+		return repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner())
+		.switchIfEmpty(Mono.defer(() ->
+			quotaService.addTrack(entity.getOwner(), entity.getData().length)
+			.then(r2dbc.insert(entity))
+		));
 	}
 	
 	private void validate(Track dto) {
 		ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
 	}
 	
+	@Transactional
 	public Mono<Track> updateTrack(Track track, Authentication auth) {
 		validate(track);
 		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
 		.switchIfEmpty(Mono.error(new TrackNotFound(auth.getPrincipal().toString(), track.getUuid())))
 		.flatMap(entity -> {
 			if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
+			int previousDataSize = entity.getData().length;
 			try {
 				StoredData data = new StoredData();
 				data.s = track.getS();
@@ -98,14 +115,24 @@ public class TrackService {
 			} catch (Exception e) {
 				return Mono.error(e);
 			}
-			return DbUtils.updateByUuidAndOwner(r2dbc, entity)
-					.flatMap(nb -> nb == 0 ? Mono.just(entity) : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()));
+			return quotaService.updateTrackSize(entity.getOwner(), entity.getData().length - previousDataSize)
+			.then(DbUtils.updateByUuidAndOwner(r2dbc, entity))
+			.flatMap(nb -> nb == 0 ? Mono.just(entity) : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()));
 		})
 		.map(this::toDTO);
 	}
 	
 	public Mono<Void> bulkDelete(Collection<String> uuids, Authentication auth) {
-		return repo.deleteAllByUuidInAndOwner(uuids.stream().map(UUID::fromString).toList(), auth.getPrincipal().toString());
+		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), auth.getPrincipal().toString());
+	}
+	
+	@Transactional
+	public Mono<Void> deleteTracksWithQuota(Set<UUID> uuids, String owner) {
+		return repo.findAllByUuidInAndOwner(uuids, owner)
+		.flatMap(entity ->
+			repo.deleteByUuidAndOwner(entity.getUuid(), owner)
+			.flatMap(nb -> nb == 0 ? Mono.empty() : quotaService.tracksDeleted(owner, 1, entity.getData().length))
+		).then();
 	}
 	
 	@SuppressWarnings("java:S2445") // synchronized on a parameter
@@ -292,6 +319,7 @@ public class TrackService {
 			StoredData data = uncompress(entity.getData(), new TypeReference<StoredData>() {});
 			dto.setS(data.s);
 			dto.setWp(data.wp);
+			dto.setSizeUsed(entity.getData().length);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}

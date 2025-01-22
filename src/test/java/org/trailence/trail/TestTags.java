@@ -22,14 +22,18 @@ class TestTags extends AbstractTest {
 		
 		var tag1 = user.createTag(mytrails, null);
 		var tag2 = user.createTag(mytrails, null);
-		var tag3 = user.createTag(mytrails, null);
-		var tag4 = user.createTag(mytrails, null);
+		var tags = user.createTags(mytrails, null, null);
+		var tag3 = tags.get(0);
+		var tag4 = tags.get(1);
 		
-		var tag2_1 = user.createTag(mytrails, tag2);
-		var tag2_2 = user.createTag(mytrails, tag2);
-		var tag2_2_1 = user.createTag(mytrails, tag2_2);
+		tags = user.createTags(mytrails, tag2, tag2, 1);
+		var tag2_1 = tags.get(0);
+		var tag2_2 = tags.get(1);
+		var tag2_2_1 = tags.get(2);
 		
 		user.expectTags(tag1, tag2, tag3, tag4, tag2_1, tag2_2, tag2_2_1);
+		assertThat(tag2_2.getParentUuid()).isEqualTo(tag2.getUuid());
+		assertThat(tag2_2_1.getParentUuid()).isEqualTo(tag2_2.getUuid());
 		
 		// update tag1
 		tag1.setName("updated");
@@ -48,6 +52,15 @@ class TestTags extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		
 		user.expectTags(tag1, tag2, tag4, tag2_1);
+	}
+	
+	@Test
+	void bulkEmpty() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		assertThat(user.createTags(mytrails)).isEmpty();
+		assertThat(user.updateTags()).isEmpty();
+		user.deleteTags();
 	}
 	
 	@Test

@@ -1,6 +1,5 @@
 package org.trailence.trail;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -8,8 +7,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Conditions;
@@ -17,12 +17,16 @@ import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.db.BulkGetUpdates;
+import org.trailence.global.db.BulkUtils;
+import org.trailence.global.db.BulkUtils.ChecksAndActions;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.TrackService.TrackNotFound;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
@@ -31,7 +35,6 @@ import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.db.TrailTagEntity;
-import org.trailence.trail.db.TrailTagRepository;
 import org.trailence.trail.dto.ShareElementType;
 import org.trailence.trail.dto.Trail;
 
@@ -40,7 +43,6 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -50,98 +52,77 @@ public class TrailService {
     private final TrailRepository repo;
     private final TrackRepository trackRepo;
     private final TrailCollectionRepository collectionRepo;
-    private final TrailTagRepository trailTagRepo;
     private final R2dbcEntityTemplate r2dbc;
     private final ShareService shareService;
     private final PhotoService photoService;
-
-    private Mono<Trail> createNotExisting(Trail dto, Authentication auth) {
-        UUID collectionId = UUID.fromString(dto.getCollectionUuid());
-        UUID originalTrackId = UUID.fromString(dto.getOriginalTrackUuid());
-        UUID currentTrackId = UUID.fromString(dto.getCurrentTrackUuid());
-        String owner = auth.getPrincipal().toString();
-
-        Mono<Boolean> collectionExists = collectionRepo.existsByUuidAndOwner(collectionId, owner)
-        	.map(exists -> {
-        		if (!exists.booleanValue())
-        			throw new NotFoundException("collection", dto.getCollectionUuid());
-        		return true;
-        	});
-        Mono<Boolean> originalTrackExists = trackRepo.existsByUuidAndOwner(originalTrackId, owner)
-        	.map(exists -> {
-        		if (!exists.booleanValue())
-        			throw new TrackNotFound(owner, dto.getOriginalTrackUuid());
-        		return true;
-        	});
-        Mono<Boolean> currentTrackExists = currentTrackId.equals(originalTrackId) ? Mono.just(true) :
-            trackRepo.existsByUuidAndOwner(currentTrackId, owner)
-            .map(exists -> {
-            	if (!exists.booleanValue())
-            		throw new TrackNotFound(owner, dto.getCurrentTrackUuid());
-            	return true;
-            });
-
-        return Mono.zip(
-            collectionExists.publishOn(Schedulers.parallel()),
-            originalTrackExists.publishOn(Schedulers.parallel()),
-            currentTrackExists.publishOn(Schedulers.parallel())
-        ).flatMap(ok -> {
-            TrailEntity entity = new TrailEntity();
-            entity.setUuid(UUID.fromString(dto.getUuid()));
-            entity.setOwner(owner);
-            entity.setName(dto.getName());
-            entity.setDescription(dto.getDescription());
-            entity.setLocation(dto.getLocation());
-            entity.setLoopType(dto.getLoopType());
-            entity.setCollectionUuid(collectionId);
-            entity.setOriginalTrackUuid(originalTrackId);
-            entity.setCurrentTrackUuid(currentTrackId);
-            entity.setCreatedAt(System.currentTimeMillis());
-            entity.setUpdatedAt(entity.getCreatedAt());
-            return r2dbc.insert(entity);
-        }).map(this::toDTO);
-    }
+    private final QuotaService quotaService;
+    private final TrailTagService trailTagService;
+    private final TrackService trackService;
+    
+    @Autowired @Lazy @SuppressWarnings("java:S6813")
+    private TrailService self;
 
     public Mono<List<Trail>> bulkCreate(List<Trail> dtos, Authentication auth) {
-    	List<Trail> valid = new LinkedList<>();
-    	Set<UUID> uuids = new HashSet<>();
-    	List<Throwable> errors = new LinkedList<>();
-    	dtos.forEach(dto -> {
-    		try {
-    			validateCreate(dto);
-    			valid.add(dto);
-    			uuids.add(UUID.fromString(dto.getUuid()));
-    		} catch (Exception e) {
-    			errors.add(e);
-    		}
+    	String owner = auth.getPrincipal().toString();
+    	return BulkUtils.bulkCreate(
+    		dtos, owner,
+    		this::validateCreate,
+    		dto -> {
+    			TrailEntity entity = new TrailEntity();
+                entity.setUuid(UUID.fromString(dto.getUuid()));
+                entity.setOwner(owner);
+                entity.setName(dto.getName());
+                entity.setDescription(dto.getDescription());
+                entity.setLocation(dto.getLocation());
+                entity.setLoopType(dto.getLoopType());
+                entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
+                entity.setOriginalTrackUuid(UUID.fromString(dto.getOriginalTrackUuid()));
+                entity.setCurrentTrackUuid(UUID.fromString(dto.getCurrentTrackUuid()));
+                entity.setCreatedAt(System.currentTimeMillis());
+                entity.setUpdatedAt(entity.getCreatedAt());
+                return entity;
+    		},
+    		entities -> self.createTrailsWithQuota(entities, owner),
+    		repo
+    	)
+    	.map(list -> list.stream().map(this::toDTO).toList());
+    }
+
+    @Transactional
+    public Mono<List<TrailEntity>> createTrailsWithQuota(List<TrailEntity> entities, String owner) {
+    	Set<UUID> collectionsUuids = new HashSet<>();
+    	Set<UUID> tracksUuids = new HashSet<>();
+    	entities.forEach(entity -> {
+    		collectionsUuids.add(entity.getCollectionUuid());
+    		tracksUuids.add(entity.getOriginalTrackUuid());
+    		tracksUuids.add(entity.getCurrentTrackUuid());
     	});
-    	if (valid.isEmpty()) {
-    		if (errors.isEmpty()) return Mono.just(List.of());
-    		return Mono.error(errors.getFirst());
-    	}
-        return repo.findAllByUuidInAndOwner(uuids, auth.getPrincipal().toString())
-        .collectList()
-        .zipWhen(known -> {
-            List<Trail> toCreate = valid.stream().filter(dto -> known.stream().noneMatch(entity -> entity.getUuid().toString().equals(dto.getUuid()))).toList();
-            if (toCreate.isEmpty()) return Mono.just(Collections.<Trail>emptyList());
-            return Flux.fromIterable(toCreate)
-            	.flatMap(dto -> createNotExisting(dto, auth)
-            		.map(Object.class::cast)
-            		.onErrorResume(e -> Mono.just((Object) e)),
-            		3, 6
-            	).collectList();
-        })
-        .flatMap(tuple -> {
-        	@SuppressWarnings("unchecked")
-			var created = (Stream<Trail>) tuple.getT2().stream().filter(Trail.class::isInstance);
-        	var existing = tuple.getT1().stream().map(this::toDTO);
-        	var result = Stream.concat(created, existing).toList();
-        	if (!result.isEmpty()) return Mono.just(result);
-        	var errors2 = tuple.getT2().stream().filter(Throwable.class::isInstance).map(Throwable.class::cast).toList();
-        	if (!errors2.isEmpty()) return Mono.error(errors2.getFirst());
-        	if (!errors.isEmpty()) return Mono.error(errors.getFirst());
-        	return Mono.just(result);
-        });
+    	
+    	return Mono.zip(
+    		collectionRepo.findExistingUuids(collectionsUuids, owner).collectList().publishOn(Schedulers.parallel()),
+    		trackRepo.findExistingUuids(tracksUuids, owner).collectList().publishOn(Schedulers.parallel())
+    	).flatMap(tuple -> {
+    		List<UUID> existingCollectionsUuids = tuple.getT1();
+    		List<UUID> existingTracksUuids = tuple.getT2();
+    		List<Throwable> errors = new LinkedList<>();
+    		List<TrailEntity> toCreate = new LinkedList<>();
+    		for (var entity : entities) {
+    			if (!existingCollectionsUuids.contains(entity.getCollectionUuid()))
+    				errors.add(new NotFoundException("collection", entity.getCollectionUuid().toString()));
+    			else if (!existingTracksUuids.contains(entity.getOriginalTrackUuid()))
+    				errors.add(new TrackNotFound(owner, entity.getOriginalTrackUuid().toString()));
+    			else if (!existingTracksUuids.contains(entity.getCurrentTrackUuid()))
+    				errors.add(new TrackNotFound(owner, entity.getCurrentTrackUuid().toString()));
+    			else
+    				toCreate.add(entity);
+    		}
+    		if (toCreate.isEmpty()) return Mono.error(errors.getFirst());
+    		return quotaService.addTrails(owner, toCreate.size())
+	    	.flatMap(nb -> {
+	    		var toCreate2 = nb == toCreate.size() ? toCreate : toCreate.subList(0, nb);
+	    		return DbUtils.insertMany(r2dbc, toCreate2);
+	    	});
+    	});
     }
     
     private void validateCreate(Trail dto) {
@@ -159,83 +140,42 @@ public class TrailService {
     	ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
     }
 
-    @SuppressWarnings("java:S3776")
     public Flux<Trail> bulkUpdate(List<Trail> dtos, Authentication auth) {
-    	List<Trail> valid = new LinkedList<>();
-    	Set<UUID> uuids = new HashSet<>();
-    	List<Throwable> errors = new LinkedList<>();
-    	dtos.forEach(dto -> {
-    		try {
-    			validate(dto);
-    			valid.add(dto);
-    			uuids.add(UUID.fromString(dto.getUuid()));
-    		} catch (Exception e) {
-    			errors.add(e);
-    		}
-    	});
-    	if (valid.isEmpty()) {
-    		if (errors.isEmpty()) return Flux.empty();
-    		return Flux.error(errors.getFirst());
-    	}
-        String owner = auth.getPrincipal().toString();
-        return repo.findAllByUuidInAndOwner(uuids, owner)
-        .flatMap(entity -> {
-            var dtoOpt = valid.stream().filter(dto -> dto.getUuid().equals(entity.getUuid().toString())).findAny();
-            if (dtoOpt.isEmpty()) return Mono.just(Tuples.of(entity.getUuid(), false));
-            var dto = dtoOpt.get();
-            if (dto.getVersion() != entity.getVersion()) return Mono.just(Tuples.of(entity.getUuid(), true));
-            return updateEntity(entity, dto, owner).zipWith(Mono.just(true));
-        }, 3, 6)
-        .collectList()
-        .flatMapMany(results -> {
-        	var updatedUuids = results.stream().filter(r -> r.getT1() instanceof UUID && r.getT2().booleanValue()).map(r -> (UUID)r.getT1()).toList();
-        	if (!updatedUuids.isEmpty()) return repo.findAllByUuidInAndOwner(updatedUuids, owner);
-        	var errors2 = results.stream().filter(r -> r.getT1() instanceof Throwable).map(r -> (Throwable)r.getT1()).toList();
-        	if (!errors2.isEmpty()) return Flux.<TrailEntity>error(errors2.getFirst());
-        	if (!errors.isEmpty()) return Flux.<TrailEntity>error(errors.getFirst());
-        	return Flux.<TrailEntity>empty();
-        })
-        .map(this::toDTO);
+    	String owner = auth.getPrincipal().toString();
+    	return BulkUtils.bulkUpdate(
+    		dtos, owner,
+    		this::validate,
+    		(entity, dto, checksAndActions) -> this.updateEntity(entity, dto, checksAndActions, owner),
+    		repo, r2dbc
+    	).map(this::toDTO);
     }
     
     @SuppressWarnings("java:S3776")
-    private Mono<Object> updateEntity(TrailEntity entity, Trail dto, String owner) {
-        Mono<Optional<Throwable>> checks = Mono.just(Optional.empty());
-        Mono<?> actions = Mono.just(true);
+    private boolean updateEntity(TrailEntity entity, Trail dto, ChecksAndActions checksAndActions, String owner) {
         var changed = false;
         if (dto.getCollectionUuid() != null && !dto.getCollectionUuid().equals(entity.getCollectionUuid().toString())) {
         	// change of collection: it must exist, and we should remove all associated tags
         	var newUuid = UUID.fromString(dto.getCollectionUuid());
-        	checks = checks.flatMap(error -> {
-        		if (error.isPresent()) return Mono.just(error);
-        		return collectionRepo.existsByUuidAndOwner(newUuid, owner)
-        			.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new NotFoundException("collection", newUuid.toString())));
-        	});
-        	actions = actions.then(trailTagRepo.deleteAllByTrailUuidInAndOwner(Set.of(entity.getUuid()), owner).then(Mono.just(true)));
+        	checksAndActions.addCheck(
+        		collectionRepo.existsByUuidAndOwner(newUuid, owner)
+        		.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new NotFoundException("collection", newUuid.toString())))
+        	).addAction(
+        		trailTagService.trailsDeleted(Set.of(entity.getUuid()), owner)
+        	);
         	entity.setCollectionUuid(newUuid);
         	changed = true;
         }
         if (dto.getCurrentTrackUuid() != null && !dto.getCurrentTrackUuid().equals(entity.getCurrentTrackUuid().toString())) {
         	var newUuid = UUID.fromString(dto.getCurrentTrackUuid());
-        	checks = checks.flatMap(error -> {
-        		if (error.isPresent()) return Mono.just(error);
-        		return trackRepo.existsByUuidAndOwner(newUuid, owner)
-        			.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new TrackNotFound(owner, newUuid.toString())));
-        	});
+        	checksAndActions.addCheck(
+        		trackRepo.existsByUuidAndOwner(newUuid, owner)
+        		.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new TrackNotFound(owner, newUuid.toString())))
+        	);
         	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
-        		actions = actions.then(trackRepo.deleteByUuidAndOwner(entity.getCurrentTrackUuid(), owner));
+        		checksAndActions.addAction(trackService.deleteTracksWithQuota(Set.of(entity.getCurrentTrackUuid()), owner));
             entity.setCurrentTrackUuid(newUuid);
             changed = true;
         }
-        var a = actions;
-        var c = changed;
-        return checks.flatMap(error -> {
-        	if (error.isPresent()) return Mono.just(error.get());
-        	return a.then(updateEntityFields(entity, dto, c));
-        });
-    }
-
-    private Mono<UUID> updateEntityFields(TrailEntity entity, Trail dto, boolean changed) {
         if (!Objects.equals(entity.getName(), dto.getName())) {
             entity.setName(dto.getName());
             changed = true;
@@ -252,8 +192,7 @@ public class TrailService {
         	entity.setLoopType(dto.getLoopType());
         	changed = true;
         }
-        if (!changed) return Mono.just(entity.getUuid());
-        return DbUtils.updateByUuidAndOwner(r2dbc, entity).thenReturn(entity.getUuid());
+        return changed;
     }
 
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
@@ -276,12 +215,18 @@ public class TrailService {
 				tracksUuids.add(entity.getCurrentTrackUuid());
 			});
 			return Mono.zip(
-				trailTagRepo.deleteAllByTrailUuidInAndOwner(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-				trackRepo.deleteAllByUuidInAndOwner(tracksUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+				trailTagService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+				trackService.deleteTracksWithQuota(tracksUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
 				shareService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
 				photoService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel())
-			).then(repo.deleteAllByUuidInAndOwner(trailsUuids, owner));
+			).then(self.deleteTrailsWithQuota(trailsUuids, owner));
 		});
+    }
+    
+    @Transactional
+    public Mono<Void> deleteTrailsWithQuota(Set<UUID> uuids, String owner) {
+    	return repo.deleteAllByUuidInAndOwner(uuids, owner)
+    	.flatMap(nb -> quotaService.trailsDeleted(owner, nb));
     }
 
     public Mono<UpdateResponse<Trail>> getUpdates(List<Versioned> known, Authentication auth) {

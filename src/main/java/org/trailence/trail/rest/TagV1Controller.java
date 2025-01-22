@@ -55,7 +55,7 @@ public class TagV1Controller {
 	}
 	
 	@PostMapping("/trails/_bulkCreate")
-	public Flux<TrailTag> bulkCreateTrailsTags(@RequestBody List<TrailTag> dtos, Authentication auth) {
+	public Mono<List<TrailTag>> bulkCreateTrailsTags(@RequestBody List<TrailTag> dtos, Authentication auth) {
 		return trailTagService.bulkCreate(dtos, auth);
 	}
 	

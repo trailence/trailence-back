@@ -3,6 +3,7 @@ package org.trailence.global.db;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.commons.lang3.stream.Streams;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.relational.core.sql.Aliased;
@@ -23,9 +24,7 @@ public class SqlBuilder {
 	}
 	
 	public SqlBuilder from(@NonNull Table table) {
-		sql.append(" FROM ");
-		sql.append(table.toString());
-		return this;
+		return from(table, null);
 	}
 	
 	public SqlBuilder from(@NonNull Table table, @Nullable String alias) {
@@ -35,14 +34,22 @@ public class SqlBuilder {
 		return this;
 	}
 	
-	public SqlBuilder from(@NonNull String innerSql, @Nullable String alias) {
+	public SqlBuilder from(@NonNull String innerSql, @NonNull String alias) {
 		sql.append(" FROM (").append(innerSql).append(")");
-		if (alias != null) sql.append(" AS ").append(alias);
+		sql.append(" AS ").append(alias);
 		return this;
 	}
 	
-	public SqlBuilder leftJoin(@NonNull String innerSql, @NonNull Condition on, @Nullable String alias) {
-		sql.append(" LEFT JOIN (").append(innerSql).append(')');
+	public SqlBuilder leftJoinSubSelect(@NonNull String innerSql, @NonNull Condition on, @Nullable String alias) {
+		return leftJoin("(" + innerSql + ")", on, alias);
+	}
+	
+	public SqlBuilder leftJoinTable(@NonNull Table table, @NonNull Condition on, @Nullable String alias) {
+		return leftJoin(table.toString(), on, alias);
+	}
+	
+	private SqlBuilder leftJoin(String join, Condition on, String alias) {
+		sql.append(" LEFT JOIN ").append(join);
 		if (alias != null) sql.append(" AS ").append(alias);
 		sql.append(" ON ").append(on.toString());
 		return this;
@@ -68,24 +75,24 @@ public class SqlBuilder {
 	}
 	
 	public SqlBuilder orderBy(Iterable<Order> orders, Map<String, Object> sortFieldMapping) {
-		boolean first = true;
-		for (Iterator<Order> it = orders.iterator(); it.hasNext(); ) {
-			if (first) {
-				sql.append(" ORDER BY ");
-				first = false;
-			} else {
-				sql.append(',');
-			}
-			Order order = it.next();
-			Object field = sortFieldMapping.get(order.getProperty());
-			switch (field) {
-				case CharSequence s -> sql.append(s);
-				case Expression e -> append(e);
-				default -> { continue; }
-			}
-			sql.append(' ').append(order.isAscending() ? "ASC" : "DESC");
-		}
+		Iterator<Order> it = orders.iterator();
+		if (!it.hasNext()) return this;
+		sql.append(" ORDER BY ");
+		sql.append(String.join(",", Streams.of(it).map(o -> order(o, sortFieldMapping)).filter(o -> o != null).toList()));
 		return this;
+	}
+	
+	private String order(Order order, Map<String, Object> sortFieldMapping) {
+		StringBuilder result = new StringBuilder();
+		Object field = sortFieldMapping.get(order.getProperty());
+		if (field == null) return null;
+		switch (field) {
+			case CharSequence s -> result.append(s);
+			case Expression e -> append(e);
+			default -> { return null; }
+		}
+		result.append(' ').append(order.isAscending() ? "ASC" : "DESC");
+		return result.toString();
 	}
 	
 	public String build() {

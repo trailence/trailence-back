@@ -10,21 +10,24 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.TrailenceUtils;
-import org.trailence.global.db.AbstractEntityUuidOwner;
 import org.trailence.global.db.BulkGetUpdates;
+import org.trailence.global.db.BulkUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.TagEntity;
 import org.trailence.trail.db.TagRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
-import org.trailence.trail.db.TrailTagRepository;
 import org.trailence.trail.dto.Tag;
 
 import lombok.RequiredArgsConstructor;
@@ -42,9 +45,13 @@ public class TagService {
 
 	private final TagRepository repo;
 	private final TrailCollectionRepository collectionRepo;
-	private final TrailTagRepository trailTagRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final ShareService shareService;
+	private final QuotaService quotaService;
+	private final TrailTagService trailTagService;
+	
+	@Autowired @Lazy @SuppressWarnings("java:S6813")
+	private TagService self;
 	
 	@SuppressWarnings("java:S3776")
 	public Mono<List<Tag>> bulkCreate(List<Tag> dtos, Authentication auth) {
@@ -66,8 +73,7 @@ public class TagService {
 		}
 		String owner = auth.getPrincipal().toString();
 		// check collectionUuid
-		return collectionRepo.findAllByUuidInAndOwner(collectionsUuids, owner)
-		.map(AbstractEntityUuidOwner::getUuid)
+		return collectionRepo.findExistingUuids(collectionsUuids, owner)
 		.collectList()
 		.flatMap(existingCollections -> {
 			Set<UUID> uuids = new HashSet<>();
@@ -145,15 +151,7 @@ public class TagService {
     			remaining.stream().map(dto -> (Throwable) new NotFoundException("tag", "parent " + dto.getParentUuid() + " on collection " + dto.getCollectionUuid())).toList()
     		)));
     	}
-    	return Flux.fromIterable(canCreate).flatMap(dto ->
-    		createNotExisting(dto, owner)
-    		.map(e -> (Object) e)
-    		.onErrorResume(e -> {
-    			log.error("Error creating tag", e);
-    			return Mono.just((Object) e);
-    		})
-    		, 3, 6
-    	)
+    	return BulkUtils.parallelSingleOperations(Flux.fromIterable(canCreate), dto -> self.createTagWithQuota(dto, owner))
     	.collectList()
     	.map(results -> {
     		var created = results.stream().filter(TagEntity.class::isInstance).map(e -> (TagEntity) e).toList();
@@ -162,16 +160,20 @@ public class TagService {
     	});
 	}
 	
-	private Mono<TagEntity> createNotExisting(Tag dto, String owner) {
-		TagEntity entity = new TagEntity();
-		entity.setUuid(UUID.fromString(dto.getUuid()));
-		entity.setOwner(owner);
-		entity.setParentUuid(dto.getParentUuid() != null ? UUID.fromString(dto.getParentUuid()) : null);
-		entity.setName(dto.getName());
-		entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
-		entity.setCreatedAt(System.currentTimeMillis());
-		entity.setUpdatedAt(entity.getCreatedAt());
-		return r2dbc.insert(entity);
+	@Transactional
+	public Mono<TagEntity> createTagWithQuota(Tag dto, String owner) {
+		return quotaService.addTags(owner, 1)
+		.then(Mono.defer(() -> {
+			TagEntity entity = new TagEntity();
+			entity.setUuid(UUID.fromString(dto.getUuid()));
+			entity.setOwner(owner);
+			entity.setParentUuid(dto.getParentUuid() != null ? UUID.fromString(dto.getParentUuid()) : null);
+			entity.setName(dto.getName());
+			entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
+			entity.setCreatedAt(System.currentTimeMillis());
+			entity.setUpdatedAt(entity.getCreatedAt());
+			return r2dbc.insert(entity);
+		}));
     }
 	
 	public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
@@ -191,10 +193,16 @@ public class TagService {
 		return toDelete.collectList()
 		.flatMap(entities -> {
 			var tagsUuids = entities.stream().map(TagEntity::getUuid).collect(Collectors.toSet());
-			return trailTagRepo.deleteAllByTagUuidInAndOwner(tagsUuids, owner)
+			return trailTagService.tagsDeleted(tagsUuids, owner)
 			.then(shareService.tagsDeleted(tagsUuids, owner))
-			.then(repo.deleteAllByUuidInAndOwner(tagsUuids, owner));
+			.then(self.deleteTagsWithQuota(tagsUuids, owner));
 		});
+	}
+	
+	@Transactional
+	public Mono<Void> deleteTagsWithQuota(Set<UUID> uuids, String owner) {
+		return repo.deleteAllByUuidInAndOwner(uuids, owner)
+		.flatMap(nb -> quotaService.tagsDeleted(owner, nb));
 	}
 	
 	@SuppressWarnings("java:S3776")
