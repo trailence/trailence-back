@@ -43,7 +43,7 @@ public class TrailenceApp {
 		} else {
 			log.warn(" ❌ Geonames service not configured, it will always returns empty responses.");
 		}
-		if (ctx.getBean(OutdoorActiveService.class).available()) {
+		if (ctx.getBean(OutdoorActiveService.class).configured()) {
 			log.info(" ✔ Outdoor Active API configured");
 		} else {
 			log.warn(" ❌ Outdoor Active API not configured, it will not be available.");

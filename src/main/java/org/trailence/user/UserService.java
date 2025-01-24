@@ -1,5 +1,6 @@
 package org.trailence.user;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,9 @@ import org.trailence.user.dto.User;
 import org.trailence.verificationcode.VerificationCodeService;
 import org.trailence.verificationcode.VerificationCodeService.Spec;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+
+import io.r2dbc.postgresql.codec.Json;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +66,7 @@ public class UserService {
 	public Mono<Void> createUser(String email, String password, boolean isAdmin) {
 		log.info("Creating new user: {}", email);
 		email = email.toLowerCase();
-		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0, isAdmin);
+		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0, isAdmin, null);
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
@@ -72,6 +76,15 @@ public class UserService {
 		.then(r2dbc.insert(myTrails))
 		.then(r2dbc.getDatabaseClient().sql("INSERT INTO user_quotas (email,collections_used) VALUES (" + SQL.literalOf(email) + ",1)").fetch().rowsUpdated())
 		.then();
+	}
+	
+	public List<String> toRolesList(Json roles) {
+		if (roles == null) return List.of();
+		try {
+			return Arrays.asList(TrailenceUtils.mapper.readValue(roles.asString(), String[].class));
+		} catch (Exception e) {
+			return List.of();
+		}
 	}
 	
 	public Mono<Void> sendChangePasswordCode(String email, String lang, boolean isForgot) {
@@ -159,6 +172,7 @@ public class UserService {
 			UserEntity.COL_CREATED_AT,
 			new AliasedExpression(Conditions.not(Conditions.isNull(UserEntity.COL_PASSWORD)), COL_COMPLETE),
 			UserEntity.COL_IS_ADMIN,
+			UserEntity.COL_ROLES,
 			UserEntity.COL_INVALID_ATTEMPTS,
 			UserKeyEntity.COL_LAST_USAGE,
 			COL_MIN_VERSION,
@@ -221,6 +235,7 @@ public class UserService {
 			row.get(UserEntity.COL_CREATED_AT.getName().toString(), Long.class),
 			row.get(COL_COMPLETE, Boolean.class),
 			row.get(UserEntity.COL_IS_ADMIN.getName().toString(), Boolean.class),
+			toRolesList(row.get(UserEntity.COL_ROLES.getName().toString(), Json.class)),
 			row.get(UserEntity.COL_INVALID_ATTEMPTS.getName().toString(), Integer.class),
 			row.get(UserKeyEntity.COL_LAST_USAGE.getName().toString(), Long.class),
 			row.get(COL_MIN_VERSION.getName().toString(), Long.class),
@@ -246,6 +261,22 @@ public class UserService {
 				row.get(UserQuotasEntity.COL_SHARES_MAX.getName().toString(), Short.class)
 			)
 		);
+	}
+	
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<List<String>> updateUserRoles(String email, List<String> roles) {
+		return userRepo.findByEmail(email.toLowerCase())
+		.flatMap(entity -> {
+			if (roles.isEmpty()) entity.setRoles(null);
+			else
+				try {
+					entity.setRoles(Json.of(TrailenceUtils.mapper.writeValueAsString(roles)));
+				} catch (JsonProcessingException e) {
+					// ignore
+				}
+			return userRepo.save(entity);
+		})
+		.map(entity -> toRolesList(entity.getRoles()));
 	}
 	
 }

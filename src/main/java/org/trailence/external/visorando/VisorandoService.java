@@ -4,8 +4,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.trailence.global.TrailenceUtils;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,6 +17,14 @@ import reactor.core.publisher.Mono;
 
 @Service
 public class VisorandoService {
+	
+	@Value("${trailence.external.visorando.userRole:}")
+	private String userRole;
+	
+	public boolean isAvailable(Authentication auth) {
+		if (userRole == null || userRole.isEmpty()) return true;
+		return TrailenceUtils.hasRole(auth, userRole);
+	}
 	
 	@Data
 	@NoArgsConstructor
@@ -24,7 +35,8 @@ public class VisorandoService {
 	}
 
 	@SuppressWarnings({"java:S3776", "java:S3740"})
-	public Mono<List<Rando>> searchBbox(String bbox) {
+	public Mono<List<Rando>> searchBbox(String bbox, Authentication auth) {
+		if (!this.isAvailable(auth)) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("https://www.visorando.com").build();
 		return client.get()
 		.uri("/?component=rando&task=searchCircuitV2&geolocation=0&metaData=&minDuration=0&maxDuration=720&minDifficulty=1&maxDifficulty=5&loc=&retourDepart=0&&bbox=" + bbox)

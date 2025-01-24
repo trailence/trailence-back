@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.trailence.global.TrailenceUtils;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,13 +28,23 @@ public class OutdoorActiveService {
 
 	@Value("${trailence.external.outdooractive.clientKey:}")
 	private String key;
+	@Value("${trailence.external.outdooractive.userRole:}")
+	private String userRole;
 	
-	public boolean available() {
+	public boolean configured() {
 		return key != null && !key.isEmpty();
 	}
 	
-	public Mono<List<String>> search(double lat, double lng, int radius, int limit) {
-		if (!this.available()) return Mono.just(List.of());
+	public boolean available(Authentication auth) {
+		if (!this.configured()) return false;
+		if (userRole != null && !userRole.isEmpty()) {
+			return TrailenceUtils.hasRole(auth, userRole);
+		}
+		return true;
+	}
+	
+	public Mono<List<String>> search(double lat, double lng, int radius, int limit, Authentication auth) {
+		if (!this.available(auth)) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("https://www.outdooractive.com").build();
 		String queryParams = "?location=" + lng + "," + lat +
 			"&radius=" + radius +
@@ -104,8 +116,8 @@ public class OutdoorActiveService {
 	}
 	
 	@SuppressWarnings("java:S3776")
-	public Mono<List<Rando>> getDetails(List<String> ids, String lang) {
-		if (!this.available()) return Mono.just(List.of());
+	public Mono<List<Rando>> getDetails(List<String> ids, String lang, Authentication auth) {
+		if (!this.available(auth)) return Mono.just(List.of());
 		WebClient client = WebClient.builder()
 			.baseUrl("https://api-oa.com")
 			.exchangeStrategies(ExchangeStrategies.builder().codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(1024 * 1024)).build())

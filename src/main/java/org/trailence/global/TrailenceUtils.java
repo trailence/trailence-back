@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.security.core.Authentication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -44,6 +45,10 @@ public class TrailenceUtils {
 				return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			}
 		}).subscribeOn(Schedulers.boundedElastic()).publishOn(Schedulers.parallel());
+	}
+	
+	public static boolean hasRole(Authentication auth, String role) {
+		return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role) || a.getAuthority().equals(AUTHORITY_ADMIN_USER));
 	}
 	
 }

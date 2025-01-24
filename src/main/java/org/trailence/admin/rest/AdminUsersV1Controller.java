@@ -1,4 +1,6 @@
-package org.trailence.user.rest;
+package org.trailence.admin.rest;
+
+import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +43,11 @@ public class AdminUsersV1Controller {
 	@PutMapping("/{user}/quotas")
 	public Mono<UserQuotas> updateUserQuotas(@PathVariable("user") String user, @RequestBody UserQuotas quotas) {
 		return quotaService.updateUserQuotas(user, quotas);
+	}
+	
+	@PutMapping("/{user}/roles")
+	public Mono<List<String>> updateUserRoles(@PathVariable("user") String user, @RequestBody List<String> roles) {
+		return service.updateUserRoles(user, roles);
 	}
 	
 }

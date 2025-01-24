@@ -43,6 +43,9 @@ trailence:
       secretKey: ${CAPTCHA_SECRET_KEY:}
     outdooractive:
       clientKey: ${OUTDOOR_ACTIVE_KEY:}
+      userRole: ${OUTDOOR_ACTIVE_ROLE:}
+    visorando:
+      userRole: ${VISORANDO_ROLE:}
   storage:
     type: ${TRAILENCE_STORAGE_TYPE:fs}
     username: ${TRAILENCE_STORAGE_USERNAME:}

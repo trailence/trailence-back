@@ -39,6 +39,7 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 	
 	private static final String CLAIM_COMPLETE = "cpl";
 	private static final String CLAIM_ADMIN = "adm";
+	private static final String CLAIM_ROLES = "rl";
 	
 	@Override
 	public void afterPropertiesSet() throws Exception {
@@ -59,20 +60,23 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 			}
 			Integer isComplete = decoded.getClaim(CLAIM_COMPLETE).asInt();
 			Integer isAdmin = decoded.getClaim(CLAIM_ADMIN).asInt();
+			String[] roles = decoded.getClaim(CLAIM_ROLES).asArray(String.class);
 			List<GrantedAuthority> authorities = new LinkedList<>();
 			if (Integer.valueOf(1).equals(isComplete)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER));
 			if (Integer.valueOf(1).equals(isAdmin)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_ADMIN_USER));
+			for (String role : roles) authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
 			return Mono.just(new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities));
 		});
 	}
 	
-	public Tuple2<String, Instant> generateToken(String email, boolean isComplete, boolean isAdmin) {
+	public Tuple2<String, Instant> generateToken(String email, boolean isComplete, boolean isAdmin, List<String> roles) {
 		var expires = Instant.now().plus(tokenValidity);
 		var token = JWT.create()
 			.withSubject(email)
 			.withExpiresAt(expires)
 			.withClaim(CLAIM_COMPLETE, isComplete ? 1 : 0)
 			.withClaim(CLAIM_ADMIN, isAdmin ? 1 : 0)
+			.withArrayClaim(CLAIM_ROLES, roles.toArray(new String[roles.size()]))
 			.sign(algo);
 		return Tuples.of(token, expires);
 	}

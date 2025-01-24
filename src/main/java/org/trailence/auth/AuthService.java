@@ -97,7 +97,7 @@ public class AuthService {
 			.flatMap(user -> checkPassword(user, request.getPassword()))
 			// ok, authenticate
 			.flatMap(user -> {
-				var token = auth.generateToken(user.getEmail(), true, user.isAdmin());
+				var token = auth.generateToken(user.getEmail(), true, user.isAdmin(), getRoles(user));
 				
 				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 				
@@ -109,6 +109,10 @@ public class AuthService {
 				.thenReturn(response)
 				.flatMap(this::withPreferences).flatMap(this::withQuotas);
 			});
+	}
+	
+	private List<String> getRoles(UserEntity user) {
+		return userService.toRolesList(user.getRoles());
 	}
 	
 	private UserKeyEntity createKey(String email, byte[] publicKey, Long expiresAfter, Map<String, Object> deviceInfo) {
@@ -167,7 +171,7 @@ public class AuthService {
 			.flatMap(user -> {
 				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
 				
-				var token = auth.generateToken(user.getEmail(), false, false);
+				var token = auth.generateToken(user.getEmail(), false, false, List.of());
 				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 
 				var response = response(token, user, key, null, null);
@@ -214,13 +218,13 @@ public class AuthService {
 				key.setRandomExpires(0L);
 				key.setInvalidAttempts(0);
 				if (request.getNewPublicKey() == null) {
-					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin());
+					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), getRoles(user));
 					var response = response(token, user, key, null, null);
 					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 				}
 				// new key
 				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
-				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin());
+				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), getRoles(user));
 				var response = response(token, user, newKey, null, null);
 				key.setDeletedAt(System.currentTimeMillis());
 				return keyRepo.save(key)

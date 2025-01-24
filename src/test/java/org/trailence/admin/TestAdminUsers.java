@@ -2,6 +2,8 @@ package org.trailence.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.trailence.global.dto.PageResult;
 import org.trailence.test.AbstractTest;
@@ -53,6 +55,40 @@ class TestAdminUsers extends AbstractTest {
 		
 		response = user.get("/api/admin/users/v1/{user}/keys", user.getEmail());
 		TestUtils.expectError(response, 403, "forbidden");
+	}
+	
+	@Test
+	void updateUserRoles() {
+		var user = test.createUserAndLogin(false, null);
+		
+		var response = test.asAdmin().get("/api/admin/users/v1");
+		assertThat(response.statusCode()).isEqualTo(200);
+		var users = response.getBody().as(new TypeRef<PageResult<User>>() {});
+		var myUser = users.getElements().stream().filter(u -> u.getEmail().equals(user.getEmail().toLowerCase())).findAny();
+		assertThat(myUser).isPresent();
+		assertThat(myUser.get().getRoles()).isEmpty();
+		
+		response = test.asAdmin().put("/api/admin/users/v1/" + user.getEmail() + "/roles", List.of("hello", "world"));
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(response.getBody().as(String[].class)).isEqualTo(new String[] { "hello", "world" });
+		
+		response = test.asAdmin().get("/api/admin/users/v1");
+		assertThat(response.statusCode()).isEqualTo(200);
+		users = response.getBody().as(new TypeRef<PageResult<User>>() {});
+		myUser = users.getElements().stream().filter(u -> u.getEmail().equals(user.getEmail().toLowerCase())).findAny();
+		assertThat(myUser).isPresent();
+		assertThat(myUser.get().getRoles()).isEqualTo(List.of("hello", "world"));
+		
+		response = test.asAdmin().put("/api/admin/users/v1/" + user.getEmail() + "/roles", List.of());
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(response.getBody().as(String[].class)).isEqualTo(new String[] {});
+		
+		response = test.asAdmin().get("/api/admin/users/v1");
+		assertThat(response.statusCode()).isEqualTo(200);
+		users = response.getBody().as(new TypeRef<PageResult<User>>() {});
+		myUser = users.getElements().stream().filter(u -> u.getEmail().equals(user.getEmail().toLowerCase())).findAny();
+		assertThat(myUser).isPresent();
+		assertThat(myUser.get().getRoles()).isEmpty();
 	}
 	
 }
