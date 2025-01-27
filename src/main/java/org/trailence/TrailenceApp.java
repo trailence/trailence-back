@@ -34,7 +34,7 @@ public class TrailenceApp {
 	
 	private void checks(ConfigurableApplicationContext ctx) {
 		if (ctx.getBean(CaptchaService.class).isActivated()) {
-			log.info(" ✔ Captcha service activated");
+			log.info(" ✔ Captcha service activated: " + ctx.getBean(CaptchaService.class).getConfig().getProvider());
 		} else {
 			log.warn(" ❌ Captcha service disabled ! There will be no security especially protecting spam emails !");
 		}

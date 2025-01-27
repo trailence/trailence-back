@@ -17,6 +17,7 @@ import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
+import org.trailence.captcha.CaptchaService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -61,8 +62,8 @@ public class AuthV1Controller {
 	}
 	
 	@GetMapping("captcha")
-	public Mono<String> getCaptchaKey() {
-		return service.getCaptchaKey();
+	public Mono<CaptchaService.PublicConfig> getCaptchaConfig() {
+		return service.getCaptchaConfig();
 	}
 	
 	@PostMapping("forgot")

@@ -19,6 +19,7 @@ import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
+import org.trailence.captcha.CaptchaService;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestUtils;
 import org.trailence.test.stubs.CaptchaStub;
@@ -278,7 +279,9 @@ class TestAuth extends AbstractTest {
 	void testCaptchaKey() {
 		var response = RestAssured.given().get("/api/auth/v1/captcha");
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(response.getBody().asString()).isEqualTo("captchaClient");
+		var config = response.getBody().as(CaptchaService.PublicConfig.class);
+		assertThat(config.getProvider()).isEqualTo("turnstile");
+		assertThat(config.getClientKey()).isEqualTo("captchaClient");
 	}
 	
 	@Test

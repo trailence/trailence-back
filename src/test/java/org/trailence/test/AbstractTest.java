@@ -99,6 +99,7 @@ public abstract class AbstractTest {
 		start();
 		registry.add("trailence.external.captcha.clientKey", () -> "captchaClient");
 		registry.add("trailence.external.captcha.secretKey", () -> "captchaSecret");
+		registry.add("trailence.external.captcha.provider", () -> "turnstile");
 		registry.add("trailence.external.captcha.url", () -> wireMockServer.url("/captcha/siteverify"));
 	}
 	

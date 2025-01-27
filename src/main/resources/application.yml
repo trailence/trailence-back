@@ -38,7 +38,7 @@ trailence:
       url: "http://api.geonames.org"
       username: ${GEONAMES_USER:}
     captcha:
-      url: "https://www.google.com/recaptcha/api/siteverify"
+      provider: ${CAPTCHA_PROVIDER:turnstile}
       clientKey: ${CAPTCHA_CLIENT_KEY:}
       secretKey: ${CAPTCHA_SECRET_KEY:}
     outdooractive:

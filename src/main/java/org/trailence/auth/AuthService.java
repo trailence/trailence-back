@@ -320,8 +320,8 @@ public class AuthService {
 		});
 	}
 	
-	public Mono<String> getCaptchaKey() {
-		return captchaService.getKey();
+	public Mono<CaptchaService.PublicConfig> getCaptchaConfig() {
+		return Mono.just(captchaService.getConfig());
 	}
 	
 	public Mono<Void> forgotPassword(ForgotPasswordRequest request) {
