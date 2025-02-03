@@ -12,7 +12,7 @@
 		<maven.compiler.target>21</maven.compiler.target>
 
 		<spring-boot.version>3.4.1</spring-boot.version>
-		<java-jwt.version>4.4.0</java-jwt.version>
+		<java-jwt.version>4.5.0</java-jwt.version>
 		
 		<maven-jacoco.version>0.8.12</maven-jacoco.version>
 		<maven-compiler.version>3.13.0</maven-compiler.version>
