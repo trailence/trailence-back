@@ -2,6 +2,7 @@ package org.trailence.trail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -9,9 +10,12 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
 import org.trailence.global.dto.Versioned;
+import org.trailence.init.FreePlanProperties;
+import org.trailence.quotas.dto.Plan;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestUtils;
 import org.trailence.trail.dto.Track;
@@ -22,6 +26,8 @@ import org.trailence.trail.dto.Track.WayPoint;
 import io.restassured.common.mapper.TypeRef;
 
 class TestTracks extends AbstractTest {
+	
+	@Autowired private FreePlanProperties freePlan;
 
 	@Test
 	void crud() {
@@ -216,10 +222,14 @@ class TestTracks extends AbstractTest {
 	
 	@Test
 	void testQuotaTrackNumber() {
-		var user = test.createUserAndLogin();
+		var userTest = test.createUser();
+		
+		test.asAdmin().createPlan(new Plan("reducedTracks", 0, 0, -freePlan.getTracks() + 5, 0, 0, 0, 0, 0, 0, null, null));
+		var subscription = test.asAdmin().addPlanToUser(userTest.getEmail(), "reducedTracks");
+		
+		var user = test.login(userTest, null, new HashMap<String, Object>());
 		var quotas = user.getAuth().getQuotas();
-		quotas.setTracksMax(5);
-		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		assertThat(quotas.getTracksMax()).isEqualTo(5);
 		
 		var tracks = new LinkedList<Track>();
 		tracks.add(user.createTrack());
@@ -243,14 +253,21 @@ class TestTracks extends AbstractTest {
 		
 		user.deleteTracks(tracks);
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isZero();
+		
+		test.asAdmin().stopUserSubscription(userTest.getEmail(), subscription.getUuid());
+		assertThat(test.login(userTest, null, new HashMap<String, Object>()).getAuth().getQuotas().getTracksMax()).isEqualTo(freePlan.getTracks());
 	}
 	
 	@Test
 	void testQuotaTrackSize() {
-		var user = test.createUserAndLogin();
+		var userTest = test.createUser();
+		
+		test.asAdmin().createPlan(new Plan("reducedTracksSize", 0, 0, 0, -freePlan.getTracksSize() + 10000, 0, 0, 0, 0, 0, null, null));
+		var subscription = test.asAdmin().addPlanToUser(userTest.getEmail(), "reducedTracksSize");
+		
+		var user = test.login(userTest, null, new HashMap<String, Object>());
 		var quotas = user.getAuth().getQuotas();
-		quotas.setTracksSizeMax(10000);
-		test.asAdmin().updateQuotas(user.getEmail(), quotas);
+		assertThat(quotas.getTracksSizeMax()).isEqualTo(10000);
 		
 		var track = user.createTrack(user.generateRandomTrack(new Random(), 1, 1, 1, 1, 1, 1), -1, null);
 		var size = user.renewToken().getQuotas().getTracksSizeUsed();
@@ -265,6 +282,8 @@ class TestTracks extends AbstractTest {
 		quotas = user.renewToken().getQuotas();
 		assertThat(quotas.getTracksSizeUsed()).isZero();
 		assertThat(quotas.getTracksUsed()).isZero();
+		
+		test.asAdmin().stopUserSubscription(userTest.getEmail(), subscription.getUuid());
 	}
 	
 	private Track createTooLargeTrack(String email) {

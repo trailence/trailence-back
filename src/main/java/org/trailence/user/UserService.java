@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -13,7 +14,6 @@ import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expressions;
-import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.SimpleFunction;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,7 +29,9 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotasEntity;
+import org.trailence.quotas.db.UserSubscriptionEntity;
 import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.trail.db.TrailCollectionEntity;
 import org.trailence.trail.dto.TrailCollectionType;
@@ -45,8 +47,10 @@ import io.r2dbc.postgresql.codec.Json;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
 
 @Service
 @RequiredArgsConstructor
@@ -58,24 +62,27 @@ public class UserService {
 	private final VerificationCodeService verificationCodeService;
 	private final EmailService emailService;
 	private final TokenService tokenService;
+	private final QuotaService quotaService;
 	
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 	private static final String FORGOT_PASSWORD_VERIFICATION_CODE_TYPE = "forgot_password";
 
 	@Transactional
-	public Mono<Void> createUser(String email, String password, boolean isAdmin) {
-		log.info("Creating new user: {}", email);
-		email = email.toLowerCase();
-		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, System.currentTimeMillis(), 0, isAdmin, null);
+	public Mono<Void> createUser(String emailInput, String password, boolean isAdmin, List<Tuple2<String, Optional<Long>>> subscriptions) {
+		log.info("Creating new user: {} with admin {} and subscriptions {}", emailInput, isAdmin, subscriptions);
+		String email = emailInput.toLowerCase();
+		long now = System.currentTimeMillis();
+		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, now, 0, isAdmin, null);
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
 		myTrails.setType(TrailCollectionType.MY_TRAILS);
 		myTrails.setName("");
+		var subscriptionsEntities = subscriptions.stream().map(s -> new UserSubscriptionEntity(UUID.randomUUID(), email, s.getT1(), now, s.getT2().orElse(null)));
 		return r2dbc.insert(entity)
 		.then(r2dbc.insert(myTrails))
-		.then(r2dbc.getDatabaseClient().sql("INSERT INTO user_quotas (email,collections_used) VALUES (" + SQL.literalOf(email) + ",1)").fetch().rowsUpdated())
-		.then();
+		.thenMany(Flux.fromStream(subscriptionsEntities).flatMap(r2dbc::insert))
+		.then(quotaService.initUserQuotas(email, now));
 	}
 	
 	public List<String> toRolesList(Json roles) {

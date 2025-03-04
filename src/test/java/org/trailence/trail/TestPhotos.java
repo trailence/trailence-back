@@ -2,14 +2,18 @@ package org.trailence.trail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.global.dto.UpdateResponse;
+import org.trailence.init.FreePlanProperties;
+import org.trailence.quotas.dto.Plan;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestUtils;
 import org.trailence.trail.dto.Photo;
@@ -18,6 +22,8 @@ import io.restassured.common.mapper.TypeRef;
 import io.restassured.http.ContentType;
 
 class TestPhotos extends AbstractTest {
+	
+	@Autowired private FreePlanProperties freePlan;
 
 	@Test
 	void crud() {
@@ -328,13 +334,16 @@ class TestPhotos extends AbstractTest {
 	
 	@Test
 	void testQuotaPhotoNumber() {
-		var user = test.createUserAndLogin();
+		var userTest = test.createUser();
+		
+		test.asAdmin().createPlan(new Plan("reducedPhotos", 0, 0, 0, 0, -freePlan.getPhotos() + 5, 0, 0, 0, 0, null, null));
+		var subscription = test.asAdmin().addPlanToUser(userTest.getEmail(), "reducedPhotos");
+		
+		var user = test.login(userTest, null, new HashMap<String, Object>());
+		var quotas = user.getAuth().getQuotas();
+		assertThat(quotas.getPhotosMax()).isEqualTo(5);
 		var mytrails = user.getMyTrails();
 		var trail = user.createTrail(mytrails, true);
-		
-		var quotas = user.getAuth().getQuotas();
-		quotas.setPhotosMax(5);
-		test.asAdmin().updateQuotas(user.getEmail(), quotas);
 		
 		var photos = new LinkedList<Photo>();
 		photos.add(user.createPhoto(trail).getT1());
@@ -358,17 +367,23 @@ class TestPhotos extends AbstractTest {
 		
 		user.deletePhotos(photos);
 		assertThat(user.renewToken().getQuotas().getPhotosUsed()).isZero();
+		
+		test.asAdmin().stopUserSubscription(userTest.getEmail(), subscription.getUuid());
 	}
 	
 	@Test
 	void testQuotaPhotoSize() {
-		var user = test.createUserAndLogin();
+		var userTest = test.createUser();
+		
+		test.asAdmin().createPlan(new Plan("reducedPhotoSize", 0, 0, 0, 0, 0, -freePlan.getPhotosSize() + 10000, 0, 0, 0, null, null));
+		var subscription = test.asAdmin().addPlanToUser(userTest.getEmail(), "reducedPhotoSize");
+		
+		var user = test.login(userTest, null, new HashMap<String, Object>());
+		var quotas = user.getAuth().getQuotas();
+		assertThat(quotas.getPhotosSizeMax()).isEqualTo(10000);
+
 		var mytrails = user.getMyTrails();
 		var trail = user.createTrail(mytrails, true);
-		
-		var quotas = user.getAuth().getQuotas();
-		quotas.setPhotosSizeMax(10000);
-		test.asAdmin().updateQuotas(user.getEmail(), quotas);
 		
 		var photo1 = user.createPhoto(trail, 9000, 9000, -1, null);
 		assertThat(user.renewToken().getQuotas().getPhotosSizeUsed()).isEqualTo(9000);
@@ -404,6 +419,8 @@ class TestPhotos extends AbstractTest {
 		quotas = user.renewToken().getQuotas();
 		assertThat(quotas.getPhotosSizeUsed()).isZero();
 		assertThat(quotas.getPhotosUsed()).isZero();
+		
+		test.asAdmin().stopUserSubscription(userTest.getEmail(), subscription.getUuid());
 	}
 	
 	private Photo copy(Photo p) {

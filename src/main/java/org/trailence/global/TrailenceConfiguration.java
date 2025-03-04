@@ -23,7 +23,9 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.server.session.WebSessionManager;
+import org.trailence.global.rest.HttpFilter;
 import org.trailence.global.rest.JwtFilter;
+import org.trailence.init.FreePlanProperties;
 import org.trailence.storage.StorageProperties;
 
 import reactor.core.publisher.Mono;
@@ -31,7 +33,7 @@ import reactor.core.publisher.Mono;
 @Configuration
 @EnableReactiveMethodSecurity
 @EnableScheduling
-@EnableConfigurationProperties(StorageProperties.class)
+@EnableConfigurationProperties({StorageProperties.class, FreePlanProperties.class})
 public class TrailenceConfiguration implements WebFluxConfigurer {
 
 	@Bean
@@ -59,6 +61,7 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 			.pathMatchers(HttpMethod.POST, "/api/user/v1/resetPassword").permitAll()
 			.pathMatchers("/**").authenticated()
 		)
+		.addFilterBefore(new HttpFilter(), SecurityWebFiltersOrder.HTTP_BASIC)
 		.addFilterBefore(new JwtFilter(authManager), SecurityWebFiltersOrder.HTTP_BASIC)
 		.securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
 		.exceptionHandling(handling ->

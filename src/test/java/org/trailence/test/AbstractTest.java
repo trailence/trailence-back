@@ -41,6 +41,15 @@ import reactor.util.function.Tuples;
 	"trailence.jobs.initialDelay=5",
 	"trailence.jobs.delay=1",
 	"spring.codec.max-in-memory-size=16MB",
+	"trailence.free-plan.collections=10",
+	"trailence.free-plan.trails=1000",
+	"trailence.free-plan.tracks=2000",
+	"trailence.free-plan.tracks_size=10485760",
+	"trailence.free-plan.photos=500",
+	"trailence.free-plan.photos_size=104857600",
+	"trailence.free-plan.tags=500",
+	"trailence.free-plan.trail_tags=2000",
+	"trailence.free-plan.shares=50",
 })
 public abstract class AbstractTest {
 	

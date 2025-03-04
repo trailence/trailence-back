@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -25,9 +26,11 @@ import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
-import org.trailence.quotas.dto.UserQuotas;
+import org.trailence.quotas.dto.Plan;
+import org.trailence.quotas.dto.UserSubscription;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.Share;
 import org.trailence.trail.dto.Tag;
@@ -76,7 +79,7 @@ public class TestService {
 		String email = email();
 		String password = RandomStringUtils.insecure().nextAlphanumeric(8, 20);
 		StepVerifier.create(
-			userService.createUser(email, password, admin)
+			userService.createUser(email, password, admin, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty())))
 		).verifyComplete();
 		return new TestUser(email, password);
 	}
@@ -591,10 +594,22 @@ public class TestService {
 			super(admin.getEmail(), admin.getPassword(), admin.getKeyPair(), admin.getAuth());
 		}
 		
-		public UserQuotas updateQuotas(String user, UserQuotas quotas) {
-			var response = put("/api/admin/users/v1/" + user + "/quotas", quotas);
+		public Plan createPlan(Plan plan) {
+			var response = post("/api/admin/plans/v1", plan);
 			assertThat(response.statusCode()).isEqualTo(200);
-			return response.getBody().as(UserQuotas.class);
+			return response.getBody().as(Plan.class);
+		}
+		
+		public UserSubscription addPlanToUser(String email, String plan) {
+			var response = post("/api/admin/users/v1/" + email + "/subscriptions", plan);
+			assertThat(response.statusCode()).isEqualTo(200);
+			return response.getBody().as(UserSubscription.class);
+		}
+		
+		public UserSubscription stopUserSubscription(String email, UUID subscription) {
+			var response = delete("/api/admin/users/v1/" + email + "/subscriptions/" + subscription);
+			assertThat(response.statusCode()).isEqualTo(200);
+			return response.getBody().as(UserSubscription.class);
 		}
 	}
 	

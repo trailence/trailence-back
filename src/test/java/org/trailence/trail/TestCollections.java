@@ -318,9 +318,6 @@ class TestCollections extends AbstractTest {
 	@Test
 	void testQuotas() {
 		var user = test.createUserAndLogin();
-		var quotas = user.getAuth().getQuotas();
-		quotas.setCollectionsMax((short) 10);
-		test.asAdmin().updateQuotas(user.getEmail(), quotas);
 		
 		var collections = new LinkedList<TrailCollection>();
 		// create collections under quota

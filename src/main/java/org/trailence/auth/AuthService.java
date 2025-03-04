@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
@@ -165,7 +166,7 @@ public class AuthService {
 			userRepo.findById(tokenData.getEmail())
 			.switchIfEmpty(Mono.defer(() ->
 				// first time the user use a share link -> create his account without password
-				userService.createUser(tokenData.getEmail().toLowerCase(), null, false)
+				userService.createUser(tokenData.getEmail().toLowerCase(), null, false, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty())))
 				.then(userRepo.findById(tokenData.getEmail()))
 			))
 			.flatMap(user -> {

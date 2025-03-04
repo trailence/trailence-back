@@ -5,14 +5,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.sql.SQL;
+import org.trailence.global.TrailenceUtils;
+import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotaInit;
 import org.trailence.user.UserService;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.util.function.Tuples;
 
 @Slf4j
 @SuppressWarnings("java:S6813") // use autowired instead of constructor
@@ -20,13 +25,15 @@ public class InitDB {
 
 	@Autowired private R2dbcEntityTemplate db;
 	@Autowired private UserService userService;
+	@Autowired private FreePlanProperties freePlan;
+	@Autowired private QuotaService quotaService;
 	
 	private static final String[] TABLES = {
 		"users", "user_keys", "user_preferences", "user_extensions",
 		"collections", "tracks", "trails", "tags", "trails_tags", "shares",
 		"jobs_queue", "verification_codes",
 		"files", "photos",
-		"user_quotas",
+		"user_quotas", "user_subscriptions", "plans",
 		"migrations"
 	};
 	
@@ -43,8 +50,11 @@ public class InitDB {
 	public void init() {
 		for (var table : TABLES) createTable(table);
 		doMigrations();
+		log.info("Configuring free plan: {}", freePlan);
+		setFreePlan();
+		quotaService.computeQuotas().block();
 		if (System.getenv("TRAILENCE_INIT_USER") != null && System.getenv("TRAILENCE_INIT_PASSWORD") != null)
-			userService.createUser(System.getenv("TRAILENCE_INIT_USER"), System.getenv("TRAILENCE_INIT_PASSWORD"), true)
+			userService.createUser(System.getenv("TRAILENCE_INIT_USER"), System.getenv("TRAILENCE_INIT_PASSWORD"), true, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty())))
 					.onErrorComplete(DuplicateKeyException.class)
 					.block();
 	}
@@ -76,6 +86,20 @@ public class InitDB {
 				throw new RuntimeException("Migration error");
 			}
 		}
+	}
+	
+	private void setFreePlan() {
+		// create free plan or update it with current configuration
+		db.getDatabaseClient().sql(
+			"INSERT INTO plans (name,collections,trails,tracks,tracks_size,photos,photos_size,tags,trail_tags,shares) VALUES " +
+			"(" + SQL.literalOf(TrailenceUtils.FREE_PLAN) + "," + freePlan.getCollections() + "," + freePlan.getTrails() + "," + freePlan.getTracks() + "," + freePlan.getTracksSize() +
+			"," + freePlan.getPhotos() + "," + freePlan.getPhotosSize() + "," + freePlan.getTags() + "," + freePlan.getTrailTags() + "," + freePlan.getShares() +
+			") ON CONFLICT (name) DO UPDATE SET " +
+			"collections = " + freePlan.getCollections() + ",trails = " + freePlan.getTrails() +
+			",tracks = " + freePlan.getTracks() + ",tracks_size = " + freePlan.getTracksSize() +
+			",photos = " + freePlan.getPhotos() + ",photos_size = " + freePlan.getPhotosSize() +
+			",tags = " + freePlan.getTags() + ",trail_tags = " + freePlan.getTrailTags() + ",shares = " + freePlan.getShares()
+		).then().block();
 	}
 	
 }

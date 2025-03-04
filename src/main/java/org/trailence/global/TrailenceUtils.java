@@ -27,6 +27,8 @@ public class TrailenceUtils {
 	public static final String PREAUTHORIZE_ADMIN = "hasAuthority('" + AUTHORITY_ADMIN_USER + "')";
 	
 	public static final int MIN_PASSWORD_SIZE = 6;
+	
+	public static final String FREE_PLAN = "free";
 
 	public static String hashPassword(String password) {
 		return DigestUtils.sha256Hex(password);
