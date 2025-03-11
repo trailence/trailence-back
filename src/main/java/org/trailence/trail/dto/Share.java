@@ -11,14 +11,20 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Share {
 
-	private String id;
-	private String name;
-	private String from;
-	private String to;
-	private ShareElementType type;
+	private String uuid;
+	private String owner;
+	private long version;
+	
 	private long createdAt;
+    private long updatedAt;
+
+	private List<String> recipients;
+    
+	private ShareElementType type;
+	private String name;
+	private boolean includePhotos;
+
 	private List<String> elements;
 	private List<String> trails;
-	private boolean includePhotos;
 	
 }

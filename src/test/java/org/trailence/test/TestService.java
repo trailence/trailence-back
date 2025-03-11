@@ -548,7 +548,7 @@ public class TestService {
 		}
 
 		public List<Share> getShares() {
-			var response = get("/api/share/v1");
+			var response = get("/api/share/v2");
 			assertThat(response.statusCode()).isEqualTo(200);
 			return Arrays.asList(response.getBody().as(Share[].class));
 		}

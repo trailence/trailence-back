@@ -3,17 +3,17 @@ package org.trailence.trail.db;
 import java.util.Collection;
 import java.util.UUID;
 
-import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.trailence.global.db.UuidOwnerRepository;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface ShareRepository extends ReactiveCrudRepository<ShareEntity, Long> {
+public interface ShareRepository extends UuidOwnerRepository<ShareEntity> {
 
-	Flux<ShareEntity> findAllByFromEmailOrToEmail(String fromEmail, String toEmail);
+	Flux<ShareEntity> findAllByOwner(String owner);
 	
-	Mono<ShareEntity> findOneByUuidAndFromEmail(UUID uuid, String fromEmail);
+	Mono<ShareEntity> findOneByUuidAndOwner(UUID uuid, String owner);
 	
-	Mono<Long> deleteAllByUuidInAndFromEmail(Collection<UUID> uuids, String fromEmail);
+	Mono<Long> deleteAllByUuidInAndOwner(Collection<UUID> uuids, String owner);
 	
 }

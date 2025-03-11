@@ -45,6 +45,7 @@ public class InitDB {
 		new DatabaseMigration("0.12_users_add_columns_is_admin_and_roles"),
 		new DatabaseMigration("0.12_user_keys_add_columns_deleted_at_expires_after"),
 		new UserQuotaInit(),
+		new DatabaseMigration("0.13_shares"),
 	};
 	
 	public void init() {

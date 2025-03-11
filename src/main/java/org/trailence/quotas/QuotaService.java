@@ -515,7 +515,7 @@ public class QuotaService {
 		+ "photos_size_used = (SELECT COALESCE(sum(files.size),0) FROM photos left join files on files.id = photos.file_id WHERE photos.owner = user_quotas.email),"
 		+ "tags_used = (SELECT count(*) FROM tags WHERE tags.owner = user_quotas.email),"
 		+ "trail_tags_used = (SELECT count(*) FROM trails_tags WHERE trails_tags.owner = user_quotas.email),"
-		+ "shares_used = (SELECT count(*) FROM shares WHERE shares.from_email = user_quotas.email),"
+		+ "shares_used = (SELECT count(*) FROM shares WHERE shares.owner = user_quotas.email),"
 		+ "collections_max = (SELECT collections_max FROM users_max WHERE users_max.email = user_quotas.email),"
 		+ "trails_max = (SELECT trails_max FROM users_max WHERE users_max.email = user_quotas.email),"
 		+ "tracks_max = (SELECT tracks_max FROM users_max WHERE users_max.email = user_quotas.email),"

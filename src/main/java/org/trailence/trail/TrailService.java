@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Conditions;
+import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
@@ -28,14 +29,10 @@ import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.quotas.QuotaService;
 import org.trailence.trail.TrackService.TrackNotFound;
-import org.trailence.trail.db.ShareElementEntity;
-import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
-import org.trailence.trail.db.TrailTagEntity;
-import org.trailence.trail.dto.ShareElementType;
 import org.trailence.trail.dto.Trail;
 
 import lombok.RequiredArgsConstructor;
@@ -234,47 +231,14 @@ public class TrailService {
     }
 
     private List<Select> buildSelectAccessibleTrails(String email) {
-        Select sharedCollections = Select.builder()
-    		.select(AsteriskFromTable.create(TrailEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
-    		)
-    		.build();
-    	
-    	Select sharedTags = Select.builder()
-			.select(AsteriskFromTable.create(TrailEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailTagEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
-    		)
-    		.build();
-    	
-    	Select sharedTrails = Select.builder()
-			.select(AsteriskFromTable.create(TrailEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
-    		)
-    		.build();
-    	
+    	Select sharedWithMe = shareService.selectSharedElementsWithMe(email, new Expression[] { AsteriskFromTable.create(TrailEntity.TABLE) }, null, null, null);
     	Select ownedTrails = Select.builder()
 	        .select(AsteriskFromTable.create(TrailEntity.TABLE))
 	        .from(TrailEntity.TABLE)
 	        .where(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(email)))
 	        .build();
     	
-    	return List.of(ownedTrails, sharedTrails, sharedTags, sharedCollections);
+    	return List.of(ownedTrails, sharedWithMe);
     }
 
     private Trail toDTO(TrailEntity entity) {

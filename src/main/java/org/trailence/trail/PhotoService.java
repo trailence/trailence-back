@@ -13,6 +13,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Conditions;
+import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
@@ -30,13 +31,11 @@ import org.trailence.storage.FileService;
 import org.trailence.storage.db.FileEntity;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
-import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEntity;
+import org.trailence.trail.db.ShareRecipientEntity;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
-import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.Photo;
-import org.trailence.trail.dto.ShareElementType;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -51,6 +50,7 @@ public class PhotoService {
 	private final TrailRepository trailRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final QuotaService quotaService;
+	private final ShareService shareService;
 	
 	@Autowired @Lazy @SuppressWarnings("java:S6813")
 	private PhotoService self;
@@ -197,51 +197,21 @@ public class PhotoService {
     }
 
     private List<Select> buildSelectAccessiblePhotos(String email) {
-        Select sharedCollections = Select.builder()
-    		.select(AsteriskFromTable.create(PhotoEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailEntity.TABLE).on(Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
-    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-    		)
-    		.build();
-    	
-    	Select sharedTags = Select.builder()
-			.select(AsteriskFromTable.create(PhotoEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID).and(Conditions.isEqual(TrailTagEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
-    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-    		)
-    		.build();
-    	
-    	Select sharedTrails = Select.builder()
-			.select(AsteriskFromTable.create(PhotoEntity.TABLE))
-    		.from(ShareEntity.TABLE)
-    		.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.join(PhotoEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareEntity.COL_FROM_EMAIL)))
-    		.where(
-    			Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(email))
-    			.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
-    			.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-    		)
-    		.build();
-    	
+    	Select sharedWithMe = shareService.selectSharedElementsWithMe(
+    		email,
+    		new Expression[] { AsteriskFromTable.create(PhotoEntity.TABLE) },
+    		PhotoEntity.TABLE,
+    		Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)),
+    		Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true))
+    	);
+    			
     	Select ownedPhotos = Select.builder()
 	        .select(AsteriskFromTable.create(PhotoEntity.TABLE))
 	        .from(PhotoEntity.TABLE)
 	        .where(Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(email)))
 	        .build();
     	
-    	return List.of(ownedPhotos, sharedTrails, sharedTags, sharedCollections);
+    	return List.of(ownedPhotos, sharedWithMe);
     }
 
     public Mono<Flux<DataBuffer>> getFileContent(String owner, String uuid, Authentication auth) {
@@ -252,86 +222,24 @@ public class PhotoService {
     private Mono<PhotoEntity> getPhoto(String owner, String uuid, Authentication auth) {
     	String email = owner.toLowerCase();
     	Mono<PhotoEntity> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email);
-		if (email.equals(auth.getPrincipal().toString())) return getFromDB;
 		String user = auth.getPrincipal().toString();
-		return isFromSharedTrail(uuid, email, user)
-		.flatMap(sharedTrail -> {
-			if (sharedTrail.booleanValue()) return getFromDB;
-			return isFromSharedTag(uuid, email, user)
-			.flatMap(sharedTag -> {
-				if (sharedTag.booleanValue()) return getFromDB;
-				return isFromSharedCollection(uuid, email, user)
-				.flatMap(sharedCollection -> {
-					if (sharedCollection.booleanValue()) return getFromDB;
-					return Mono.error(new NotFoundException("photo", uuid));
-				});
-			});
+		if (email.equals(user)) return getFromDB;
+		
+		Select sharedWithMe = shareService.selectSharedElementsWithMe(
+    		email,
+    		new Expression[] { PhotoEntity.COL_UUID },
+    		PhotoEntity.TABLE,
+    		Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)),
+    		Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(uuid))
+			.and(Conditions.isEqual(ShareRecipientEntity.COL_OWNER, SQL.literalOf(owner)))
+    		.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
+    	);
+		
+		return r2dbc.query(DbUtils.select(sharedWithMe, null, r2dbc), UUID.class).first().hasElement()
+		.flatMap(isSharedWithMe -> {
+			if (!isSharedWithMe.booleanValue()) return Mono.error(new NotFoundException("photo", uuid));
+			return getFromDB;
 		});
     }
 	
-	private Mono<Boolean> isFromSharedTrail(String photoUuid, String photoOwner, String user) {
-		var select = Select.builder()
-			.select(PhotoEntity.COL_UUID)
-			.from(PhotoEntity.TABLE)
-			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, PhotoEntity.COL_TRAIL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, ShareElementEntity.COL_OWNER)))
-			.join(ShareEntity.TABLE).on(
-				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
-				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TRAIL.name())))
-				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
-			)
-			.limit(1)
-			.where(
-				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
-			)
-			.build();
-		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
-	}
-	
-	private Mono<Boolean> isFromSharedTag(String photoUuid, String photoOwner, String user) {
-		var select = Select.builder()
-			.select(PhotoEntity.COL_UUID)
-			.from(PhotoEntity.TABLE)
-			.join(TrailTagEntity.TABLE).on(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, PhotoEntity.COL_TRAIL_UUID))
-			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailTagEntity.COL_TAG_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, PhotoEntity.COL_OWNER)))
-			.join(ShareEntity.TABLE).on(
-				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
-				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.TAG.name())))
-				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
-			)
-			.limit(1)
-			.where(
-				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
-			)
-			.build();
-		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
-	}
-	
-	private Mono<Boolean> isFromSharedCollection(String photoUuid, String photoOwner, String user) {
-		var select = Select.builder()
-			.select(PhotoEntity.COL_UUID)
-			.from(PhotoEntity.TABLE)
-			.join(TrailEntity.TABLE).on(Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)))
-			.join(ShareElementEntity.TABLE).on(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, TrailEntity.COL_COLLECTION_UUID).and(Conditions.isEqual(ShareElementEntity.COL_OWNER, SQL.literalOf(photoOwner))))
-			.join(ShareEntity.TABLE).on(
-				Conditions.isEqual(ShareElementEntity.COL_SHARE_UUID, ShareEntity.COL_UUID)
-				.and(Conditions.isEqual(ShareEntity.COL_ELEMENT_TYPE, SQL.literalOf(ShareElementType.COLLECTION.name())))
-				.and(Conditions.isEqual(ShareEntity.COL_INCLUDE_PHOTOS, SQL.literalOf(true)))
-				.and(Conditions.isEqual(ShareEntity.COL_FROM_EMAIL, SQL.literalOf(photoOwner)))
-				.and(Conditions.isEqual(ShareEntity.COL_TO_EMAIL, SQL.literalOf(user)))
-			)
-			.limit(1)
-			.where(
-				Conditions.isEqual(PhotoEntity.COL_OWNER, SQL.literalOf(photoOwner))
-				.and(Conditions.isEqual(PhotoEntity.COL_UUID, SQL.literalOf(photoUuid)))
-			)
-			.build();
-		return r2dbc.query(DbUtils.select(select, null, r2dbc), UUID.class).first().hasElement();
-	}
-
 }

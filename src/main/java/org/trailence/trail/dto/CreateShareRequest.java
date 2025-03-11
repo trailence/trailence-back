@@ -21,15 +21,15 @@ public class CreateShareRequest {
 	@Size(min = 1)
 	private String name;
 	@NotNull
-	@Email
-	private String to;
+	@Size(min = 1, max = 20)
+	private List<@Email String> recipients;
 	@NotNull
 	private ShareElementType type;
 	@NotNull @NotEmpty
 	private List<String> elements;
 	@NotNull
 	@Size(min = 2, max = 2)
-	private String toLanguage;
+	private String mailLanguage;
 	private boolean includePhotos = false;
 	
 }
