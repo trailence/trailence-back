@@ -462,28 +462,31 @@ public class ShareService {
 			share.setName(request.getName());
 			share.setIncludePhotos(request.isIncludePhotos());
 			Mono<Long> updateEntity = DbUtils.updateByUuidAndOwner(r2dbc, share);
-			return shareRecipientRepo.findAllByUuidAndOwner(share.getUuid(), share.getOwner()).collectList()
-			.flatMap(existingRecipients -> {
-				List<String> recipientsToDelete = new LinkedList<>(existingRecipients.stream().map(r -> r.getRecipient()).toList());
-				List<String> recipientsToAdd = new LinkedList<>();
-				for (String recipient : request.getRecipients()) {
-					String s = recipient.toLowerCase().trim();
-					if (!recipientsToDelete.removeIf(m -> m.toLowerCase().trim().equals(s)))
-						recipientsToAdd.add(recipient.trim());
-				}
-				Mono<Void> deleteRecipients = deleteRecipients(uuid, owner, recipientsToDelete);
-				Mono<List<String>> addRecipients = addRecipients(share.getUuid(), owner, recipientsToAdd);
-				return updateEntity.then(deleteRecipients).then(addRecipients)
-				.flatMap(added ->
-					shareRecipientRepo.countByUuidAndOwner(share.getUuid(), owner)
-					.flatMap(newNb -> {
-						if (newNb.longValue() == 0L) return deleteSharesWithQuota(List.of(share.getUuid()), owner, true, false).thenReturn(List.of());
-						if (newNb.longValue() > 20L) return Mono.error(new BadRequestException("A share cannot exceed 20 recipients"));
-						return Mono.just(added);
-					})
-				);
-			});
-					
+			return updateEntity.then(updateRecipients(share, uuid, owner, request))
+			.flatMap(added ->
+				shareRecipientRepo.countByUuidAndOwner(share.getUuid(), owner)
+				.flatMap(newNb -> {
+					if (newNb.longValue() == 0L) return deleteSharesWithQuota(List.of(share.getUuid()), owner, true, false).thenReturn(List.of());
+					if (newNb.longValue() > 20L) return Mono.error(new BadRequestException("A share cannot exceed 20 recipients"));
+					return Mono.just(added);
+				})
+			);
+		});
+	}
+	
+	private Mono<List<String>> updateRecipients(ShareEntity share, String uuid, String owner, UpdateShareRequest request) {
+		return shareRecipientRepo.findAllByUuidAndOwner(share.getUuid(), share.getOwner()).collectList()
+		.flatMap(existingRecipients -> {
+			List<String> recipientsToDelete = new LinkedList<>(existingRecipients.stream().map(r -> r.getRecipient()).toList());
+			List<String> recipientsToAdd = new LinkedList<>();
+			for (String recipient : request.getRecipients()) {
+				String s = recipient.toLowerCase().trim();
+				if (!recipientsToDelete.removeIf(m -> m.toLowerCase().trim().equals(s)))
+					recipientsToAdd.add(recipient.trim());
+			}
+			Mono<Void> deleteRecipients = deleteRecipients(uuid, owner, recipientsToDelete);
+			Mono<List<String>> addRecipients = addRecipients(share.getUuid(), owner, recipientsToAdd);
+			return deleteRecipients.then(addRecipients);
 		});
 	}
 	
