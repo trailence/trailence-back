@@ -34,6 +34,7 @@ public class InitDB {
 		"jobs_queue", "verification_codes",
 		"files", "photos",
 		"user_quotas", "user_subscriptions", "plans",
+		"donations", "donation_goals",
 		"migrations"
 	};
 	
