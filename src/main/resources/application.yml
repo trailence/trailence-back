@@ -62,4 +62,11 @@ trailence:
     tags: ${FREE_PLAN_TAGS:500}
     trail_tags: ${FREE_PLAN_TRAIL_TAGS:2000}
     shares: ${FREE_PLAN_SHARES:50}
-    
+  extensions:
+    allowed:
+      "[thunderforest.com]":
+        enabled: ${THUNDERFOREST_ENABLED:false}
+        role: ${THUNDERFOREST_ROLE:}
+        content:
+          apikey:
+            pattern: "[0-9a-f]{32}" 

@@ -1,5 +1,7 @@
 package org.trailence.auth.dto;
 
+import java.util.List;
+
 import org.trailence.preferences.dto.UserPreferences;
 import org.trailence.quotas.dto.UserQuotas;
 
@@ -22,5 +24,6 @@ public class AuthResponse {
 	private boolean isComplete;
 	private boolean isAdmin;
 	private UserQuotas quotas;
+	private List<String> allowedExtensions;
 	
 }

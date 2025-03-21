@@ -50,6 +50,9 @@ import reactor.util.function.Tuples;
 	"trailence.free-plan.tags=500",
 	"trailence.free-plan.trail_tags=2000",
 	"trailence.free-plan.shares=50",
+	"trailence.extensions.allowed.[thunderforest.com].enabled=true",
+	"trailence.extensions.allowed.[thunderforest.com].role=thunderforest",
+	"trailence.extensions.allowed.[thunderforest.com].content.apikey.pattern=[0-9a-f]{32}",
 })
 public abstract class AbstractTest {
 	

@@ -611,6 +611,12 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 			return response.getBody().as(UserSubscription.class);
 		}
+		
+		public void setUserRoles(String email, List<String> roles) {
+			var response = put("/api/admin/users/v1/" + email + "/roles", roles);
+			assertThat(response.statusCode()).isEqualTo(200);
+			assertThat(response.getBody().as(String[].class)).isEqualTo(roles.toArray(new String[roles.size()]));
+		}
 	}
 	
 }

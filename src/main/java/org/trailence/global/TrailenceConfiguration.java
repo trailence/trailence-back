@@ -23,6 +23,7 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.server.session.WebSessionManager;
+import org.trailence.extensions.ExtensionsConfig;
 import org.trailence.global.rest.HttpFilter;
 import org.trailence.global.rest.JwtFilter;
 import org.trailence.init.FreePlanProperties;
@@ -33,7 +34,7 @@ import reactor.core.publisher.Mono;
 @Configuration
 @EnableReactiveMethodSecurity
 @EnableScheduling
-@EnableConfigurationProperties({StorageProperties.class, FreePlanProperties.class})
+@EnableConfigurationProperties({StorageProperties.class, FreePlanProperties.class, ExtensionsConfig.class})
 public class TrailenceConfiguration implements WebFluxConfigurer {
 
 	@Bean

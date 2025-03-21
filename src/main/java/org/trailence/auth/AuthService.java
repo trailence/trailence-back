@@ -38,6 +38,7 @@ import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
+import org.trailence.extensions.UserExtensionsService;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.db.PlusExpression;
@@ -80,6 +81,7 @@ public class AuthService {
 	private final UserService userService;
 	private final CaptchaService captchaService;
 	private final QuotaService quotaService;
+	private final UserExtensionsService extensionsService;
 	
 	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
 	private static final String ERROR_CODE_LOCKED = "locked";
@@ -98,11 +100,12 @@ public class AuthService {
 			.flatMap(user -> checkPassword(user, request.getPassword()))
 			// ok, authenticate
 			.flatMap(user -> {
-				var token = auth.generateToken(user.getEmail(), true, user.isAdmin(), getRoles(user));
+				var roles = getRoles(user);
+				var token = auth.generateToken(user.getEmail(), true, user.isAdmin(), roles);
 				
 				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 				
-				var response = response(token, user, key, null, null);
+				var response = response(token, user, key, null, null, roles);
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
@@ -175,7 +178,7 @@ public class AuthService {
 				var token = auth.generateToken(user.getEmail(), false, false, List.of());
 				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 
-				var response = response(token, user, key, null, null);
+				var response = response(token, user, key, null, null, List.of());
 				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 			})
 		);
@@ -219,14 +222,16 @@ public class AuthService {
 				key.setRandomExpires(0L);
 				key.setInvalidAttempts(0);
 				if (request.getNewPublicKey() == null) {
-					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), getRoles(user));
-					var response = response(token, user, key, null, null);
+					var roles = getRoles(user);
+					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
+					var response = response(token, user, key, null, null, roles);
 					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 				}
 				// new key
 				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
-				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), getRoles(user));
-				var response = response(token, user, newKey, null, null);
+				var roles = getRoles(user);
+				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
+				var response = response(token, user, newKey, null, null, roles);
 				key.setDeletedAt(System.currentTimeMillis());
 				return keyRepo.save(key)
 					.then(r2dbc.insert(newKey))
@@ -249,7 +254,7 @@ public class AuthService {
 		}
 	}
 	
-	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas) {
+	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas, List<String> roles) {
 		return new AuthResponse(
 			token.getT1(),
 			token.getT2().toEpochMilli(),
@@ -260,7 +265,8 @@ public class AuthService {
 			preferences,
 			user.getPassword() != null,
 			user.isAdmin(),
-			quotas
+			quotas,
+			extensionsService.getAllowedExtensions(user.isAdmin(), roles)
 		);
 	}
 	
