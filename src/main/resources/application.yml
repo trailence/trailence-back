@@ -46,6 +46,8 @@ trailence:
       userRole: ${OUTDOOR_ACTIVE_ROLE:}
     visorando:
       userRole: ${VISORANDO_ROLE:}
+    kofi:
+      verificationToken: ${KOFI_TOKEN:}
   storage:
     type: ${TRAILENCE_STORAGE_TYPE:fs}
     username: ${TRAILENCE_STORAGE_USERNAME:}
