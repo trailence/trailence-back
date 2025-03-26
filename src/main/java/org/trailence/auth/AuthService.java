@@ -336,12 +336,13 @@ public class AuthService {
 		if (request.getEmail() == null) return Mono.error(new ForbiddenException());
 		String email = request.getEmail().toLowerCase();
 		String lang = request.getLang();
-		return userRepo.findByEmail(email)
-		.flatMap(user -> 
+		return userRepo.findByEmail(email).map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
+		.flatMap(optUser -> 
 			(captchaService.isActivated() ? captchaService.validate(request.getCaptchaToken()) : Mono.just(true))
 			.flatMap(ok -> {
 				if (!ok.booleanValue()) return Mono.error(new ForbiddenException());
-				return Mono.just(user);
+				if (optUser.isEmpty()) return Mono.empty();
+				return Mono.just(optUser.get());
 			})
 		)
 		.flatMap(user -> userService.sendChangePasswordCode(email, lang, true))

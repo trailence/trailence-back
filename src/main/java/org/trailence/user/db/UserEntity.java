@@ -22,6 +22,7 @@ public class UserEntity {
 	private int invalidAttempts;
 	private boolean isAdmin;
 	private Json roles;
+	private Long lastPasswordEmail;
 	
 	public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("users");
 	public static final Column COL_EMAIL = Column.create("email", TABLE);

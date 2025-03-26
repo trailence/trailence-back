@@ -16,11 +16,13 @@ import org.trailence.storage.provider.pcloud.PCloudProvider;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FileService {
 	
 	private final StorageProperties properties;
@@ -100,6 +102,7 @@ public class FileService {
 	
 	@Scheduled(fixedRate = 15, timeUnit = TimeUnit.MINUTES, initialDelay = 5)
 	public void clean() {
+		log.info("Cleaning temporary files older than 1 hour");
 		repo.findByTmpAndCreatedAtLessThan(true, System.currentTimeMillis() - (60 * 60 * 1000), PageRequest.of(0, 100, Sort.by(Direction.ASC, "createdAt")))
 		.flatMap(entity -> {
 			if (entity.getStorageId() == null) return repo.delete(entity);
@@ -108,8 +111,10 @@ public class FileService {
 				.onErrorComplete()
 			)
 			.then(repo.delete(entity));
-		}, 3, 6)
+		}, 2, 5)
 		.checkpoint("Clean tmp files")
+		.count()
+		.doOnNext(nb -> log.info("Temporary files cleant: {}", nb))
 		.subscribe();
 	}
 

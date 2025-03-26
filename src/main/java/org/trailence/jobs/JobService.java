@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +29,9 @@ public class JobService {
 	private final JobRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
 	
+	@Value("${trailence.jobs.delay:60}")
+	private long delay = 60;
+	
 	@SuppressWarnings("java:S6813") // autowired
 	@Lazy @Autowired
 	private List<Job> jobs;
@@ -38,37 +42,42 @@ public class JobService {
 	@Scheduled(initialDelayString = "${trailence.jobs.initialDelay:60}", fixedDelayString = "${trailence.jobs.delay:60}", timeUnit = TimeUnit.SECONDS)
 	public void launch() {
 		if (!running.compareAndSet(false, true)) return;
-		execute(System.currentTimeMillis() - lastCleaning > 5L * 60000)
+		execute(System.currentTimeMillis() - lastCleaning > 5L * 60000, System.currentTimeMillis())
 		.doFinally(s -> running.set(false))
 		.checkpoint("Job processing")
 		.subscribe();
 	}
 	
-	private Mono<Void> execute(boolean cleanExpired) {
+	private Mono<Void> execute(boolean cleanExpired, long startTime) {
 		Mono<Void> clean = cleanExpired ? repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis()) : Mono.empty();
-		return clean.then(executeLoop());
+		return clean.then(Mono.defer(() -> executeLoop(startTime)));
 	}
 	
-	private Mono<Void> executeLoop() {
+	private Mono<Void> executeLoop(long startTime) {
 		return executeNext()
-			.then(Mono.defer(() -> execute(false)));
+		.flatMap(processed -> {
+			if (!processed.booleanValue() || System.currentTimeMillis() - startTime >= delay * 1000) return Mono.empty();
+			return execute(false, startTime);
+		});
 	}
 	
-	private Mono<Void> executeNext() {
+	private Mono<Boolean> executeNext() {
 		return repo.findFirstByNextRetryAtLessThanOrderByPriorityAscNextRetryAtAsc(System.currentTimeMillis())
 		.flatMap(entity ->
 			executeJob(entity)
 			.flatMap(result -> {
 				log.info("Job {} {} - id {}", entity.getType(), result.success ? "succeed" : "failed", entity.getId());
 				if (result.retryAt == null) {
-					return repo.delete(entity);
+					return repo.delete(entity).thenReturn(true);
 				} else {
 					entity.setRetry(entity.getRetry() + 1);
 					entity.setNextRetryAt(result.retryAt);
-					return repo.save(entity).then();
+					return repo.save(entity).thenReturn(true);
 				}
 			})
-		);
+			.switchIfEmpty(Mono.just(true))
+		)
+		.switchIfEmpty(Mono.just(false));
 	}
 	
 	private Mono<Job.Result> executeJob(JobEntity entity) {

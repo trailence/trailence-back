@@ -10,7 +10,7 @@ public interface VerificationCodeRepository extends ReactiveCrudRepository<Verif
 	
 	Flux<VerificationCodeEntity> findByTypeAndKeyAndExpiresAtGreaterThan(String type, String key, long now);
 	
-	Mono<Void> deleteAllByExpiresAtLessThan(long now);
+	Mono<Long> deleteAllByExpiresAtLessThan(long now);
 	
 	Mono<Void> deleteAllByTypeAndKey(String type, String key);
 	

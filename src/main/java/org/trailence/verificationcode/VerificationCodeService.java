@@ -17,11 +17,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VerificationCodeService {
 
 	private final VerificationCodeRepository repo;
@@ -104,7 +106,11 @@ public class VerificationCodeService {
 	
 	@Scheduled(fixedRate = 60, timeUnit = TimeUnit.MINUTES, initialDelay = 5)
 	public void clean() {
-		repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis()).checkpoint("Clean expired verification codes").subscribe();
+		log.info("Cleaning expired verification codes");
+		repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis())
+		.checkpoint("Clean expired verification codes")
+		.doOnNext(nb -> log.info("Verification codes removed: {}", nb))
+		.subscribe();
 	}
 	
 }

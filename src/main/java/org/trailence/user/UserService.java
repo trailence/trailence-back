@@ -66,13 +66,22 @@ public class UserService {
 	
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 	private static final String FORGOT_PASSWORD_VERIFICATION_CODE_TYPE = "forgot_password";
+	private static final long CHANGE_PASSWORD_VERIFICATION_CODE_EXPIRATION = 10L * 60 * 1000;
 
 	@Transactional
 	public Mono<Void> createUser(String emailInput, String password, boolean isAdmin, List<Tuple2<String, Optional<Long>>> subscriptions) {
 		log.info("Creating new user: {} with admin {} and subscriptions {}", emailInput, isAdmin, subscriptions);
 		String email = emailInput.toLowerCase();
 		long now = System.currentTimeMillis();
-		UserEntity entity = new UserEntity(email, password != null ? TrailenceUtils.hashPassword(password) : null, now, 0, isAdmin, null);
+		UserEntity entity = new UserEntity(
+			email,
+			password != null ? TrailenceUtils.hashPassword(password) : null,
+			now, // createdAt
+			0, // invalidAttempts
+			isAdmin,
+			null, // roles
+			null // lastPasswordEmail
+		);
 		TrailCollectionEntity myTrails = new TrailCollectionEntity();
 		myTrails.setUuid(UUID.randomUUID());
 		myTrails.setOwner(email);
@@ -99,9 +108,14 @@ public class UserService {
 		int priority = isForgot ? EmailService.FORGOT_PASSWORD_PRIORITY : EmailService.CHANGE_PASSWORD_PRIORITY;
 		return userRepo.findByEmail(email)
 		.switchIfEmpty(Mono.error(new NotFoundException("user", email)))
-		.flatMap(user -> Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, ""))))
+		.flatMap(user -> {
+			if (user.getLastPasswordEmail() != null && System.currentTimeMillis() - user.getLastPasswordEmail() < CHANGE_PASSWORD_VERIFICATION_CODE_EXPIRATION)
+				return Mono.error(new ForbiddenException("change-password-already-sent"));
+			user.setLastPasswordEmail(System.currentTimeMillis());
+			return userRepo.save(user).then(Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, ""))));
+		})
 		.flatMap(stopLink ->
-			verificationCodeService.generate(email, codeType, System.currentTimeMillis() + 10L * 60 * 1000, "", 6, Spec.DIGITS, 3)
+			verificationCodeService.generate(email, codeType, System.currentTimeMillis() + CHANGE_PASSWORD_VERIFICATION_CODE_EXPIRATION, "", 6, Spec.DIGITS, 3)
 			.flatMap(code -> emailService.send(priority, email, "change_password_code", lang, Map.of(
 				"code", code,
 				"stop_url", emailService.getLinkUrl(stopLink)

@@ -19,7 +19,7 @@ public class CurrencyConverterService {
 	private Map<String, Double> euroConversions = null;
 	
 	public Mono<BigDecimal> convertToEuro(String currency, BigDecimal amount) {
-		return Mono.defer(() -> getConversion())
+		return Mono.defer(this::getConversion)
 		.flatMap(map -> {
 			Double value = map.get(currency.toLowerCase());
 			if (value == null) return Mono.error(new RuntimeException("Unknown currency: " + currency));
