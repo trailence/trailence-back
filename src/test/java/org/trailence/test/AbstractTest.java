@@ -40,6 +40,8 @@ import reactor.util.function.Tuples;
 	"trailence.storage.root=./storage-tests",
 	"trailence.jobs.initialDelay=5",
 	"trailence.jobs.delay=1",
+	"trailence.mail.throttling.min-delay=1s",
+	"trailence.mail.throttling.min-delay-count=2",
 	"spring.codec.max-in-memory-size=16MB",
 	"trailence.free-plan.collections=10",
 	"trailence.free-plan.trails=1000",

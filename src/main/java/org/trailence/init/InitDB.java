@@ -47,6 +47,7 @@ public class InitDB {
 		new DatabaseMigration("0.12_user_keys_add_columns_deleted_at_expires_after"),
 		new UserQuotaInit(),
 		new DatabaseMigration("0.13_shares"),
+		new DatabaseMigration("0.13_jobs_queue_add_priority"),
 	};
 	
 	public void init() {

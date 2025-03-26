@@ -33,53 +33,61 @@ public class JobService {
 	private List<Job> jobs;
 	
 	private AtomicBoolean running = new AtomicBoolean(false);
+	private long lastCleaning = 0;
 	
 	@Scheduled(initialDelayString = "${trailence.jobs.initialDelay:60}", fixedDelayString = "${trailence.jobs.delay:60}", timeUnit = TimeUnit.SECONDS)
 	public void launch() {
 		if (!running.compareAndSet(false, true)) return;
-		execute()
+		execute(System.currentTimeMillis() - lastCleaning > 5L * 60000)
 		.doFinally(s -> running.set(false))
 		.checkpoint("Job processing")
 		.subscribe();
 	}
 	
-	private Mono<Void> execute() {
-		return repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis())
-			.then(executeLoop());
+	private Mono<Void> execute(boolean cleanExpired) {
+		Mono<Void> clean = cleanExpired ? repo.deleteAllByExpiresAtLessThan(System.currentTimeMillis()) : Mono.empty();
+		return clean.then(executeLoop());
 	}
 	
 	private Mono<Void> executeLoop() {
 		return executeNext()
-			.flatMap(job -> execute());
+			.then(Mono.defer(() -> execute(false)));
 	}
 	
-	private Mono<JobEntity> executeNext() {
-		return repo.findFirstByNextRetryAtLessThanOrderByNextRetryAtAsc(System.currentTimeMillis())
-		.flatMap(entity -> {
-			Optional<Job> job = jobs.stream().filter(j -> j.getType().equals(entity.getType())).findAny();
-			Mono<Job.Result> result;
-			if (job.isEmpty()) {
-				log.error("Unknown job type {}, retry in 15 minutes", entity.getType());
-				result = Mono.just(new Job.Result(entity.getRetry() < 100 ? System.currentTimeMillis() + 15 * 60 * 1000 : null));
-			} else {
-				log.info("Executing job {} - {}", entity.getType(), entity.getId());
-				result = job.get().execute(entity.getData(), entity.getRetry()).checkpoint("Job " + entity.getType());
-			}
-			return result.flatMap(r -> {
-				if (r.retryAt == null) {
-					log.info("Job {} succeed - id {}", entity.getType(), entity.getId());
-					return repo.delete(entity).thenReturn(entity);
+	private Mono<Void> executeNext() {
+		return repo.findFirstByNextRetryAtLessThanOrderByPriorityAscNextRetryAtAsc(System.currentTimeMillis())
+		.flatMap(entity ->
+			executeJob(entity)
+			.flatMap(result -> {
+				log.info("Job {} {} - id {}", entity.getType(), result.success ? "succeed" : "failed", entity.getId());
+				if (result.retryAt == null) {
+					return repo.delete(entity);
 				} else {
-					log.info("Job {} failed - id {}", entity.getType(), entity.getId());
 					entity.setRetry(entity.getRetry() + 1);
-					entity.setNextRetryAt(r.retryAt);
-					return repo.save(entity);
+					entity.setNextRetryAt(result.retryAt);
+					return repo.save(entity).then();
 				}
-			});
-		});
+			})
+		);
 	}
 	
-	public Mono<Void> createJob(String type, Object data) {
+	private Mono<Job.Result> executeJob(JobEntity entity) {
+		Optional<Job> job = jobs.stream().filter(j -> j.getType().equals(entity.getType())).findAny();
+		if (job.isEmpty()) {
+			log.error("Unknown job type {}, retry in 15 minutes", entity.getType());
+			return Mono.just(new Job.Result(false, entity.getRetry() < 200 ? System.currentTimeMillis() + 15 * 60 * 1000 : null));
+		}
+		Long later = job.get().acceptNewJob(entity);
+		if (later != null) {
+			log.info("Job {} delayed by {}", entity.getType(), later);
+			entity.setNextRetryAt(System.currentTimeMillis() + later);
+			return repo.save(entity).then(Mono.empty());
+		}
+		log.info("Executing job {} - {}", entity.getType(), entity.getId());
+		return job.get().execute(entity.getData(), entity.getRetry()).checkpoint("Job " + entity.getType());
+	}
+	
+	public Mono<Void> createJob(String type, int priority, Object data) {
 		return Mono.defer(() -> {
 			Optional<Job> optJob = jobs.stream().filter(j -> j.getType().equals(type)).findAny();
 			if (optJob.isEmpty()) return Mono.error(new RuntimeException("Unknown job " + type));
@@ -88,6 +96,7 @@ public class JobService {
 				JobEntity entity = new JobEntity(
 					UUID.randomUUID(),
 					type,
+					priority,
 					System.currentTimeMillis(),
 					System.currentTimeMillis() + job.getInitialDelayMillis(),
 					1,

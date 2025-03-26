@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 
 public interface JobRepository extends ReactiveCrudRepository<JobEntity, UUID> {
 
-	Mono<JobEntity> findFirstByNextRetryAtLessThanOrderByNextRetryAtAsc(long now);
+	Mono<JobEntity> findFirstByNextRetryAtLessThanOrderByPriorityAscNextRetryAtAsc(long now);
 	
 	Mono<Void> deleteAllByExpiresAtLessThan(long now);
 	

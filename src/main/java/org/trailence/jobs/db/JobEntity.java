@@ -20,6 +20,7 @@ public class JobEntity {
 	private UUID id;
 	
 	private String type;
+	private int priority;
 	private long startAt;
 	private long nextRetryAt;
 	private int retry;

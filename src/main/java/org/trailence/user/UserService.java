@@ -96,12 +96,13 @@ public class UserService {
 	
 	public Mono<Void> sendChangePasswordCode(String email, String lang, boolean isForgot) {
 		String codeType = isForgot ? FORGOT_PASSWORD_VERIFICATION_CODE_TYPE : CHANGE_PASSWORD_VERIFICATION_CODE_TYPE;
+		int priority = isForgot ? EmailService.FORGOT_PASSWORD_PRIORITY : EmailService.CHANGE_PASSWORD_PRIORITY;
 		return userRepo.findByEmail(email)
 		.switchIfEmpty(Mono.error(new NotFoundException("user", email)))
 		.flatMap(user -> Mono.fromCallable(() -> tokenService.generate(new TokenData("stop_change_password", email, ""))))
 		.flatMap(stopLink ->
 			verificationCodeService.generate(email, codeType, System.currentTimeMillis() + 10L * 60 * 1000, "", 6, Spec.DIGITS, 3)
-			.flatMap(code -> emailService.send(email, "change_password_code", lang, Map.of(
+			.flatMap(code -> emailService.send(priority, email, "change_password_code", lang, Map.of(
 				"code", code,
 				"stop_url", emailService.getLinkUrl(stopLink)
 			)))

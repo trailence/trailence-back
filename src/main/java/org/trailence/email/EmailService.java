@@ -25,8 +25,13 @@ public class EmailService {
 	private String linkpath;
 	
 	private static final String TEMPLATES_DIR = "templates/";
+	
+	public static final int CHANGE_PASSWORD_PRIORITY = 1;
+	public static final int FORGOT_PASSWORD_PRIORITY = 10;
+	public static final int SHARE_INVITE_PRIORITY = 100;
+	public static final int SHARE_NEW_PRIORITY = 200;
 
-	public Mono<Void> send(String to, String template, String lang, Map<String, String> templateData) {
+	public Mono<Void> send(int priority, String to, String template, String lang, Map<String, String> templateData) {
 		String language = getLanguage(lang);
 		Mono<String> readSubject = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".subject.txt");
 		Mono<String> readText = TrailenceUtils.readResource(TEMPLATES_DIR + template + "." + language + ".body.txt");
@@ -35,7 +40,7 @@ public class EmailService {
 			String subject = applyTemplate(files.getT1(), templateData);
 			String text = applyTemplate(files.getT2(), templateData);
 			String html = applyTemplate(files.getT3(), templateData);
-			return job.send(new Email(to, subject, text, html));
+			return job.send(new Email(to, subject, text, html), priority);
 		});
 	}
 	

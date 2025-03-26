@@ -165,12 +165,12 @@ public class ShareService {
 			} catch (Exception e) {
 				return Mono.empty();
 			}
-			return emailService.send(recipient, "invite_share", language, Map.of(
+			return emailService.send(EmailService.SHARE_INVITE_PRIORITY, recipient, "invite_share", language, Map.of(
 				"from", owner,
 				"link", emailService.getLinkUrl(token + "?lang=" + language)
 			));
 		} else {
-			return emailService.send(recipient, "new_share", language, Map.of(
+			return emailService.send(EmailService.SHARE_NEW_PRIORITY, recipient, "new_share", language, Map.of(
 				"from", owner
 			));
 		}

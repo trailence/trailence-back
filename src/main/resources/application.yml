@@ -64,6 +64,15 @@ trailence:
     tags: ${FREE_PLAN_TAGS:500}
     trail_tags: ${FREE_PLAN_TRAIL_TAGS:2000}
     shares: ${FREE_PLAN_SHARES:50}
+  mail:
+    from:
+      email: ${TRAILENCE_MAIL_FROM_EMAIL:trailence@trailence.org}
+      name: ${TRAILENCE_MAIL_FROM_NAME:Trailence}
+    throttling:
+      max: ${TRAILENCE_MAX_MAILS:500}
+      max-delay: ${TRAILENCE_MAX_MAILS_DELAY:1d}
+      min-delay: ${TRAILENCE_MAILS_MIN_DELAY:1m}
+      min-delay-count: ${TRAILENCE_MAILS_MIN_DELAY_COUNT:10}
   extensions:
     allowed:
       "[thunderforest.com]":

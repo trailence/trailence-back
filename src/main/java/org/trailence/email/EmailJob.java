@@ -1,5 +1,9 @@
 package org.trailence.email;
 
+import java.time.Duration;
+import java.util.LinkedList;
+import java.util.ListIterator;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -7,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.jobs.Job;
 import org.trailence.jobs.JobService;
+import org.trailence.jobs.db.JobEntity;
 
 import io.r2dbc.postgresql.codec.Json;
 import jakarta.mail.internet.InternetAddress;
@@ -33,6 +38,16 @@ public class EmailJob implements Job {
 	private String fromEmail;
 	@Value("${trailence.mail.from.name:Trailence}")
 	private String fromName;
+	@Value("${trailence.mail.throttling.max:500}")
+	private int maxMails;
+	@Value("${trailence.mail.throttling.max-delay:1d}")
+	private Duration maxDelay;
+	@Value("${trailence.mail.throttling.min-delay:1m}")
+	private Duration minDelay;
+	@Value("${trailence.mail.throttling.min-delay-count:10}")
+	private int minDelayCount;
+	
+	private LinkedList<Long> lastEmails = new LinkedList<>();
 
 	@Override
 	public String getType() {
@@ -46,7 +61,37 @@ public class EmailJob implements Job {
 	
 	@Override
 	public long getExpirationDelayMillis() {
-		return 2L * 24 * 60 * 60 * 1000;
+		return 5L * 24 * 60 * 60 * 1000;
+	}
+	
+	@Override
+	@SuppressWarnings("java:S3776")
+	public Long acceptNewJob(JobEntity job) {
+		long now = System.currentTimeMillis();
+		synchronized (lastEmails) {
+			// clean lastEmails older than 1 hour
+			while (!lastEmails.isEmpty() && lastEmails.getFirst().longValue() < now - maxDelay.toMillis())
+				lastEmails.removeFirst();
+			if (!lastEmails.isEmpty()) {
+				// minimum delay
+				int count = 0;
+				long maxTime = now - minDelay.toMillis();
+				for (ListIterator<Long> it = lastEmails.listIterator(lastEmails.size()); it.hasPrevious(); )
+					if (it.previous() > maxTime) count++;
+					else break;
+				if (count >= minDelayCount) return minDelay.toMillis();
+				// if half of limit is reached, accept only mails with priority below 100
+				if (lastEmails.size() > maxMails / 2 && job.getPriority() >= 100) return 5L * 60 * 1000;
+				// if max is reached, delay the mail
+				if (lastEmails.size() >= maxMails) {
+					long nextTime = lastEmails.getFirst() + maxDelay.toMillis();
+					if (nextTime - now < 60000) return 60000L;
+					return nextTime - now;
+				}
+			}
+			lastEmails.addLast(now);
+		}
+		return null;
 	}
 	
 	@Override
@@ -61,16 +106,16 @@ public class EmailJob implements Job {
 				helper.setSubject(email.getSubject());
 				helper.setText(email.getText(), email.getHtml());
 				emailSender.send(message);
-				return new Result(null);
+				return new Result(true, null);
 			} catch (Exception e) {
 				log.error("Error sending mail", e);
-				return new Result(trial >= 20 ? null : System.currentTimeMillis() + trial * 10000);
+				return new Result(false, trial >= 20 ? null : System.currentTimeMillis() + trial * 10000);
 			}
 		}).subscribeOn(Schedulers.boundedElastic());
 	}
 	
-	public Mono<Void> send(Email email) {
-		return jobService.createJob(TYPE, email).then(Mono.fromRunnable(jobService::launch));
+	public Mono<Void> send(Email email, int priority) {
+		return jobService.createJob(TYPE, priority, email).then(Mono.fromRunnable(jobService::launch));
 	}
 	
 	@Data
