@@ -195,10 +195,11 @@ class TestSharesV1 extends AbstractTest {
 		var user = test.createUserAndLogin();
 		var mytrails = user.getMyTrails();
 		
+		var to1 = test.email();
 		var request1 = new CreateShareRequestV1(
 			UUID.randomUUID().toString(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			test.email(),
+			to1,
 			ShareElementType.COLLECTION,
 			List.of(mytrails.getUuid()),
 			"xx",
@@ -210,11 +211,13 @@ class TestSharesV1 extends AbstractTest {
 		assertThat(share.getId()).isEqualTo(request1.getId());
 		
 		assertThat(getShares(user)).singleElement().extracting("id").isEqualTo(share.getId());
-		
+		assertMailSent("trailence@trailence.org", to1.toLowerCase());
+
+		var to2 = test.email();
 		var request2 = new CreateShareRequestV1(
 			request1.getId(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			test.email(),
+			to2,
 			ShareElementType.COLLECTION,
 			List.of(mytrails.getUuid()),
 			"xx",
@@ -226,6 +229,7 @@ class TestSharesV1 extends AbstractTest {
 		assertThat(share.getId()).isEqualTo(request1.getId());
 		
 		assertThat(getShares(user)).singleElement().extracting("id").isEqualTo(share.getId());
+		assertMailNotSent("trailence@trailence.org", to2.toLowerCase());
 	}
 	
 	@Test
@@ -235,10 +239,11 @@ class TestSharesV1 extends AbstractTest {
 		var trail1 = user.createTrail(mytrails, true);
 		var trail2 = user.createTrail(mytrails, true);
 		
+		var to = "notReallyAFriend." + RandomStringUtils.insecure().nextAlphanumeric(1, 9) + "@trailence.org";
 		var request = new CreateShareRequestV1(
 			UUID.randomUUID().toString(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			"notReallyAFriend." + RandomStringUtils.insecure().nextAlphanumeric(1, 9) + "@trailence.org",
+			to,
 			ShareElementType.TRAIL,
 			List.of(trail1.getUuid(), trail2.getUuid()),
 			"en",
@@ -256,6 +261,7 @@ class TestSharesV1 extends AbstractTest {
 		assertThat(share.getTrails()).isNull();
 		
 		assertThat(getShares(user)).singleElement().extracting("id").isEqualTo(share.getId());
+		assertMailSent("trailence@trailence.org", to.toLowerCase());
 		
 		user.deleteTrails(trail1, trail2);
 		assertThat(user.getShares()).isEmpty();

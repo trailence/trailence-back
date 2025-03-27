@@ -39,6 +39,8 @@ import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
 import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.ShareElementEntity;
+import org.trailence.trail.db.ShareEmailEntity;
+import org.trailence.trail.db.ShareEmailRepository;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.ShareRecipientEntity;
 import org.trailence.trail.db.ShareRecipientRepository;
@@ -68,6 +70,7 @@ public class ShareService {
 	
 	private final ShareRepository shareRepo;
 	private final ShareRecipientRepository shareRecipientRepo;
+	private final ShareEmailRepository shareEmailRepo;
 	private final TrailCollectionRepository collectionRepo;
 	private final TagRepository tagRepo;
 	private final TrailRepository trailRepo;
@@ -158,22 +161,30 @@ public class ShareService {
 	}
 	
 	private Mono<Void> sendInvitationEmail(String uuid, String owner, String recipient, Optional<UserEntity> optUser, String language) {
-		if (optUser.isEmpty() || optUser.get().getPassword() == null) {
-			String token;
-			try {
-				token = tokenService.generate(new TokenData("share", recipient, uuid + "/" + owner));
-			} catch (Exception e) {
-				return Mono.empty();
+		return shareEmailRepo.findByShareUuidAndFromEmailAndToEmail(UUID.fromString(uuid), owner, recipient)
+		.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
+		.flatMap(optSent -> {
+			if (optSent.isPresent()) return Mono.empty();
+			ShareEmailEntity entity = new ShareEmailEntity(UUID.fromString(uuid), owner, recipient, System.currentTimeMillis());
+			return r2dbc.insert(entity);
+		}).flatMap(entity -> {
+			if (optUser.isEmpty() || optUser.get().getPassword() == null) {
+				String token;
+				try {
+					token = tokenService.generate(new TokenData("share", recipient, uuid + "/" + owner));
+				} catch (Exception e) {
+					return Mono.empty();
+				}
+				return emailService.send(EmailService.SHARE_INVITE_PRIORITY, recipient, "invite_share", language, Map.of(
+					"from", owner,
+					"link", emailService.getLinkUrl(token + "?lang=" + language)
+				));
+			} else {
+				return emailService.send(EmailService.SHARE_NEW_PRIORITY, recipient, "new_share", language, Map.of(
+					"from", owner
+				));
 			}
-			return emailService.send(EmailService.SHARE_INVITE_PRIORITY, recipient, "invite_share", language, Map.of(
-				"from", owner,
-				"link", emailService.getLinkUrl(token + "?lang=" + language)
-			));
-		} else {
-			return emailService.send(EmailService.SHARE_NEW_PRIORITY, recipient, "new_share", language, Map.of(
-				"from", owner
-			));
-		}
+		});
 	}
 	
 	private Mono<Share> getShare(String id, String owner) {

@@ -30,11 +30,9 @@ public class InitDB {
 	
 	private static final String[] TABLES = {
 		"users", "user_keys", "user_preferences", "user_extensions",
-		"collections", "tracks", "trails", "tags", "trails_tags", "shares",
-		"jobs_queue", "verification_codes",
-		"files", "photos",
-		"user_quotas", "user_subscriptions", "plans",
-		"donations", "donation_goals",
+		"collections", "tracks", "trails", "tags", "trails_tags", "shares", "share_emails",
+		"jobs_queue", "verification_codes", "files", "photos",
+		"user_quotas", "user_subscriptions", "plans", "donations", "donation_goals",
 		"migrations"
 	};
 	

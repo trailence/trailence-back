@@ -194,10 +194,11 @@ class TestShares extends AbstractTest {
 		var user = test.createUserAndLogin();
 		var mytrails = user.getMyTrails();
 		
+		var to1 = test.email();
 		var request1 = new CreateShareRequest(
 			UUID.randomUUID().toString(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			List.of(test.email()),
+			List.of(to1),
 			ShareElementType.COLLECTION,
 			List.of(mytrails.getUuid()),
 			"xx",
@@ -209,11 +210,13 @@ class TestShares extends AbstractTest {
 		assertThat(share.getUuid()).isEqualTo(request1.getId());
 		
 		assertThat(user.getShares()).singleElement().extracting("uuid").isEqualTo(share.getUuid());
+		assertMailSent("trailence@trailence.org", to1.toLowerCase());
 		
+		var to2 = test.email();
 		var request2 = new CreateShareRequest(
 			request1.getId(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			List.of(test.email()),
+			List.of(to2),
 			ShareElementType.COLLECTION,
 			List.of(mytrails.getUuid()),
 			"xx",
@@ -225,6 +228,7 @@ class TestShares extends AbstractTest {
 		assertThat(share.getUuid()).isEqualTo(request1.getId());
 		
 		assertThat(user.getShares()).singleElement().extracting("uuid").isEqualTo(share.getUuid());
+		assertMailNotSent("trailence@trailence.org", to2.toLowerCase());
 	}
 	
 	@Test
@@ -234,10 +238,11 @@ class TestShares extends AbstractTest {
 		var trail1 = user.createTrail(mytrails, true);
 		var trail2 = user.createTrail(mytrails, true);
 		
+		var to = "notReallyAFriend." + RandomStringUtils.insecure().nextAlphanumeric(1, 9) + "@trailence.org";
 		var request = new CreateShareRequest(
 			UUID.randomUUID().toString(),
 			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
-			List.of("notReallyAFriend." + RandomStringUtils.insecure().nextAlphanumeric(1, 9) + "@trailence.org"),
+			List.of(to),
 			ShareElementType.TRAIL,
 			List.of(trail1.getUuid(), trail2.getUuid()),
 			"en",
@@ -255,6 +260,7 @@ class TestShares extends AbstractTest {
 		assertThat(share.getTrails()).isNull();
 		
 		assertThat(user.getShares()).singleElement().extracting("uuid").isEqualTo(share.getUuid());
+		assertMailSent("trailence@trailence.org", to.toLowerCase());
 		
 		user.deleteTrails(trail1, trail2);
 		assertThat(user.getShares()).isEmpty();
@@ -316,6 +322,7 @@ class TestShares extends AbstractTest {
 		var error = response.getBody().as(ApiError.class);
 		assertThat(error.getErrorCode()).isEqualTo("invalid-recipients");
 		assertThat(error.getErrorMessage()).isEqualTo("size must be between 1 and 20");
+		IntStream.range(1, 22).mapToObj(i -> i + "@test.com").forEach(email -> assertMailNotSent("trailence@trailence.org", email));
 	}
 	
 	@Test
@@ -363,6 +370,9 @@ class TestShares extends AbstractTest {
 		assertThat(friend2.getShares()).singleElement().extracting("uuid").isEqualTo(share.getUuid());		
 		friend3.expectTrails(trail1, trail2);
 		assertThat(friend3.getShares()).singleElement().extracting("uuid").isEqualTo(share.getUuid());
+		assertMailSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend3.getEmail().toLowerCase());
 		
 		response = friend1.delete("/api/share/v2/" + user.getEmail() + "/" + share.getUuid());
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -432,6 +442,8 @@ class TestShares extends AbstractTest {
 		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
 		assertThat(share.getElements()).isEqualTo(request.getElements());
 		assertThat(share.getTrails()).isNull();
+		assertMailSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
 		
 		var update = new UpdateShareRequest(
 			"new name",
@@ -449,7 +461,10 @@ class TestShares extends AbstractTest {
 		assertThat(share.getRecipients()).containsExactlyInAnyOrder(friend1.getEmail().toLowerCase(), friend3.getEmail().toLowerCase());
 		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
 		assertThat(share.getElements()).isEqualTo(request.getElements());
-		
+		assertMailNotSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailNotSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend3.getEmail().toLowerCase());
+
 		var shares = user.getShares();
 		assertThat(shares).hasSize(1);
 		share = shares.getFirst();
@@ -460,5 +475,78 @@ class TestShares extends AbstractTest {
 		assertThat(share.getRecipients()).containsExactlyInAnyOrder(friend1.getEmail().toLowerCase(), friend3.getEmail().toLowerCase());
 		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
 		assertThat(share.getElements()).isEqualTo(request.getElements());
+	}
+	
+	@Test
+	void shareThenRemoveRecipientThenAddAgainSendEmailOnlyOnce() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		
+		var friend1 = test.createUserAndLogin();
+		var friend2 = test.createUserAndLogin();
+		var friend3 = test.createUserAndLogin();
+		
+		var request = new CreateShareRequest(
+			UUID.randomUUID().toString(),
+			RandomStringUtils.insecure().nextAlphanumeric(1, 51),
+			List.of(friend1.getEmail(), friend2.getEmail()),
+			ShareElementType.COLLECTION,
+			List.of(mytrails.getUuid()),
+			"en",
+			false
+		);
+		var response = user.post("/api/share/v2", request);
+		assertThat(response.statusCode()).isEqualTo(200);
+		var share = response.getBody().as(Share.class);
+		assertThat(share.getUuid()).isEqualTo(request.getId());
+		assertThat(share.getOwner()).isEqualTo(user.getEmail().toLowerCase());
+		assertThat(share.getName()).isEqualTo(request.getName());
+		assertThat(share.isIncludePhotos()).isFalse();
+		assertThat(share.getRecipients()).containsExactlyInAnyOrder(friend1.getEmail().toLowerCase(), friend2.getEmail().toLowerCase());
+		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
+		assertThat(share.getElements()).isEqualTo(request.getElements());
+		assertThat(share.getTrails()).isNull();
+		assertMailSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
+		
+		var update = new UpdateShareRequest(
+			"new name",
+			true,
+			List.of(friend1.getEmail(), friend3.getEmail()),
+			"en"
+		);
+		response = user.put("/api/share/v2/" + share.getUuid(), update);
+		assertThat(response.statusCode()).isEqualTo(200);
+		share = response.getBody().as(Share.class);
+		assertThat(share.getUuid()).isEqualTo(request.getId());
+		assertThat(share.getOwner()).isEqualTo(user.getEmail().toLowerCase());
+		assertThat(share.getName()).isEqualTo(update.getName());
+		assertThat(share.isIncludePhotos()).isTrue();
+		assertThat(share.getRecipients()).containsExactlyInAnyOrder(friend1.getEmail().toLowerCase(), friend3.getEmail().toLowerCase());
+		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
+		assertThat(share.getElements()).isEqualTo(request.getElements());
+		assertMailNotSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailNotSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
+		assertMailSent("trailence@trailence.org", friend3.getEmail().toLowerCase());
+		
+		update = new UpdateShareRequest(
+			"new name",
+			true,
+			List.of(friend1.getEmail(), friend2.getEmail()),
+			"en"
+		);
+		response = user.put("/api/share/v2/" + share.getUuid(), update);
+		assertThat(response.statusCode()).isEqualTo(200);
+		share = response.getBody().as(Share.class);
+		assertThat(share.getUuid()).isEqualTo(request.getId());
+		assertThat(share.getOwner()).isEqualTo(user.getEmail().toLowerCase());
+		assertThat(share.getName()).isEqualTo(update.getName());
+		assertThat(share.isIncludePhotos()).isTrue();
+		assertThat(share.getRecipients()).containsExactlyInAnyOrder(friend1.getEmail().toLowerCase(), friend2.getEmail().toLowerCase());
+		assertThat(share.getType()).isEqualTo(ShareElementType.COLLECTION);
+		assertThat(share.getElements()).isEqualTo(request.getElements());
+		assertMailNotSent("trailence@trailence.org", friend1.getEmail().toLowerCase());
+		assertMailNotSent("trailence@trailence.org", friend2.getEmail().toLowerCase());
+		assertMailNotSent("trailence@trailence.org", friend3.getEmail().toLowerCase());
 	}
 }

@@ -17,6 +17,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.FileSystemUtils;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.trailence.email.EmailJob;
+import org.trailence.jobs.db.JobRepository;
 import org.trailence.mailhog.MailHogDtos;
 import org.trailence.mailhog.MailHogDtos.Message;
 
@@ -26,6 +28,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.restassured.RestAssured;
 import io.restassured.specification.RequestSpecification;
 import jakarta.mail.internet.MimeUtility;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
@@ -56,6 +59,7 @@ import reactor.util.function.Tuples;
 	"trailence.extensions.allowed.[thunderforest.com].role=thunderforest",
 	"trailence.extensions.allowed.[thunderforest.com].content.apikey.pattern=[0-9a-f]{32}",
 })
+@Slf4j
 public abstract class AbstractTest {
 	
 	@SuppressWarnings("resource")
@@ -88,6 +92,9 @@ public abstract class AbstractTest {
 	@Autowired
 	protected TestService test;
 	
+	@Autowired
+	private JobRepository jobRepo;
+	
 	@BeforeEach
 	void setupRestAssured() {
 		RestAssured.port = port;
@@ -106,6 +113,10 @@ public abstract class AbstractTest {
         registry.add("spring.mail.port", () -> smtp.getMappedPort(1025));
         registry.add("spring.mail.properties.mail.smtp.auth", () -> "false");
         registry.add("spring.mail.properties.mail.smtp.starttls.enable", () -> "false");
+        registry.add("spring.mail.properties.mail.mime.address.usecanonicalhostname", () -> "false");
+        registry.add("spring.mail.properties.mail.smtp.localhost", () -> "localhost");
+        registry.add("spring.mail.properties.mail.smtp.ehlo", () -> "false");
+        registry.add("spring.mail.properties.mail.smtp.quitwait", () -> "false");
     }
 	
 	@DynamicPropertySource
@@ -131,19 +142,23 @@ public abstract class AbstractTest {
 	@SuppressWarnings("java:S2925")
 	protected Tuple2<String, String> assertMailSent(String from, String to) {
 		MailHogDtos.Message message = null;
-		for (var trial = 0; trial < 300; trial++) {
+		for (var trial = 0; trial < 100; trial++) {
 			var messageOpt = searchMail(from, to);
 			if (messageOpt.isPresent()) {
 				message = messageOpt.get();
 				break;
 			}
+			long pending = jobRepo.findAll().filter(j -> EmailJob.TYPE.equals(j.getType())).count().block();
+			if (pending == 0) break;
+			log.info("Still {} pending email(s)", pending);
 			try {
-				Thread.sleep(100);
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {
 				// ignore
 			}
 		}
 
+		assertThat(message).as("Expect mail from " + from + " to " + to).isNotNull();
 		var subject = message.getContent().getHeaders().get("Subject").getFirst();
 		try {
 			subject = MimeUtility.decodeText(subject);
@@ -161,11 +176,31 @@ public abstract class AbstractTest {
 	
 	@SuppressWarnings("java:S2925")
 	protected void assertMailNotSent(String from, String to) {
+		for (var trial = 0; trial < 100; trial++) {
+			long pending = jobRepo.findAll().filter(j -> EmailJob.TYPE.equals(j.getType())).count().block();
+			if (pending == 0) break;
+			log.info("Still {} pending email(s)", pending);
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				// ignore
+			}
+		}
 		assertThat(searchMail(from, to)).isEmpty();
 		try {
-			Thread.sleep(5000);
+			Thread.sleep(1000);
 		} catch (InterruptedException e) {
 			// ignore
+		}
+		for (var trial = 0; trial < 100; trial++) {
+			long pending = jobRepo.findAll().filter(j -> EmailJob.TYPE.equals(j.getType())).count().block();
+			if (pending == 0) break;
+			log.info("Still {} pending email(s)", pending);
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				// ignore
+			}
 		}
 		assertThat(searchMail(from, to)).isEmpty();
 	}
