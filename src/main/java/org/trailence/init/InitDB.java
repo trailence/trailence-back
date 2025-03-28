@@ -33,6 +33,7 @@ public class InitDB {
 		"collections", "tracks", "trails", "tags", "trails_tags", "shares", "share_emails",
 		"jobs_queue", "verification_codes", "files", "photos",
 		"user_quotas", "user_subscriptions", "plans", "donations", "donation_goals",
+		"contact_messages",
 		"migrations"
 	};
 	

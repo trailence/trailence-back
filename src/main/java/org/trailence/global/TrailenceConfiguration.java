@@ -62,6 +62,7 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 			.pathMatchers(HttpMethod.POST, "/api/user/v1/resetPassword").permitAll()
 			.pathMatchers(HttpMethod.POST, "/api/kofi/v1").permitAll()
 			.pathMatchers(HttpMethod.GET, "/api/donation/v1/status").permitAll()
+			.pathMatchers(HttpMethod.POST, "/api/contact/v1").permitAll()
 			.pathMatchers("/**").authenticated()
 		)
 		.addFilterBefore(new HttpFilter(), SecurityWebFiltersOrder.HTTP_BASIC)
