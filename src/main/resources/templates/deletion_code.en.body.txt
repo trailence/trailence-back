@@ -1,0 +1,6 @@
+Hello,
+
+Here is your code to confirm the deletion of your account on {{hostname}}: {{code}}
+
+If you did not make this request, you can cancel it by using this link:
+{{stop_url}}

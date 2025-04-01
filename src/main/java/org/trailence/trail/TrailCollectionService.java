@@ -109,16 +109,23 @@ public class TrailCollectionService {
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
         Set<UUID> ids = new HashSet<>(uuids.stream().map(UUID::fromString).toList());
         String owner = auth.getPrincipal().toString();
-        return r2dbc.query(DbUtils.select(buildSelectDeletable(ids, owner), null, r2dbc), row -> (UUID) row.get("uuid"))
-        .all().collectList()
-        .flatMap(deletable ->
-        	Mono.zip(
-        		trailService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-        		tagService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-        		shareService.collectionsDeleted(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel())
-        	)
-        	.then(self.deleteCollectionsWithQuota(deletable, owner))
-        );
+        return deleteCollections(r2dbc.query(DbUtils.select(buildSelectDeletable(ids, owner), null, r2dbc), row -> (UUID) row.get("uuid")).all(), owner);
+    }
+    
+    public Mono<Void> deleteUser(String email) {
+    	return deleteCollections(repo.findAllUuidsForUser(email), email);
+    }
+    
+    private Mono<Void> deleteCollections(Flux<UUID> uuids, String owner) {
+    	return uuids.collectList()
+		.flatMap(deletable ->
+	    	Mono.zip(
+	    		trailService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+	    		tagService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
+	    		shareService.collectionsDeleted(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel())
+	    	)
+	    	.then(self.deleteCollectionsWithQuota(deletable, owner))
+	    );
     }
     
     @Transactional

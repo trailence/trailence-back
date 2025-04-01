@@ -14,5 +14,7 @@ public interface UserRepository extends ReactiveCrudRepository<UserEntity, Strin
 	Mono<UserEntity> findByEmailAndPassword(String email, String password);
 
 	Flux<UserEntity> findAllByEmailIn(List<String> emails);
+	
+	Mono<Void> deleteByEmail(String email);
 
 }

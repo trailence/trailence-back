@@ -17,10 +17,15 @@ import org.springframework.data.relational.core.sql.Expressions;
 import org.springframework.data.relational.core.sql.SimpleFunction;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.trailence.auth.db.UserKeyEntity;
+import org.trailence.auth.db.UserKeyRepository;
+import org.trailence.captcha.CaptchaService;
 import org.trailence.email.EmailService;
+import org.trailence.extensions.db.UserExtensionRepository;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.db.SqlBuilder;
@@ -29,14 +34,21 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotasEntity;
+import org.trailence.quotas.db.UserQuotasRepository;
 import org.trailence.quotas.db.UserSubscriptionEntity;
+import org.trailence.quotas.db.UserSubscriptionRepository;
 import org.trailence.quotas.dto.UserQuotas;
+import org.trailence.trail.ShareService;
+import org.trailence.trail.TrailCollectionService;
 import org.trailence.trail.db.TrailCollectionEntity;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
+import org.trailence.user.dto.RegisterNewUserCodeRequest;
+import org.trailence.user.dto.RegisterNewUserRequest;
 import org.trailence.user.dto.User;
 import org.trailence.verificationcode.VerificationCodeService;
 import org.trailence.verificationcode.VerificationCodeService.Spec;
@@ -51,6 +63,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -58,15 +71,27 @@ import reactor.util.function.Tuple2;
 public class UserService {
 
 	private final UserRepository userRepo;
+	private final UserQuotasRepository userQuotaRepo;
+	private final UserExtensionRepository userExtensionRepo;
+	private final UserKeyRepository userKeyRepo;
+	private final UserSubscriptionRepository userSubscriptionRepo;
+	private final UserPreferencesRepository userPreferencesRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final VerificationCodeService verificationCodeService;
 	private final EmailService emailService;
 	private final TokenService tokenService;
 	private final QuotaService quotaService;
+	private final CaptchaService captchaService;
+	private final TrailCollectionService collectionService;
+	private final ShareService shareService;
 	
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 	private static final String FORGOT_PASSWORD_VERIFICATION_CODE_TYPE = "forgot_password";
 	private static final long CHANGE_PASSWORD_VERIFICATION_CODE_EXPIRATION = 10L * 60 * 1000;
+	private static final String REGISTER_VERIFICATION_CODE_TYPE = "register_user";
+	private static final long REGISTER_VERIFICATION_CODE_EXPIRATION = 10L * 60 * 1000;
+	private static final String DELETION_VERIFICATION_CODE_TYPE = "delete_user";
+	private static final long DELETION_VERIFICATION_CODE_EXPIRATION = 10L * 60 * 1000;
 
 	@Transactional
 	public Mono<Void> createUser(String emailInput, String password, boolean isAdmin, List<Tuple2<String, Optional<Long>>> subscriptions) {
@@ -155,6 +180,104 @@ public class UserService {
 			});
 		})
 		.then();
+	}
+	
+	public Mono<Void> sendRegisterCode(RegisterNewUserCodeRequest request) {
+		if (request.getEmail() == null) return Mono.error(new ForbiddenException());
+		Mono<Void> checkCaptcha;
+		if (captchaService.isActivated()) {
+			if (request.getCaptcha() == null) return Mono.error(new ForbiddenException());
+			checkCaptcha = captchaService.validate(request.getCaptcha()).flatMap(ok ->ok.booleanValue() ? Mono.empty() : Mono.error(new ForbiddenException()));
+		} else
+			checkCaptcha = Mono.empty();
+		var email = request.getEmail().toLowerCase();
+		return checkCaptcha
+		.then(userRepo.findByEmail(email).map(Optional::of).switchIfEmpty(Mono.just(Optional.empty())))
+		.flatMap(userExists -> {
+			if (userExists.isPresent())
+				return this.sendChangePasswordCode(email, request.getLang(), true);
+			return verificationCodeService.generate(email, REGISTER_VERIFICATION_CODE_TYPE, System.currentTimeMillis() + REGISTER_VERIFICATION_CODE_EXPIRATION, "", 6, Spec.DIGITS, 3)
+			.flatMap(code -> {
+				String stopToken;
+				try {
+					stopToken = tokenService.generate(new TokenData("stop_registration", email, ""));
+				} catch (Exception e) {
+					return Mono.error(e);
+				}
+				return emailService.send(EmailService.REGISTER_USER_PRIORITY, email, "registration_code", request.getLang(), Map.of(
+					"code", code,
+					"stop_url", emailService.getLinkUrl(stopToken)
+				));
+			});
+		});
+	}
+	
+	public Mono<Void> cancelRegisterCode(String token) {
+		return Mono.fromCallable(() -> tokenService.check(token))
+		.flatMap(data -> {
+			log.info("Cancel registration request for user: {}", data.getEmail());
+			return verificationCodeService.cancelAll(REGISTER_VERIFICATION_CODE_TYPE, data.getEmail())
+			.then(verificationCodeService.cancelAll(FORGOT_PASSWORD_VERIFICATION_CODE_TYPE, data.getEmail()));
+		});
+	}
+	
+	@Transactional
+	@SuppressWarnings("java:S6809")
+	public Mono<Void> registerNewUser(@RequestBody RegisterNewUserRequest request) {
+		if (request.getEmail() == null) return Mono.error(new ForbiddenException());
+		if (request.getCode() == null) return Mono.error(new ForbiddenException());
+		if (request.getPassword() == null || request.getPassword().length() < TrailenceUtils.MIN_PASSWORD_SIZE) return Mono.error(new ForbiddenException());
+		String email = request.getEmail().toLowerCase();
+		return userRepo.findByEmail(email).map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
+		.flatMap(userExists -> {
+			if (userExists.isPresent())
+				return changePassword(email, request.getCode(), request.getPassword(), null, true);
+			return verificationCodeService.check(request.getCode(), REGISTER_VERIFICATION_CODE_TYPE, email, String.class)
+			.flatMap(check -> createUser(email, request.getPassword(), false, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty()))));
+		})
+		.then();
+	}
+	
+	public Mono<Void> sendDeletionCode(String lang, Authentication auth) {
+		String email = auth.getPrincipal().toString();
+		return verificationCodeService.generate(email, DELETION_VERIFICATION_CODE_TYPE, System.currentTimeMillis() + DELETION_VERIFICATION_CODE_EXPIRATION, "", 6, Spec.DIGITS, 3)
+		.flatMap(code -> {
+			String stopToken;
+			try {
+				stopToken = tokenService.generate(new TokenData("stop_deletion", email, ""));
+			} catch (Exception e) {
+				return Mono.error(e);
+			}
+			return emailService.send(EmailService.DELETE_USER_PRIORITY, email, "deletion_code", lang, Map.of(
+				"code", code,
+				"stop_url", emailService.getLinkUrl(stopToken)
+			));
+		});
+	}
+	
+	public Mono<Void> cancelDeletionCode(String token) {
+		return Mono.fromCallable(() -> tokenService.check(token))
+		.flatMap(data -> {
+			log.info("Cancel deletion request for user: {}", data.getEmail());
+			return verificationCodeService.cancelAll(DELETION_VERIFICATION_CODE_TYPE, data.getEmail());
+		});
+	}
+	
+	@Transactional
+	public Mono<Void> deleteUser(String code, String email) {
+		return verificationCodeService.check(code, DELETION_VERIFICATION_CODE_TYPE, email, String.class)
+		.flatMap(check ->
+			collectionService.deleteUser(email)
+			.then(shareService.deleteRecipient(email))
+			.then(userRepo.deleteByEmail(email))
+			.then(Mono.zip(
+				userKeyRepo.deleteAllByEmail(email).thenReturn(1).publishOn(Schedulers.parallel()),
+				userQuotaRepo.deleteById(email).thenReturn(1).publishOn(Schedulers.parallel()),
+				userExtensionRepo.deleteAllByEmail(email).thenReturn(1).publishOn(Schedulers.parallel()),
+				userPreferencesRepo.deleteById(email).thenReturn(1).publishOn(Schedulers.parallel()),
+				userSubscriptionRepo.deleteAllByUserEmail(email).thenReturn(1).publishOn(Schedulers.parallel())
+			)).then()
+		);
 	}
 
 	private static final Table ALIAS_APP_VERSION = Table.create("app_versions");

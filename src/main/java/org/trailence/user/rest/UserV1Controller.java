@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.user.UserService;
 import org.trailence.user.dto.ChangePasswordRequest;
+import org.trailence.user.dto.RegisterNewUserCodeRequest;
+import org.trailence.user.dto.RegisterNewUserRequest;
 import org.trailence.user.dto.ResetPasswordRequest;
 
 import jakarta.validation.Valid;
@@ -41,6 +43,36 @@ public class UserV1Controller {
 	@PostMapping("resetPassword")
 	public Mono<Void> changePassword(@RequestBody ResetPasswordRequest request) {
 		return service.changePassword(request.getEmail(), request.getCode(), request.getNewPassword(), null, true);
+	}
+	
+	@PostMapping("sendRegisterCode")
+	public Mono<Void> sendRegisterCode(@RequestBody RegisterNewUserCodeRequest request) {
+		return service.sendRegisterCode(request);
+	}
+	
+	@DeleteMapping("sendRegisterCode")
+	public Mono<Void> cancelRegisterCode(@RequestParam("token") String token) {
+		return service.cancelRegisterCode(token);
+	}
+	
+	@PostMapping("registerNewUser")
+	public Mono<Void> registerNewUser(@RequestBody RegisterNewUserRequest request) {
+		return service.registerNewUser(request);
+	}
+	
+	@PostMapping("sendDeletionCode")
+	public Mono<Void> sendDeletionCode(@RequestParam(value = "lang", required = false) String lang, Authentication auth) {
+		return service.sendDeletionCode(lang, auth);
+	}
+	
+	@DeleteMapping("sendDeletionCode")
+	public Mono<Void> cancelDeletionCode(@RequestParam("token") String token) {
+		return service.cancelDeletionCode(token);
+	}
+
+	@PostMapping("deleteMe")
+	public Mono<Void> deleteMe(@RequestBody String code, Authentication auth) {
+		return service.deleteUser(code, auth.getPrincipal().toString());
 	}
 	
 }

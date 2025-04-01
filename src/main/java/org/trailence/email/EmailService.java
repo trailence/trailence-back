@@ -26,8 +26,10 @@ public class EmailService {
 	
 	private static final String TEMPLATES_DIR = "templates/";
 	
-	public static final int CHANGE_PASSWORD_PRIORITY = 1;
+	public static final int REGISTER_USER_PRIORITY = 1;
+	public static final int CHANGE_PASSWORD_PRIORITY = 3;
 	public static final int FORGOT_PASSWORD_PRIORITY = 10;
+	public static final int DELETE_USER_PRIORITY = 25;
 	public static final int SHARE_INVITE_PRIORITY = 100;
 	public static final int SHARE_NEW_PRIORITY = 200;
 

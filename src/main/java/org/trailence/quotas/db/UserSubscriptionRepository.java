@@ -15,4 +15,6 @@ public interface UserSubscriptionRepository extends ReactiveCrudRepository<UserS
 	
 	Mono<Long> countByPlanName(String planName);
 	
+	Mono<Void> deleteAllByUserEmail(String email);
+	
 }

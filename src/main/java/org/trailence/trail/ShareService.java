@@ -315,6 +315,21 @@ public class ShareService {
 			.flatMap(remaining -> remaining.longValue() == 0L ? deleteSharesWithQuota(List.of(UUID.fromString(id)), fromEmail, true, false) : Mono.empty());
 	}
 	
+	public Mono<Void> deleteRecipient(String email) {
+		return shareRecipientRepo.findAllByRecipient(email).collectList()
+		.flatMap(deleted -> {
+			Delete deleteRecipient = Delete.builder().from(ShareRecipientEntity.TABLE)
+			.where(Conditions.isEqual(ShareRecipientEntity.COL_RECIPIENT, SQL.literalOf(email)))
+			.build();
+			return r2dbc.getDatabaseClient().sql(DbUtils.delete(deleteRecipient, null, r2dbc)).then()
+			.thenMany(Flux.fromIterable(deleted))
+			.flatMap(recipient ->
+				shareRecipientRepo.countByUuidAndOwner(recipient.getUuid(), recipient.getOwner())
+				.flatMap(remaining -> remaining.longValue() == 0L ? deleteSharesWithQuota(List.of(recipient.getUuid()), recipient.getOwner(), true, false) : Mono.empty())
+			).then();
+		});
+	}
+	
 	private Mono<Void> deleteSharesWithQuota(List<UUID> uuids, String owner, boolean withElements, boolean withRecipients) {
 		List<StringLiteral> uuidsExpr = uuids.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList();
 		Mono<Void> deleteElements = !withElements ? Mono.empty() :

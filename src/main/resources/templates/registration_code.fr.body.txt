@@ -1,0 +1,6 @@
+Bonjour,
+
+Voici votre code pour confirmer la création de votre compte sur {{hostname}}: {{code}}
+
+Si vous n'êtes pas à l'origine de cette demande, vous pouvez supprimer la demande en allant le lien ci-dessous:
+{{stop_url}}

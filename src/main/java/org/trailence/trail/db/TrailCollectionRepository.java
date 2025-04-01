@@ -12,5 +12,8 @@ public interface TrailCollectionRepository extends UuidOwnerRepository<TrailColl
 
     @Query("SELECT uuid FROM collections WHERE uuid IN (:uuids) AND owner = :owner")
     Flux<UUID> findExistingUuids(Collection<UUID> uuids, String owner);
+    
+    @Query("SELECT uuid FROM collections WHERE owner = :owner")
+    Flux<UUID> findAllUuidsForUser(String owner);
 
 }
