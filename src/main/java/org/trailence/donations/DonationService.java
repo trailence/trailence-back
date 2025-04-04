@@ -178,7 +178,7 @@ public class DonationService {
 	}
 	
 	private Mono<Long> getCurrentDonations() {
-		String sql = "SELECT SUM(" + DonationEntity.COL_REAL_AMOUNT + ") FROM " + DonationEntity.TABLE;
+		String sql = "SELECT COALESCE(SUM(" + DonationEntity.COL_REAL_AMOUNT + "), 0) FROM " + DonationEntity.TABLE;
 		return r2dbc.query(DbUtils.operation(sql, null), row -> row.get(0, Long.class)).one();
 	}
 }

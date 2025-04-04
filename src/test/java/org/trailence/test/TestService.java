@@ -27,6 +27,7 @@ import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.dto.PageResult;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
 import org.trailence.quotas.dto.Plan;
@@ -43,6 +44,7 @@ import org.trailence.trail.dto.TrailCollection;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.trail.dto.TrailTag;
 import org.trailence.user.UserService;
+import org.trailence.user.dto.User;
 
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
@@ -616,6 +618,12 @@ public class TestService {
 			var response = put("/api/admin/users/v1/" + email + "/roles", roles);
 			assertThat(response.statusCode()).isEqualTo(200);
 			assertThat(response.getBody().as(String[].class)).isEqualTo(roles.toArray(new String[roles.size()]));
+		}
+		
+		public PageResult<User> listUsers() {
+			var response = get("/api/admin/users/v1?page=0&size=1000");
+			assertThat(response.statusCode()).isEqualTo(200);
+			return response.getBody().as(new TypeRef<PageResult<User>>() {});
 		}
 	}
 	
