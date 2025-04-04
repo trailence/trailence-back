@@ -1,6 +1,7 @@
 package org.trailence.admin.rest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -21,11 +22,13 @@ import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.quotas.dto.UserSubscription;
 import org.trailence.user.UserService;
+import org.trailence.user.dto.CreateUserRequest;
 import org.trailence.user.dto.User;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuples;
 
 @RestController
 @RequestMapping("/api/admin/users/v1")
@@ -70,6 +73,12 @@ public class AdminUsersV1Controller {
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
 	public Mono<UserQuotas> getUserQuotas(@PathVariable("user") String user) {
 		return quotaService.getUserQuotas(user);
+	}
+	
+	@PostMapping
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<Void> createUser(@RequestBody CreateUserRequest request) {
+		return service.createUser(request.getEmail(), request.getPassword(), false, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty())));
 	}
 	
 }

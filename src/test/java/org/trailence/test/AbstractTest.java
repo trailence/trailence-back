@@ -58,6 +58,7 @@ import reactor.util.function.Tuples;
 	"trailence.extensions.allowed.[thunderforest.com].enabled=true",
 	"trailence.extensions.allowed.[thunderforest.com].role=thunderforest",
 	"trailence.extensions.allowed.[thunderforest.com].content.apikey.pattern=[0-9a-f]{32}",
+	"trailence.external.kofi.verificationToken=05ae7a8e-e497-4bec-8919-79c56bf097df"
 })
 @Slf4j
 public abstract class AbstractTest {
@@ -133,6 +134,12 @@ public abstract class AbstractTest {
 		start();
 		registry.add("trailence.external.geonames.username", () -> "geo_user");
 		registry.add("trailence.external.geonames.url", () -> wireMockServer.url("/geonames"));
+	}
+
+	@DynamicPropertySource
+	static void currencyProperties(DynamicPropertyRegistry registry) {
+		start();
+		registry.add("trailence.external.currency.url", () -> wireMockServer.url("/currency"));
 	}
 	
 	protected RequestSpecification mailHogRequest() {

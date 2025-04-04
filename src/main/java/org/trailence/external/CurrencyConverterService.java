@@ -31,7 +31,10 @@ public class CurrencyConverterService {
 		if (euroConversions != null && System.currentTimeMillis() - lastFetch < 60L * 60 * 1000) {
 			return Mono.just(euroConversions);
 		}
-		return api.getEuroConversion();
+		return api.getEuroConversion().doOnNext(c -> {
+			euroConversions = c;
+			lastFetch = System.currentTimeMillis();
+		});
 	}
 
 }
