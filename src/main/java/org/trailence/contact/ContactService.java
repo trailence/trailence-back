@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.AsteriskFromTable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,8 @@ import org.trailence.contact.db.ContactMessageEntity;
 import org.trailence.contact.db.ContactMessageRepository;
 import org.trailence.contact.dto.ContactMessage;
 import org.trailence.contact.dto.CreateMessageRequest;
+import org.trailence.email.EmailJob;
+import org.trailence.email.EmailJob.Email;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.db.SqlBuilder;
@@ -25,16 +28,19 @@ import org.trailence.global.exceptions.ForbiddenException;
 
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ContactService {
 	
 	private final ContactMessageRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final CaptchaService captcha;
+	private final EmailJob emailJob;
 
 	public Mono<Void> createMessage(CreateMessageRequest request, Authentication auth) {
 		return checkCreateRequest(request, auth).flatMap(email -> Mono.defer(() -> {
@@ -119,6 +125,26 @@ public class ContactService {
 			row.get(ContactMessageEntity.COL_SENT_AT.getName().toString(), Long.class),
 			row.get(ContactMessageEntity.COL_IS_READ.getName().toString(), Boolean.class)
 		);
+	}
+	
+	@Scheduled(initialDelayString = "15m", fixedDelayString = "3h")
+	public void checkUnreadMessages() {
+		repo.findAllBySentAtGreaterThanAndIsRead(System.currentTimeMillis() - 3L * 60 * 60 * 1000, false)
+		.buffer(10)
+		.take(1)
+		.subscribe(messages -> {
+			log.info("Unread messages since 3 last hours: {}", messages.size());
+			if (messages.isEmpty()) return;
+			String nb = messages.size() >= 10 ? "10+" : "" + messages.size();
+			StringBuilder html = new StringBuilder();
+			html.append("<ul>");
+			for (var m : messages) {
+				html.append("<li>").append(m.getEmail()).append(": ").append(m.getMessageType()).append("</li>");
+			}
+			html.append("</ul>");
+			emailJob.send(new Email(emailJob.getFromTrailenceEmail(), nb + " new contact message(s)", "New messages", html.toString()), 99)
+			.subscribe();
+		});
 	}
 	
 }

@@ -30,6 +30,7 @@ spring:
 trailence:
   jwt:
     secret: ${TRAILENCE_JWT_SECRET}
+    validity: ${TRAILENCE_JWT_VALIDITY:60m}
   hostname: ${TRAILENCE_HOSTNAME:trailence.org}
   protocol: ${TRAILENCE_PROTOCOL:https}
   linkpath: ${TRAILENCE_LINK_PATH:/link/}

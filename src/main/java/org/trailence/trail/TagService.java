@@ -176,6 +176,7 @@ public class TagService {
 		}));
     }
 	
+	@Transactional
 	public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
 		return delete(

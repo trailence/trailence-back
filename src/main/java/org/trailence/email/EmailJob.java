@@ -48,6 +48,10 @@ public class EmailJob implements Job {
 	private int minDelayCount;
 	
 	private LinkedList<Long> lastEmails = new LinkedList<>();
+	
+	public String getFromTrailenceEmail() {
+		return this.fromEmail;
+	}
 
 	@Override
 	public String getType() {
