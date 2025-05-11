@@ -226,7 +226,7 @@ public class PhotoService {
 		if (email.equals(user)) return getFromDB;
 		
 		Select sharedWithMe = shareService.selectSharedElementsWithMe(
-    		email,
+    		user,
     		new Expression[] { PhotoEntity.COL_UUID },
     		PhotoEntity.TABLE,
     		Conditions.isEqual(PhotoEntity.COL_TRAIL_UUID, TrailEntity.COL_UUID).and(Conditions.isEqual(PhotoEntity.COL_OWNER, TrailEntity.COL_OWNER)),
