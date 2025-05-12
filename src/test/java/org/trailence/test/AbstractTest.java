@@ -149,6 +149,7 @@ public abstract class AbstractTest {
 	@SuppressWarnings("java:S2925")
 	protected Tuple2<String, String> assertMailSent(String from, String to) {
 		MailHogDtos.Message message = null;
+		int lastNoPending = 0;
 		for (var trial = 0; trial < 100; trial++) {
 			var messageOpt = searchMail(from, to);
 			if (messageOpt.isPresent()) {
@@ -156,7 +157,11 @@ public abstract class AbstractTest {
 				break;
 			}
 			long pending = jobRepo.findAll().filter(j -> EmailJob.TYPE.equals(j.getType())).count().block();
-			if (pending == 0) break;
+			if (pending == 0) {
+				if (++lastNoPending == 10) break;
+				continue;
+			}
+			lastNoPending = 0;
 			log.info("Still {} pending email(s)", pending);
 			try {
 				Thread.sleep(1000);
