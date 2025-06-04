@@ -270,13 +270,12 @@ public class UserService {
 			collectionService.deleteUser(email)
 			.then(shareService.deleteRecipient(email))
 			.then(userRepo.deleteByEmail(email))
-			.then(Mono.zip(
-				userKeyRepo.deleteAllByEmail(email).thenReturn(1).publishOn(Schedulers.parallel()),
-				userQuotaRepo.deleteById(email).thenReturn(1).publishOn(Schedulers.parallel()),
-				userExtensionRepo.deleteAllByEmail(email).thenReturn(1).publishOn(Schedulers.parallel()),
-				userPreferencesRepo.deleteById(email).thenReturn(1).publishOn(Schedulers.parallel()),
-				userSubscriptionRepo.deleteAllByUserEmail(email).thenReturn(1).publishOn(Schedulers.parallel())
-			)).then()
+			.then(userKeyRepo.deleteAllByEmail(email))
+			.then(userQuotaRepo.deleteById(email))
+			.then(userExtensionRepo.deleteAllByEmail(email))
+			.then(userPreferencesRepo.deleteById(email))
+			.then(userSubscriptionRepo.deleteAllByUserEmail(email))
+			.then()
 		);
 	}
 

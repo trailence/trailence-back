@@ -44,12 +44,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TrackService {
 
 	private final TrackRepository repo;
@@ -124,13 +126,17 @@ public class TrackService {
 		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), auth.getPrincipal().toString());
 	}
 	
-	@Transactional
 	public Mono<Void> deleteTracksWithQuota(Set<UUID> uuids, String owner) {
+		log.info("Deleting {} tracks for {}", uuids.size(), owner);
 		return repo.findAllByUuidInAndOwner(uuids, owner)
-		.flatMap(entity ->
-			repo.deleteByUuidAndOwner(entity.getUuid(), owner)
-			.flatMap(nb -> nb == 0 ? Mono.empty() : quotaService.tracksDeleted(owner, 1, entity.getData().length))
-		).then();
+		.flatMap(entity -> self.deleteTrackWithQuota(entity.getUuid(), owner, entity.getData().length), 1, 1)
+		.then(Mono.fromRunnable(() -> log.info("Tracks deleted ({} for {})", uuids.size(), owner)));
+	}
+	
+	@Transactional
+	public Mono<Void> deleteTrackWithQuota(UUID uuid, String owner, int dataSize) {
+		return repo.deleteByUuidAndOwner(uuid, owner)
+		.flatMap(nb -> nb == 0 ? Mono.empty() : quotaService.tracksDeleted(owner, 1, dataSize));
 	}
 	
 	@SuppressWarnings("java:S2445") // synchronized on a parameter

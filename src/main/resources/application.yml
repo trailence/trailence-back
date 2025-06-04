@@ -9,7 +9,7 @@ spring:
     password: ${POSTGRESQL_PASSWORD:postgres}
     pool:
       enabled: true
-      max-size: 25
+      max-size: 100
       initial-size: 3
 
   mail:

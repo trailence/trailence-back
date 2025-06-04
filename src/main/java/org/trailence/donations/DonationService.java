@@ -132,14 +132,12 @@ public class DonationService {
 		.map(this::toDto);
 	}
 	
-	@Transactional
 	public Mono<Void> deleteDonation(String uuid) {
 		return donationRepo.findById(UUID.fromString(uuid))
 		.switchIfEmpty(Mono.error(new NotFoundException("donation", uuid)))
 		.flatMap(donationRepo::delete);
 	}
 	
-	@Transactional
 	public Mono<List<DonationGoal>> getGoals() {
 		return goalRepo.findAll().map(this::toDto).collectList();
 	}
@@ -169,7 +167,6 @@ public class DonationService {
 		);
 	}
 	
-	@Transactional
 	public Mono<DonationStatus> getStatus() {
 		return Mono.zip(
 			getCurrentDonations().publishOn(Schedulers.parallel()),

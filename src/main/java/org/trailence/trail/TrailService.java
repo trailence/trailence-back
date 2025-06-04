@@ -211,19 +211,20 @@ public class TrailService {
 				tracksUuids.add(entity.getOriginalTrackUuid());
 				tracksUuids.add(entity.getCurrentTrackUuid());
 			});
-			return Mono.zip(
-				trailTagService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-				trackService.deleteTracksWithQuota(tracksUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-				shareService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-				photoService.trailsDeleted(trailsUuids, owner).thenReturn(1).publishOn(Schedulers.parallel())
-			).then(self.deleteTrailsWithQuota(trailsUuids, owner));
+			return trailTagService.trailsDeleted(trailsUuids, owner)
+			.then(trackService.deleteTracksWithQuota(tracksUuids, owner))
+			.then(shareService.trailsDeleted(trailsUuids, owner))
+			.then(photoService.trailsDeleted(trailsUuids, owner))
+			.then(self.deleteTrailsWithQuota(trailsUuids, owner));
 		});
     }
     
     @Transactional
     public Mono<Void> deleteTrailsWithQuota(Set<UUID> uuids, String owner) {
+    	log.info("Deleting {} trails for {}", uuids.size(), owner);
     	return repo.deleteAllByUuidInAndOwner(uuids, owner)
-    	.flatMap(nb -> quotaService.trailsDeleted(owner, nb));
+    	.flatMap(nb -> quotaService.trailsDeleted(owner, nb))
+    	.then(Mono.fromRunnable(() -> log.info("Trails deleted ({} for {})", uuids.size(), owner)));
     }
 
     public Mono<UpdateResponse<Trail>> getUpdates(List<Versioned> known, Authentication auth) {

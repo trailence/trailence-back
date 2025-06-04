@@ -25,6 +25,7 @@ import org.trailence.trail.db.TrailTagRepository;
 import org.trailence.trail.dto.TrailTag;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -33,6 +34,7 @@ import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TrailTagService {
 
 	private final TrailTagRepository repo;
@@ -108,25 +110,28 @@ public class TrailTagService {
 	@Transactional
 	public Mono<Void> bulkDelete(Collection<TrailTag> dtos, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
+		log.info("Deleting {} trail tags for {}", dtos.size(), owner);
 		return Flux.fromIterable(new HashSet<>(dtos.stream().map(dto -> Tuples.of(UUID.fromString(dto.getTagUuid()), UUID.fromString(dto.getTrailUuid()))).toList()))
 		.flatMap(tuple -> repo.deleteByTagUuidAndTrailUuidAndOwner(tuple.getT1(), tuple.getT2(), owner), 3, 6)
 		.reduce(0L, (p, n) -> p + n)
 		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
-		.then();
+		.then(Mono.fromRunnable(() -> log.info("Trail tags deleted ({} for {})", dtos.size(), owner)));
 	}
 	
 	@Transactional
 	public Mono<Void> trailsDeleted(Set<UUID> trailsUuids, String owner) {
+		log.info("Deleting trail tags of {} trails for {}", trailsUuids.size(), owner);
 		return repo.deleteAllByTrailUuidInAndOwner(trailsUuids, owner)
 		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
-		.then();
+		.then(Mono.fromRunnable(() -> log.info("Trail tags deleted ({} trails for {})", trailsUuids.size(), owner)));
 	}
 	
 	@Transactional
 	public Mono<Void> tagsDeleted(Set<UUID> tagsUuids, String owner) {
+		log.info("Deleting trail tags of {} tags for {}", tagsUuids.size(), owner);
 		return repo.deleteAllByTagUuidInAndOwner(tagsUuids, owner)
 		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
-		.then();
+		.then(Mono.fromRunnable(() -> log.info("Trail tags deleted ({} tags for {})", tagsUuids.size(), owner)));
 	}
 	
 	private TrailTag toDto(TrailTagEntity entity) {

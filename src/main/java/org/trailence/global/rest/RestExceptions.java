@@ -1,6 +1,7 @@
 package org.trailence.global.rest;
 
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponseException;
@@ -83,6 +84,12 @@ public class RestExceptions {
 	public Mono<ResponseEntity<ApiError>> handleAccessDenied(AccessDeniedException error, ServerWebExchange exchange) {
 		log.warn("Access denied for {} {}: {} - {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI(), error.getClass().getSimpleName(), error.getMessage());
 		return Mono.fromSupplier(() -> ResponseEntity.status(403).body(new ApiError(403, "forbidden", "Access denied")));
+	}
+	
+	@ExceptionHandler(DuplicateKeyException.class)
+	public Mono<ResponseEntity<ApiError>> handleDuplicateKey(Exception error, ServerWebExchange exchange) {
+		log.warn("Duplicate key error returned by {} {}: {} - {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI(), error.getClass().getSimpleName(), error.getMessage(), error);
+		return Mono.fromSupplier(() -> ResponseEntity.status(409).body(new ApiError(409, "conflict", "Duplicate")));
 	}
 	
 	@ExceptionHandler(Exception.class)

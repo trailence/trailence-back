@@ -38,11 +38,13 @@ import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.Photo;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PhotoService {
 	
 	private final FileService fileService;
@@ -167,6 +169,7 @@ public class PhotoService {
     
     @Transactional
     public Mono<Long> deletePhotoWithFileAndQuota(PhotoEntity entity) {
+		log.info("Deleting photo {}", entity.getOwner());
     	return repo.deleteByUuidAndOwner(entity.getUuid(), entity.getOwner())
 		.flatMap(nb -> nb == 0 ? Mono.empty() :
 			fileService.deleteFile(entity.getFileId()).map(FileEntity::getSize)

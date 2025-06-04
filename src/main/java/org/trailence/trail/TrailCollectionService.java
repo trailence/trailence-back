@@ -30,12 +30,13 @@ import org.trailence.trail.dto.TrailCollection;
 import org.trailence.trail.dto.TrailCollectionType;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TrailCollectionService {
 
     private final TrailCollectionRepository repo;
@@ -119,17 +120,16 @@ public class TrailCollectionService {
     private Mono<Void> deleteCollections(Flux<UUID> uuids, String owner) {
     	return uuids.collectList()
 		.flatMap(deletable ->
-	    	Mono.zip(
-	    		trailService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-	    		tagService.deleteAllFromCollections(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel()),
-	    		shareService.collectionsDeleted(deletable, owner).thenReturn(1).publishOn(Schedulers.parallel())
-	    	)
+	    	trailService.deleteAllFromCollections(deletable, owner)
+	    	.then(tagService.deleteAllFromCollections(deletable, owner))
+	    	.then(shareService.collectionsDeleted(deletable, owner))
 	    	.then(self.deleteCollectionsWithQuota(deletable, owner))
 	    );
     }
     
     @Transactional
     public Mono<Void> deleteCollectionsWithQuota(List<UUID> uuids, String owner) {
+		log.info("Deleting {} collections for {}", uuids.size(), owner);
     	return repo.deleteAllByUuidInAndOwner(uuids, owner)
 		.flatMap(nb -> quotaService.collectionsDeleted(owner, nb));
     }

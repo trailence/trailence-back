@@ -176,7 +176,6 @@ public class TagService {
 		}));
     }
 	
-	@Transactional
 	public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
 		String owner = auth.getPrincipal().toString();
 		return delete(
@@ -202,8 +201,10 @@ public class TagService {
 	
 	@Transactional
 	public Mono<Void> deleteTagsWithQuota(Set<UUID> uuids, String owner) {
+		log.info("Deleting {} tags for {}", uuids.size(), owner);
 		return repo.deleteAllByUuidInAndOwner(uuids, owner)
-		.flatMap(nb -> quotaService.tagsDeleted(owner, nb));
+		.flatMap(nb -> quotaService.tagsDeleted(owner, nb))
+		.then(Mono.fromRunnable(() -> log.info("Tags deleted ({} for {})", uuids.size(), owner)));
 	}
 	
 	@SuppressWarnings("java:S3776")

@@ -77,7 +77,6 @@ public class ContactService {
 	}
 	
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
-	@Transactional
 	public Mono<Void> markAsRead(List<String> uuids, boolean read) {
 		return repo.findAllById(uuids.stream().map(UUID::fromString).toList())
 		.flatMap(entity -> {
