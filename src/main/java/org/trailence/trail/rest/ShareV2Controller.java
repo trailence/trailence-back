@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.trailence.global.rest.RetryRest;
 import org.trailence.trail.ShareService;
 import org.trailence.trail.dto.CreateShareRequest;
 import org.trailence.trail.dto.Share;
@@ -28,22 +29,22 @@ public class ShareV2Controller {
 	
 	@PostMapping
 	public Mono<Share> createShare(@Valid @RequestBody CreateShareRequest request, Authentication auth) {
-		return service.createShare(request, auth);
+		return RetryRest.retry(service.createShare(request, auth));
 	}
 	
 	@GetMapping
 	public Flux<Share> getShares(Authentication auth) {
-		return service.getShares(auth);
+		return RetryRest.retry(service.getShares(auth));
 	}
 	
 	@DeleteMapping("/{from}/{id}")
 	public Mono<Void> deleteShare(@PathVariable("id") String id, @PathVariable("from") String from, Authentication auth) {
-		return service.deleteShare(id, from, auth);
+		return RetryRest.retry(service.deleteShare(id, from, auth));
 	}
 	
 	@PutMapping("/{id}")
 	public Mono<Share> updateShare(@PathVariable("id") String id, @RequestBody UpdateShareRequest request, Authentication auth) {
-		return service.updateShare(id, request, auth);
+		return RetryRest.retry(service.updateShare(id, request, auth));
 	}
 	
 }

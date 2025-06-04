@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.rest.RetryRest;
 import org.trailence.trail.PhotoService;
 import org.trailence.trail.dto.Photo;
 
@@ -45,22 +46,22 @@ public class PhotoV1Controller {
 		ServerHttpRequest request,
 		Authentication auth
 	) {
-		return service.storePhoto(photoUuid, trailUuid, description, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth);
+		return RetryRest.retry(service.storePhoto(photoUuid, trailUuid, description, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
 	}
 	
 	@PutMapping("/_bulkUpdate")
 	public Flux<Photo> bulkUpdate(@RequestBody List<Photo> photos, Authentication auth) {
-		return service.bulkUpdate(photos, auth);
+		return RetryRest.retry(service.bulkUpdate(photos, auth));
 	}
 	
 	@PostMapping("/_bulkDelete")
 	public Mono<Long> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
-		return service.bulkDelete(uuids, auth);
+		return RetryRest.retry(service.bulkDelete(uuids, auth));
 	}
 	
 	@PostMapping("/_bulkGetUpdates")
 	public Mono<UpdateResponse<Photo>> bulkGetUpdates(@RequestBody List<Versioned> known, Authentication auth) {
-		return service.getUpdates(known, auth);
+		return RetryRest.retry(service.getUpdates(known, auth));
 	}
 	
 	@GetMapping(path = "/{owner}/{uuid}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -69,6 +70,6 @@ public class PhotoV1Controller {
 		@PathVariable("uuid") String uuid,
 		Authentication auth
 	) {
-		return service.getFileContent(owner, uuid, auth).map(flux -> ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux));
+		return RetryRest.retry(service.getFileContent(owner, uuid, auth).map(flux -> ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux)));
 	}
 }

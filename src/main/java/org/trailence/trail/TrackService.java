@@ -87,8 +87,8 @@ public class TrackService {
 	public Mono<TrackEntity> createTrackWithQuota(TrackEntity entity) {
 		return repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner())
 		.switchIfEmpty(Mono.defer(() ->
-			quotaService.addTrack(entity.getOwner(), entity.getData().length)
-			.then(r2dbc.insert(entity))
+			r2dbc.insert(entity)
+			.flatMap(e -> quotaService.addTrack(entity.getOwner(), entity.getData().length).thenReturn(e))
 		));
 	}
 	
@@ -115,9 +115,10 @@ public class TrackService {
 			} catch (Exception e) {
 				return Mono.error(e);
 			}
-			return quotaService.updateTrackSize(entity.getOwner(), entity.getData().length - previousDataSize)
-			.then(DbUtils.updateByUuidAndOwner(r2dbc, entity))
-			.flatMap(nb -> nb == 0 ? Mono.just(entity) : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()));
+			return DbUtils.updateByUuidAndOwner(r2dbc, entity).flatMap(nb -> nb == 0 ? Mono.just(entity) :
+				quotaService.updateTrackSize(entity.getOwner(), entity.getData().length - previousDataSize)
+				.then(repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
+			);
 		})
 		.map(this::toDTO);
 	}

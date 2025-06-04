@@ -134,8 +134,7 @@ public class ShareService {
 	
 	@Transactional
 	public Mono<Void> createShareWithQuota(ShareEntity share, List<ShareElementEntity> elements, List<ShareRecipientEntity> recipients) {
-		return quotaService.addShares(share.getOwner(), 1)
-		.then(r2dbc.insert(share))
+		return r2dbc.insert(share)
 		.thenMany(
 			Flux.fromIterable(elements).flatMap(r2dbc::insert, 3, 6)
 			.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
@@ -144,6 +143,7 @@ public class ShareService {
 			Flux.fromIterable(recipients).flatMap(r2dbc::insert, 3, 6)
 			.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
 		)
+		.then(quotaService.addShares(share.getOwner(), 1))
 		.then();
 	}
 	

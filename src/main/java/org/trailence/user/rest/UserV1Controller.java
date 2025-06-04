@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.trailence.global.rest.RetryRest;
 import org.trailence.user.UserService;
 import org.trailence.user.dto.ChangePasswordRequest;
 import org.trailence.user.dto.RegisterNewUserCodeRequest;
@@ -57,7 +58,7 @@ public class UserV1Controller {
 	
 	@PostMapping("registerNewUser")
 	public Mono<Void> registerNewUser(@RequestBody RegisterNewUserRequest request) {
-		return service.registerNewUser(request);
+		return RetryRest.retry(service.registerNewUser(request));
 	}
 	
 	@PostMapping("sendDeletionCode")
@@ -72,7 +73,7 @@ public class UserV1Controller {
 
 	@PostMapping("deleteMe")
 	public Mono<Void> deleteMe(@RequestBody String code, Authentication auth) {
-		return service.deleteUser(code, auth.getPrincipal().toString());
+		return RetryRest.retry(service.deleteUser(code, auth.getPrincipal().toString()));
 	}
 	
 }

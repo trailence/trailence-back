@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.rest.RetryRest;
 import org.trailence.trail.TrailService;
 import org.trailence.trail.dto.Trail;
 
@@ -26,22 +27,22 @@ public class TrailV1Controller {
 	
 	@PostMapping("/_bulkCreate")
 	public Mono<List<Trail>> bulkCreate(@RequestBody List<Trail> trails, Authentication auth) {
-		return service.bulkCreate(trails, auth);
+		return RetryRest.retry(service.bulkCreate(trails, auth));
 	}
 	
 	@PutMapping("/_bulkUpdate")
 	public Flux<Trail> bulkUpdate(@RequestBody List<Trail> trails, Authentication auth) {
-		return service.bulkUpdate(trails, auth);
+		return RetryRest.retry(service.bulkUpdate(trails, auth));
 	}
 	
 	@PostMapping("/_bulkDelete")
 	public Mono<Void> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
-		return service.bulkDelete(uuids, auth);
+		return RetryRest.retry(service.bulkDelete(uuids, auth));
 	}
 	
 	@PostMapping("/_bulkGetUpdates")
 	public Mono<UpdateResponse<Trail>> bulkGetUpdates(@RequestBody List<Versioned> known, Authentication auth) {
-		return service.getUpdates(known, auth);
+		return RetryRest.retry(service.getUpdates(known, auth));
 	}
 	
 }

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.rest.RetryRest;
 import org.trailence.trail.TrackService;
 import org.trailence.trail.dto.Track;
 
@@ -28,27 +29,27 @@ public class TrackV1Controller {
 
 	@GetMapping("/{owner}/{uuid}")
 	public Mono<Track> getTrack(@PathVariable("uuid") String uuid, @PathVariable("owner") String owner, Authentication auth) {
-		return service.getTrack(uuid, owner, auth);
+		return RetryRest.retry(service.getTrack(uuid, owner, auth));
 	}
 	
 	@PostMapping()
 	public Mono<Track> create(@RequestBody Track track, Authentication auth) {
-		return service.createTrack(track, auth);
+		return RetryRest.retry(service.createTrack(track, auth));
 	}
 	
 	@PutMapping()
 	public Mono<Track> update(@RequestBody Track track, Authentication auth) {
-		return service.updateTrack(track, auth);
+		return RetryRest.retry(service.updateTrack(track, auth));
 	}
 	
 	@PostMapping("/_bulkDelete")
 	public Mono<Void> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
-		return service.bulkDelete(uuids, auth);
+		return RetryRest.retry(service.bulkDelete(uuids, auth));
 	}
 	
 	@PostMapping("/_bulkGetUpdates")
 	public Mono<UpdateResponse<UuidAndOwner>> bulkGetUpdates(@RequestBody List<Versioned> known, Authentication auth) {
-		return service.getUpdates(known, auth);
+		return RetryRest.retry(service.getUpdates(known, auth));
 	}
 	
 }

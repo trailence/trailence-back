@@ -162,8 +162,7 @@ public class TagService {
 	
 	@Transactional
 	public Mono<TagEntity> createTagWithQuota(Tag dto, String owner) {
-		return quotaService.addTags(owner, 1)
-		.then(Mono.defer(() -> {
+		return Mono.defer(() -> {
 			TagEntity entity = new TagEntity();
 			entity.setUuid(UUID.fromString(dto.getUuid()));
 			entity.setOwner(owner);
@@ -173,7 +172,8 @@ public class TagService {
 			entity.setCreatedAt(System.currentTimeMillis());
 			entity.setUpdatedAt(entity.getCreatedAt());
 			return r2dbc.insert(entity);
-		}));
+		})
+		.flatMap(entity -> quotaService.addTags(owner, 1).thenReturn(entity));
     }
 	
 	public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {

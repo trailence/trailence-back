@@ -18,6 +18,7 @@ import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
+import org.trailence.global.rest.RetryRest;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,42 +34,42 @@ public class AuthV1Controller {
 	
 	@PostMapping("login")
 	public Mono<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-		return service.login(request);
+		return RetryRest.retry(service.login(request));
 	}
 	
 	@PostMapping("init_renew")
 	public Mono<InitRenewResponse> initRenew(@Valid @RequestBody InitRenewRequest request) {
-		return service.initRenew(request);
+		return RetryRest.retry(service.initRenew(request));
 	}
 	
 	@PostMapping("renew")
 	public Mono<AuthResponse> renew(@Valid @RequestBody RenewTokenRequest request) {
-		return service.renew(request);
+		return RetryRest.retry(service.renew(request));
 	}
 	
 	@GetMapping("mykeys")
 	public Flux<UserKey> getMyKeys(Authentication auth) {
-		return service.getMyKeys(auth);
+		return RetryRest.retry(service.getMyKeys(auth));
 	}
 	
 	@DeleteMapping("mykeys/{keyid}")
 	public Mono<Void> deleteMyKey(@PathVariable("keyid") String id, Authentication auth) {
-		return service.deleteMyKey(id, auth);
+		return RetryRest.retry(service.deleteMyKey(id, auth));
 	}
 	
 	@PostMapping("share")
 	public Mono<AuthResponse> loginShare(@Valid @RequestBody LoginShareRequest request) {
-		return service.loginShare(request);
+		return RetryRest.retry(service.loginShare(request));
 	}
 	
 	@GetMapping("captcha")
 	public Mono<CaptchaService.PublicConfig> getCaptchaConfig() {
-		return service.getCaptchaConfig();
+		return RetryRest.retry(service.getCaptchaConfig());
 	}
 	
 	@PostMapping("forgot")
 	public Mono<Void> forgotPassword(@RequestBody ForgotPasswordRequest request) {
-		return service.forgotPassword(request);
+		return RetryRest.retry(service.forgotPassword(request));
 	}
 	
 }
