@@ -48,6 +48,7 @@ public class InitDB {
 		new DatabaseMigration("0.13_shares"),
 		new DatabaseMigration("0.13_jobs_queue_add_priority"),
 		new DatabaseMigration("0.13_users_add_last_pasword_email"),
+		new DatabaseMigration("0.17_trails_add_activity"),
 	};
 	
 	public void init() {

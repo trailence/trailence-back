@@ -1,0 +1,1 @@
+ALTER TABLE public.trails ADD COLUMN IF NOT EXISTS activity character varying(20) DEFAULT NULL;

@@ -72,6 +72,7 @@ public class TrailService {
                 entity.setDescription(dto.getDescription());
                 entity.setLocation(dto.getLocation());
                 entity.setLoopType(dto.getLoopType());
+                entity.setActivity(dto.getActivity());
                 entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
                 entity.setOriginalTrackUuid(UUID.fromString(dto.getOriginalTrackUuid()));
                 entity.setCurrentTrackUuid(UUID.fromString(dto.getCurrentTrackUuid()));
@@ -133,6 +134,7 @@ public class TrailService {
     	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(50000);
     	ValidationUtils.field("location", dto.getLocation()).nullable().maxLength(100);
     	ValidationUtils.field("loopType", dto.getLoopType()).nullable().maxLength(2);
+    	ValidationUtils.field("activity", dto.getActivity()).nullable().maxLength(20);
     	ValidationUtils.field("currentTrackUuid", dto.getCurrentTrackUuid()).notNull().isUuid();
     	ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
     }
@@ -187,6 +189,10 @@ public class TrailService {
         }
         if (!Objects.equals(entity.getLoopType(), dto.getLoopType())) {
         	entity.setLoopType(dto.getLoopType());
+        	changed = true;
+        }
+        if (!Objects.equals(entity.getActivity(), dto.getActivity())) {
+        	entity.setActivity(dto.getActivity());
         	changed = true;
         }
         return changed;
@@ -253,6 +259,7 @@ public class TrailService {
             entity.getDescription(),
             entity.getLocation(),
             entity.getLoopType(),
+            entity.getActivity(),
             entity.getOriginalTrackUuid().toString(),
             entity.getCurrentTrackUuid().toString(),
             entity.getCollectionUuid().toString()

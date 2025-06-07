@@ -94,6 +94,7 @@ public class OutdoorActiveService {
 		private List<Photo> photos;
 		private String description;
 		private Double rating;
+		private String activity;
 	}
 	
 	@Data
@@ -200,6 +201,11 @@ public class OutdoorActiveService {
 		if (map.get("communityInfo") instanceof Map communityInfo && communityInfo.get("rating") instanceof Number rating) {
 			rando.rating = rating.doubleValue();
 		}
+		if (map.get("category") instanceof Map category) {
+			if (category.get("id") instanceof String categoryId) {
+				rando.activity = categoryIdToActivity(categoryId);
+			}
+		}
 		if (rando.points != null && rando.points.size() > 2) return rando;
 		return null;
 	}
@@ -213,6 +219,34 @@ public class OutdoorActiveService {
 			return new Point(values.get(1), values.get(0), values.size() >= 3 ? values.get(2) : null, null);
 		}
 		return null;
+	}
+	
+	private String categoryIdToActivity(String id) {
+		switch (id) {
+		case "5210": case "5710":
+			return "walk";
+		case "5143": case "5140": case "5141": case "5142": case "5191": case "5643": case "5640": case "5641": case "5642": case "5691":
+			return "hiking";
+		case "5102": case "5602":
+			return "road-biking";
+		case "5101": case "5104": case "5262": case "5603": case "5601": case "5604": case "5762":
+			return "moutain-biking";
+		case "5170": case "5171": case "5670": case "5671":
+			return "running";
+		case "5190": case "5690":
+			return "via-ferrata";
+		case "5122": case "5125": case "5622": case "5625":
+			return "snowshoeing";
+		case "5124": case "5120": case "5323": case "5121": case "5624": case "5620": case "5823": case "5621":
+			return "skiing";
+		case "5330": case "5830":
+			return "rock-climbing";
+		case "5061": case "5062": case "5329": case "5339": case "5561": case "5562": case "5829": case "5839":
+			return "on-water";
+		case "5081": case "5581":
+			return "horseback-riding";
+		default: return null;
+		}
 	}
 	
 }
