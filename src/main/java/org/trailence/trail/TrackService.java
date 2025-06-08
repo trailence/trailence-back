@@ -6,9 +6,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -43,6 +46,7 @@ import org.trailence.trail.dto.Track.WayPoint;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -279,5 +283,72 @@ public class TrackService {
 			super("track", owner + "/" + uuid);
 		}
 	}
+	
+	@PostConstruct
+	public void testNewFormat() {
+		AtomicInteger better = new AtomicInteger(0);
+		AtomicInteger worst = new AtomicInteger(0);
+		AtomicInteger equal = new AtomicInteger(0);
+		AtomicLong diff = new AtomicLong(0);
+		AtomicLong totalBefore = new AtomicLong(0);
+		AtomicLong totalAfter = new AtomicLong(0);
+		repo.findAll()
+		.map(track -> {
+			try {
+				byte[] currentCompressed = track.getData();
+				StoredData data = uncompress(currentCompressed, new TypeReference<StoredData>() {});
+				byte[] newCompressed = TrackEncoding.encode(data.s, data.wp);
+				var decoded = TrackEncoding.decode(newCompressed);
+				if (data.s.length != decoded.getLeft().length) throw new RuntimeException();
+				for (int i = 0; i < data.s.length; ++i) {
+					var s1 = data.s[i].getP();
+					var s2 = decoded.getLeft()[i].getP();
+					if (s1.length != s2.length) throw new RuntimeException();
+					for (int j = 0; j < s1.length; ++j) {
+						var p1 = s1[j];
+						var p2 = s2[j];
+						if (!Objects.equals(p1.getL(), p2.getL()) ||
+							!Objects.equals(p1.getN(), p2.getN()) ||
+							!Objects.equals(p1.getE(), p2.getE()) ||
+							!Objects.equals(p1.getT(), p2.getT()) ||
+							!Objects.equals(p1.getEa(), p2.getEa()) ||
+							!Objects.equals(p1.getPa(), p2.getPa()) ||
+							!Objects.equals(p1.getH(), p2.getH()) ||
+							!Objects.equals(p1.getS(), p2.getS())) throw new RuntimeException();
+					}
+				}
+				if (data.wp.length != decoded.getRight().length) throw new RuntimeException();
+				for (int i = 0; i < data.wp.length; ++i) {
+					var p1 = data.wp[i];
+					var p2 = decoded.getRight()[i];
+					if (!Objects.equals(p1.getL(), p2.getL()) ||
+						!Objects.equals(p1.getN(), p2.getN()) ||
+						!Objects.equals(p1.getE(), p2.getE()) ||
+						!Objects.equals(p1.getT(), p2.getT()) ||
+						!Objects.equals(p1.getNa(), p2.getNa()) ||
+						!Objects.equals(p1.getDe(), p2.getDe())) throw new RuntimeException();
+				}
+				return Tuples.of(currentCompressed.length, newCompressed.length);
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		})
+		.map(tuple -> {
+			var before = tuple.getT1().intValue();
+			var after = tuple.getT2().intValue();
+			if (before < after) worst.incrementAndGet();
+			else if (before > after) better.incrementAndGet();
+			else equal.incrementAndGet();
+			diff.addAndGet(after - before);
+			totalBefore.addAndGet(before);
+			totalAfter.addAndGet(after);
+			return tuple;
+		})
+		.count()
+		.flatMap(nb -> Mono.fromRunnable(() -> {
+			System.out.println("New format: " + better.get() + " better, " + worst.get() + " worst, " + equal.get() + " same. Total diff = " + diff.get() + " (" + totalBefore.get() + " => " + totalAfter.get() + ") on " + nb + " tracks = " + (totalBefore.get() / nb) + " => " + (totalAfter.get() / nb) + " bytes/track diff = " + (diff.get() / nb) + "/track");
+		})).subscribe();
+	}
+	
 	
 }
