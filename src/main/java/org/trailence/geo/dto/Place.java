@@ -14,5 +14,9 @@ public class Place {
 	private List<String> names;
 	private Double lat;
 	private Double lng;
+	private Double north;
+	private Double south;
+	private Double east;
+	private Double west;
 	
 }

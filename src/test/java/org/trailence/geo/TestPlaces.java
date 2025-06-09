@@ -35,16 +35,21 @@ class TestPlaces extends AbstractTest {
 		var response = user.get("/api/place/v1/search?lang=fr&terms=Antibes");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var places = response.getBody().as(Place[].class);
-		assertThat(places).isEqualTo(new Place[] {
+		assertThat(places).hasSize(10);
+		assertThat(places[0]).isEqualTo(
 			new Place(
 				List.of("Antibes", "Provence-Alpes-Côte d'Azur", "France"),
-				Double.valueOf("43.58127"), Double.valueOf("7.12487")
-			),
+				Double.valueOf("43.58127"), Double.valueOf("7.12487"),
+				Double.valueOf("43.616962436963014"), Double.valueOf("43.54557756303699"), Double.valueOf("7.17417115075293"), Double.valueOf("7.075568849247069")
+			)
+		);
+		assertThat(places[1]).isEqualTo(
 			new Place(
 				List.of("Antilles"),
-				Double.valueOf("18.73333"), Double.valueOf("-69.15")
+				Double.valueOf("18.73333"), Double.valueOf("-69.15"),
+				Double.valueOf("23.277067409"), Double.valueOf("10.635925244000077"), Double.valueOf("-60.8096896756103"), Double.valueOf("-84.952245207")
 			)
-		});
+		);
 		
 		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
 		wireMockServer.removeStub(stub);

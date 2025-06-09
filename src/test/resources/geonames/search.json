@@ -5,6 +5,13 @@
             "adminCode1": "93",
             "lng": "7.12487",
             "geonameId": 3037456,
+            "bbox": {
+                "east": 7.17417115075293,
+                "south": 43.54557756303699,
+                "north": 43.616962436963014,
+                "west": 7.075568849247069,
+                "accuracyLevel": 2
+            },
             "toponymName": "Antibes",
             "countryId": "3017382",
             "fcl": "P",
@@ -25,6 +32,13 @@
             "adminCode1": "00",
             "lng": "-69.15",
             "geonameId": 3491552,
+            "bbox": {
+                "east": -60.8096896756103,
+                "south": 10.635925244000077,
+                "north": 23.277067409,
+                "west": -84.952245207,
+                "accuracyLevel": 7
+            },
             "toponymName": "Antilles",
             "countryId": "8505032",
             "fcl": "T",
@@ -37,6 +51,194 @@
             "adminName1": "",
             "lat": "18.73333",
             "fcode": "ISLS"
+        },
+        {
+            "lng": "-71.21667",
+            "geonameId": 3571219,
+            "bbox": {
+                "east": -60.8096896756103,
+                "south": 10.635925244000077,
+                "north": 27.232027,
+                "west": -84.952245207,
+                "accuracyLevel": 7
+            },
+            "name": "West Indies",
+            "fclName": "parks,area, ...",
+            "toponymName": "West Indies",
+            "fcodeName": "region",
+            "adminName1": "",
+            "lat": "19.38333",
+            "fcl": "L",
+            "fcode": "RGN",
+            "population": 42450000
+        },
+        {
+            "adminCode1": "29",
+            "lng": "87.76786",
+            "geonameId": 1511545,
+            "toponymName": "Antibes",
+            "countryId": "2017370",
+            "fcl": "H",
+            "population": 0,
+            "countryCode": "RU",
+            "name": "Antibes",
+            "fclName": "stream, lake, ...",
+            "adminCodes1": {
+                "ISO3166_2": "KEM"
+            },
+            "countryName": "Russie",
+            "fcodeName": "stream",
+            "adminName1": "Oblast de Kemerovo",
+            "lat": "56.30367",
+            "fcode": "STM"
+        },
+        {
+            "adminCode1": "75",
+            "lng": "2.28333",
+            "geonameId": 3037449,
+            "bbox": {
+                "east": 2.296144012996026,
+                "south": 45.39100635124857,
+                "north": 45.40899364875143,
+                "west": 2.2705225870039736,
+                "accuracyLevel": 1
+            },
+            "toponymName": "Antiges",
+            "countryId": "3017382",
+            "fcl": "P",
+            "population": 0,
+            "countryCode": "FR",
+            "name": "Antiges",
+            "fclName": "city, village,...",
+            "adminCodes1": {
+                "ISO3166_2": "NAQ"
+            },
+            "countryName": "France",
+            "fcodeName": "populated place",
+            "adminName1": "Nouvelle-Aquitaine",
+            "lat": "45.4",
+            "fcode": "PPL"
+        },
+        {
+            "adminCode1": "02",
+            "lng": "21.89161",
+            "geonameId": 12635857,
+            "toponymName": "Antinen",
+            "countryId": "660013",
+            "fcl": "L",
+            "population": 0,
+            "countryCode": "FI",
+            "name": "Antinen",
+            "fclName": "parks,area, ...",
+            "adminCodes1": {
+                "ISO3166_2": "19"
+            },
+            "countryName": "Finlande",
+            "fcodeName": "field(s)",
+            "adminName1": "Finlande du Sud-Ouest",
+            "lat": "60.77711",
+            "fcode": "FLD"
+        },
+        {
+            "adminCode1": "14",
+            "lng": "21.83551",
+            "geonameId": 606796,
+            "bbox": {
+                "east": 21.854072330744906,
+                "south": 65.5480817148559,
+                "north": 65.56096995751231,
+                "west": 21.807765989095614,
+                "accuracyLevel": 10
+            },
+            "toponymName": "Antnäs",
+            "countryId": "2661886",
+            "fcl": "P",
+            "population": 889,
+            "countryCode": "SE",
+            "name": "Antnäs",
+            "fclName": "city, village,...",
+            "adminCodes1": {
+                "ISO3166_2": "BD"
+            },
+            "countryName": "Suède",
+            "fcodeName": "populated place",
+            "adminName1": "Norbotten",
+            "lat": "65.55462",
+            "fcode": "PPL"
+        },
+        {
+            "adminCode1": "AZ",
+            "lng": "-113.80856",
+            "geonameId": 5551393,
+            "bbox": {
+                "east": -113.799397,
+                "south": 35.41647,
+                "north": 35.428243,
+                "west": -113.816994,
+                "accuracyLevel": 10
+            },
+            "toponymName": "Antares",
+            "countryId": "6252001",
+            "fcl": "P",
+            "population": 126,
+            "countryCode": "US",
+            "name": "Antares",
+            "fclName": "city, village,...",
+            "adminCodes1": {
+                "ISO3166_2": "AZ"
+            },
+            "countryName": "États-Unis",
+            "fcodeName": "populated place",
+            "adminName1": "Arizona",
+            "lat": "35.41971",
+            "fcode": "PPL"
+        },
+        {
+            "adminCode1": "28",
+            "lng": "0.15439",
+            "geonameId": 3037450,
+            "toponymName": "Port du Havre-Antifer",
+            "countryId": "3017382",
+            "fcl": "L",
+            "population": 0,
+            "countryCode": "FR",
+            "name": "Port du Havre-Antifer",
+            "fclName": "parks,area, ...",
+            "adminCodes1": {
+                "ISO3166_2": "NOR"
+            },
+            "countryName": "France",
+            "fcodeName": "port",
+            "adminName1": "Normandie",
+            "lat": "49.65763",
+            "fcode": "PRT"
+        },
+        {
+            "adminCode1": "07",
+            "lng": "116.71092",
+            "geonameId": 12209320,
+            "bbox": {
+                "east": 116.72086435228589,
+                "south": 25.21529235124857,
+                "north": 25.233279648751427,
+                "west": 116.7009796477141,
+                "accuracyLevel": 1
+            },
+            "toponymName": "Anlibei",
+            "countryId": "1814991",
+            "fcl": "P",
+            "population": 0,
+            "countryCode": "CN",
+            "name": "Anlibei",
+            "fclName": "city, village,...",
+            "adminCodes1": {
+                "ISO3166_2": "FJ"
+            },
+            "countryName": "Chine",
+            "fcodeName": "populated place",
+            "adminName1": "Province de Fujian",
+            "lat": "25.22429",
+            "fcode": "PPL"
         }
     ]
 }

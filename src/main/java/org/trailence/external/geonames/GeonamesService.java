@@ -73,7 +73,7 @@ public class GeonamesService {
 		if (name.length() < 3) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl(url).build();
 		return client.get()
-		.uri("/search?maxRows=10&featureClass=L&featureClass=P&featureClass=T&featureClass=H&fuzzy=0.6&orderby=relevance&type=json&username=" + username + "&name={name}&lang={lang}", name, language)
+		.uri("/search?maxRows=10&featureClass=L&featureClass=P&featureClass=T&featureClass=H&fuzzy=0.6&orderby=relevance&type=json&inclBbox=true&username=" + username + "&name={name}&lang={lang}", name, language)
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
 		.map(response -> {
 			Object geonames = response.get("geonames");
@@ -98,13 +98,34 @@ public class GeonamesService {
 		getPlaceElement(names, elementMap, "adminName1");
 		getPlaceElement(names, elementMap, "countryName");
 		if (names.isEmpty() || names.getFirst().equals("Earth")) return;
+		Double lat = null;
+		Double lng = null;
+		Double north = null;
+		Double south = null;
+		Double east = null;
+		Double west = null;
 		try {
-			double lat = Double.parseDouble(elementMap.get("lat").toString());
-			double lng = Double.parseDouble(elementMap.get("lng").toString());
-			result.add(new Place(names, lat, lng));
+			lat = Double.parseDouble(elementMap.get("lat").toString());
+			lng = Double.parseDouble(elementMap.get("lng").toString());
 		} catch (Exception e) {
-			// ignore
+			lat = null;
+			lng = null;
 		}
+		if (elementMap.get("bbox") instanceof Map bbox) {
+			try {
+				north = Double.parseDouble(bbox.get("north").toString());
+				south = Double.parseDouble(bbox.get("south").toString());
+				east = Double.parseDouble(bbox.get("east").toString());
+				west = Double.parseDouble(bbox.get("west").toString());
+			} catch (Exception e) {
+				north = null;
+				south = null;
+				east = null;
+				west = null;
+			}
+		}
+		if ((lat != null && lng != null) || (north != null && south != null && east != null && west != null))
+			result.add(new Place(names, lat, lng, north, south, east, west));
 	}
 	
 }

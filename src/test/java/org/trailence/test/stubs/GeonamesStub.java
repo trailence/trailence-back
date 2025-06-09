@@ -44,6 +44,7 @@ public final class GeonamesStub {
 			.withQueryParam("fuzzy", equalTo("0.6"))
 			.withQueryParam("orderby", equalTo("relevance"))
 			.withQueryParam("type", equalTo("json"))
+			.withQueryParam("inclBbox", equalTo("true"))
 			.withQueryParam("lang", equalTo(lang))
 			.withQueryParam("name", equalTo(name))
 			.withQueryParam("username", equalTo("geo_user"))
