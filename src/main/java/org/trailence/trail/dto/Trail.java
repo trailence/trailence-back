@@ -23,6 +23,9 @@ public class Trail implements Versioned.Interface {
     private String location;
     private String loopType;
     private String activity;
+    private String sourceType;
+    private String source;
+    private Long sourceDate;
 
     private String originalTrackUuid;
     private String currentTrackUuid;

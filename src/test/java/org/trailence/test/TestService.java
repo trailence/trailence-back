@@ -333,6 +333,7 @@ public class TestService {
 					RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 					RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 					RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+					null, null, null,
 					track1.getUuid(),
 					track2.getUuid(),
 					collection.getUuid()

@@ -49,6 +49,7 @@ public class InitDB {
 		new DatabaseMigration("0.13_jobs_queue_add_priority"),
 		new DatabaseMigration("0.13_users_add_last_pasword_email"),
 		new DatabaseMigration("0.17_trails_add_activity"),
+		new DatabaseMigration("0.17_trails_add_source"),
 	};
 	
 	public void init() {
@@ -82,9 +83,10 @@ public class InitDB {
 		for (var migration : todo) {
 			try {
 				log.info("Doing migration {}", migration.id());
+				long start = System.currentTimeMillis();
 				migration.execute(db);
 				db.getDatabaseClient().sql("INSERT INTO migrations (id) VALUES ($1)").bind(0, migration.id()).then().block();
-				log.info("Migration done: {}", migration.id());
+				log.info("Migration done: {} in {} ms.", migration.id(), System.currentTimeMillis() - start);
 			} catch (Exception e) {
 				log.error("Error doing migration {}", migration.id(), e);
 				throw new RuntimeException("Migration error");

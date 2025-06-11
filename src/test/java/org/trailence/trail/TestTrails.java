@@ -125,7 +125,7 @@ class TestTrails extends AbstractTest {
 		
 		var response = user.post("/api/trail/v1/_bulkCreate", List.of(new Trail(
 			UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0,
-			null, null, null, null, null,
+			null, null, null, null, null, null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -185,6 +185,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track1.getUuid(),
 			track1.getUuid(),
 			col2.getUuid()
@@ -199,6 +200,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track1.getUuid(),
 			track2.getUuid(),
 			col1.getUuid()
@@ -211,6 +213,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track2.getUuid(),
 			track1.getUuid(),
 			col1.getUuid()
@@ -225,6 +228,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track1.getUuid(),
 			track1.getUuid(),
 			col1.getUuid()
@@ -285,6 +289,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -298,6 +303,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -311,6 +317,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -324,6 +331,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -337,6 +345,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -350,6 +359,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -363,6 +373,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid()
@@ -376,6 +387,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			null,
 			track.getUuid(),
 			col.getUuid()
@@ -389,6 +401,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			"123",
 			track.getUuid(),
 			col.getUuid()
@@ -402,6 +415,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			null,
 			col.getUuid()
@@ -415,6 +429,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			"123",
 			col.getUuid()
@@ -428,6 +443,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			null
@@ -441,6 +457,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			track.getUuid(),
 			track.getUuid(),
 			"123"
@@ -532,6 +549,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid()
 		);
@@ -554,6 +572,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid()
 		);
@@ -569,6 +588,7 @@ class TestTrails extends AbstractTest {
 			RandomStringUtils.insecure().nextAlphanumeric(0, 101),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 3),
 			RandomStringUtils.insecure().nextAlphanumeric(0, 21),
+			null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid()
 		);
@@ -586,7 +606,7 @@ class TestTrails extends AbstractTest {
 		
 		var update1 = new Trail(
 			trail.getUuid(), user.getEmail(), 1, 0, 0,
-			trail.getName(), trail.getDescription(), trail.getLocation(), trail.getLoopType(), trail.getActivity(),
+			trail.getName(), trail.getDescription(), trail.getLocation(), trail.getLoopType(), trail.getActivity(), null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid()
 		);

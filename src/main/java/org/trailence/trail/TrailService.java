@@ -73,10 +73,13 @@ public class TrailService {
                 entity.setLocation(dto.getLocation());
                 entity.setLoopType(dto.getLoopType());
                 entity.setActivity(dto.getActivity());
+                entity.setSourceType(dto.getSourceType());
+                entity.setSource(dto.getSource());
+                entity.setSourceDate(dto.getSourceDate());
                 entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
                 entity.setOriginalTrackUuid(UUID.fromString(dto.getOriginalTrackUuid()));
                 entity.setCurrentTrackUuid(UUID.fromString(dto.getCurrentTrackUuid()));
-                entity.setCreatedAt(System.currentTimeMillis());
+                entity.setCreatedAt(dto.getCreatedAt());
                 entity.setUpdatedAt(entity.getCreatedAt());
                 return entity;
     		},
@@ -234,18 +237,42 @@ public class TrailService {
     }
 
     public Mono<UpdateResponse<Trail>> getUpdates(List<Versioned> known, Authentication auth) {
-    	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessibleTrails(auth.getPrincipal().toString()), TrailEntity.class, trail -> trail.getOwner() + " " + trail.getUuid().toString(), known, this::toDTO);
-    }
+    	String user = auth.getPrincipal().toString();
+    	Flux<TrailEntity> ownedTrails =
+    		r2dbc.query(DbUtils.select(
+    			Select.builder()
+		        .select(AsteriskFromTable.create(TrailEntity.TABLE))
+		        .from(TrailEntity.TABLE)
+		        .where(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(user)))
+		        .build(),
+		    null, r2dbc), TrailEntity.class).all();
 
-    private List<Select> buildSelectAccessibleTrails(String email) {
-    	Select sharedWithMe = shareService.selectSharedElementsWithMe(email, new Expression[] { AsteriskFromTable.create(TrailEntity.TABLE) }, null, null, null);
-    	Select ownedTrails = Select.builder()
-	        .select(AsteriskFromTable.create(TrailEntity.TABLE))
-	        .from(TrailEntity.TABLE)
-	        .where(Conditions.isEqual(TrailEntity.COL_OWNER, SQL.literalOf(email)))
-	        .build();
-    	
-    	return List.of(ownedTrails, sharedWithMe);
+    	Flux<TrailEntity> sharedWithMe = r2dbc.query(
+    		DbUtils.select(shareService.selectSharedElementsWithMe(user, new Expression[] { AsteriskFromTable.create(TrailEntity.TABLE) }, null, null, null), null, r2dbc),
+    		TrailEntity.class
+    	).all()
+    	.collectList()
+    	// hide source of shared trails if the source is an email not among the friends, or from a file
+    	.map(list -> {
+    		if (list.isEmpty()) return list;
+    		var allFriends = list.stream().map(t -> t.getOwner()).distinct().toList();
+    		list.forEach(t -> {
+    			if (t.getSource() != null && (
+    				(t.getSource().indexOf('@') > 0 && !allFriends.contains(t.getSource())) ||
+    				("file".equals(t.getSourceType()))
+    			)) {
+   					t.setSource(null);
+    			}
+    		});
+    		return list;
+    	})
+    	.flatMapMany(Flux::fromIterable);
+    	    	
+    	return BulkGetUpdates.bulkGetUpdates(
+    		Flux.concat(ownedTrails, sharedWithMe).distinct(trail -> trail.getOwner() + " " + trail.getUuid().toString()),
+    		known,
+    		this::toDTO
+    	);
     }
 
     private Trail toDTO(TrailEntity entity) {
@@ -260,6 +287,9 @@ public class TrailService {
             entity.getLocation(),
             entity.getLoopType(),
             entity.getActivity(),
+            entity.getSourceType(),
+            entity.getSource(),
+            entity.getSourceDate(),
             entity.getOriginalTrackUuid().toString(),
             entity.getCurrentTrackUuid().toString(),
             entity.getCollectionUuid().toString()
