@@ -1,11 +1,13 @@
 package org.trailence;
 
+import org.springframework.beans.BeansException;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.boot.web.context.WebServerGracefulShutdownLifecycle;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.external.geonames.GeonamesService;
@@ -18,21 +20,20 @@ import lombok.extern.slf4j.Slf4j;
 @EnableScheduling
 @ComponentScan
 @Slf4j
-public class TrailenceApp {
+public class TrailenceApp implements SmartLifecycle, ApplicationContextAware {
 
 	public static void main(String[] args) {
 		SpringApplication.run(TrailenceApp.class, args);
 	}
 	
-	@EventListener
-	public void onApplicationReady(ApplicationReadyEvent event) {
+	public void initApp() {
 		InitDB init = new InitDB();
-		event.getApplicationContext().getAutowireCapableBeanFactory().autowireBean(init);
+		context.getAutowireCapableBeanFactory().autowireBean(init);
 		init.init();
-		checks(event.getApplicationContext());
+		checks(context);
 	}
 	
-	private void checks(ConfigurableApplicationContext ctx) {
+	private void checks(ApplicationContext ctx) {
 		if (ctx.getBean(CaptchaService.class).isActivated()) {
 			log.info(" ✔ Captcha service activated: " + ctx.getBean(CaptchaService.class).getConfig().getProvider());
 		} else {
@@ -49,5 +50,34 @@ public class TrailenceApp {
 			log.warn(" ❌ Outdoor Active API not configured, it will not be available.");
 		}
 	}
+
+	private boolean running = false;
+	private ApplicationContext context;
 	
+	@Override
+	public void start() {
+		initApp();
+		running = true;
+	}
+
+	@Override
+	public void stop() {
+		running = false;
+	}
+
+	@Override
+	public boolean isRunning() {
+		return running;
+	}
+	
+	@Override
+	public int getPhase() {
+		// WebServerStartStopLifecycle - 1 to do it before the web server is exposed
+		return WebServerGracefulShutdownLifecycle.SMART_LIFECYCLE_PHASE - 1025;
+	}
+
+	@Override
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		context = applicationContext;
+	}
 }

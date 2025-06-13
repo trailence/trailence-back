@@ -1,5 +1,7 @@
 package org.trailence.trail.rest;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.springframework.core.io.buffer.DataBuffer;
@@ -46,7 +48,7 @@ public class PhotoV1Controller {
 		ServerHttpRequest request,
 		Authentication auth
 	) {
-		return RetryRest.retry(service.storePhoto(photoUuid, trailUuid, description, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
+		return RetryRest.retry(service.storePhoto(photoUuid, trailUuid, description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
 	}
 	
 	@PutMapping("/_bulkUpdate")
