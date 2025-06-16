@@ -50,6 +50,7 @@ public class InitDB {
 		new DatabaseMigration("0.13_users_add_last_pasword_email"),
 		new DatabaseMigration("0.17_trails_add_activity"),
 		new DatabaseMigration("0.17_trails_add_source"),
+		new DatabaseMigration("0.17_trails_add_date"),
 	};
 	
 	public void init() {

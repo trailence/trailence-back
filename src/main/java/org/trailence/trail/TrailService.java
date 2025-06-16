@@ -71,6 +71,7 @@ public class TrailService {
                 entity.setName(dto.getName());
                 entity.setDescription(dto.getDescription());
                 entity.setLocation(dto.getLocation());
+                entity.setDate(dto.getDate());
                 entity.setLoopType(dto.getLoopType());
                 entity.setActivity(dto.getActivity());
                 entity.setSourceType(dto.getSourceType());
@@ -190,6 +191,10 @@ public class TrailService {
         	entity.setLocation(dto.getLocation());
         	changed = true;
         }
+        if (!Objects.equals(entity.getDate(), dto.getDate())) {
+        	entity.setDate(dto.getDate());
+        	changed = true;
+        }
         if (!Objects.equals(entity.getLoopType(), dto.getLoopType())) {
         	entity.setLoopType(dto.getLoopType());
         	changed = true;
@@ -285,7 +290,7 @@ public class TrailService {
             entity.getName(),
             entity.getDescription(),
             entity.getLocation(),
-            entity.getLoopType(),
+            entity.getDate(),            entity.getLoopType(),
             entity.getActivity(),
             entity.getSourceType(),
             entity.getSource(),

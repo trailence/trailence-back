@@ -1,0 +1,1 @@
+ALTER TABLE public.trails ADD COLUMN IF NOT EXISTS date bigint DEFAULT NULL;
