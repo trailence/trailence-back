@@ -80,7 +80,8 @@ public final class BulkUtils {
 			return bulkToSingleOperationToList(
 				source,
 				item -> operation.apply(List.of(item)).map(result -> result.getFirst())
-					.onErrorResume(DuplicateKeyException.class, e -> Mono.just(item)),
+					.onErrorResume(DuplicateKeyException.class, e -> Mono.just(item))
+					.onErrorResume(IgnoreException.class, e -> Mono.empty()),
 				existing,
 				errors
 			);

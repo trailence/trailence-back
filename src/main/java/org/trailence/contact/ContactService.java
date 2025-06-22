@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.contact.db.ContactMessageEntity;
 import org.trailence.contact.db.ContactMessageRepository;

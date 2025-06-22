@@ -53,6 +53,7 @@ import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.CreateShareRequest;
 import org.trailence.trail.dto.Share;
 import org.trailence.trail.dto.ShareElementType;
+import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.trail.dto.UpdateShareRequest;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
@@ -120,9 +121,15 @@ public class ShareService {
 	private Mono<Void> checkCount(CreateShareRequest request, List<UUID> elements, String user) {
 		Mono<Long> count;
 		switch (request.getType()) {
-		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).filter(e -> !TrailCollectionType.PUBLICATION_TYPES.contains(e.getType())).count(); break;
 		case TAG: count = tagRepo.findAllByUuidInAndOwner(elements, user).count(); break;
-		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user)
+			.collectList().flatMap(trails -> {
+				var collectionsUuids = new HashSet<UUID>();
+				trails.forEach(t -> collectionsUuids.add(t.getCollectionUuid()));
+				return collectionRepo.findAllByUuidInAndOwner(collectionsUuids, user).filter(e -> !TrailCollectionType.PUBLICATION_TYPES.contains(e.getType())).count()
+					.map(colCount -> colCount.intValue() == collectionsUuids.size() ? (long) trails.size() : 0L);
+			}); break;
 		default: return Mono.error(new BadRequestException("Invalid element type"));
 		}
 

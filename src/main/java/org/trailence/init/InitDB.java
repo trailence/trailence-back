@@ -33,7 +33,7 @@ public class InitDB {
 		"collections", "tracks", "trails", "tags", "trails_tags", "shares", "share_emails",
 		"jobs_queue", "verification_codes", "files", "photos",
 		"user_quotas", "user_subscriptions", "plans", "donations", "donation_goals",
-		"contact_messages",
+		"contact_messages", "public_trails",
 		"migrations"
 	};
 	
@@ -51,6 +51,7 @@ public class InitDB {
 		new DatabaseMigration("0.17_trails_add_activity"),
 		new DatabaseMigration("0.17_trails_add_source"),
 		new DatabaseMigration("0.17_trails_add_date"),
+		new DatabaseMigration("0.18_public_trails"),
 	};
 	
 	public void init() {

@@ -153,6 +153,15 @@ public class TrailService {
     	).map(this::toDTO);
     }
     
+    public Mono<Trail> updateTrailAsSuperUser(TrailEntity entity, Trail dto) {
+    	ChecksAndActions checksAndActions = new ChecksAndActions();
+		boolean updated = this.updateEntity(entity, dto, checksAndActions, entity.getOwner());
+		if (!updated) return Mono.just(dto);
+		return DbUtils.updateByUuidAndOwner(r2dbc, entity)
+        .flatMap(nb -> nb == 0 ? Mono.empty() : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
+        .map(this::toDTO);
+    }
+    
     @SuppressWarnings("java:S3776")
     private boolean updateEntity(TrailEntity entity, Trail dto, ChecksAndActions checksAndActions, String owner) {
         var changed = false;
@@ -211,11 +220,11 @@ public class TrailService {
         return delete(repo.findAllByUuidInAndOwner(uuids.stream().map(UUID::fromString).toList(), owner), owner);
     }
 
-    public Mono<Void> deleteAllFromCollections(List<UUID> collections, String owner) {
+    public Mono<Void> deleteAllFromCollections(Set<UUID> collections, String owner) {
     	return delete(repo.findAllByCollectionUuidInAndOwner(collections, owner), owner);
     }
     
-    private Mono<Void> delete(Flux<TrailEntity> toDelete, String owner) {
+    public Mono<Void> delete(Flux<TrailEntity> toDelete, String owner) {
     	return toDelete.collectList()
 		.flatMap(entities -> {
 			Set<UUID> trailsUuids = new HashSet<>();
@@ -280,7 +289,7 @@ public class TrailService {
     	);
     }
 
-    private Trail toDTO(TrailEntity entity) {
+    public Trail toDTO(TrailEntity entity) {
         return new Trail(
             entity.getUuid().toString(),
             entity.getOwner(),

@@ -8,7 +8,7 @@ BEGIN
     WHERE nsp.nspname = current_schema()
     AND typ.typname = 'collection_type'
   ) THEN
-    CREATE TYPE collection_type AS ENUM ('MY_TRAILS', 'CUSTOM');
+    CREATE TYPE collection_type AS ENUM ('MY_TRAILS', 'CUSTOM', 'PUB_DRAFT', 'PUB_SUBMIT', 'PUB_REJECT');
   END IF;
   IF NOT EXISTS (
     SELECT *
@@ -32,4 +32,10 @@ CREATE TABLE IF NOT EXISTS public.collections
     created_at bigint NOT NULL,
     updated_at bigint NOT NULL,
     CONSTRAINT collections_pkey PRIMARY KEY (uuid, owner)
-)
+);
+
+CREATE INDEX IF NOT EXISTS collections_type_owner
+    ON public.collections USING btree
+    (type ASC NULLS LAST, owner COLLATE pg_catalog."default" ASC NULLS LAST)
+    INCLUDE(type, owner)
+    TABLESPACE pg_default;

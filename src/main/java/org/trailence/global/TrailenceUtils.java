@@ -25,6 +25,7 @@ public class TrailenceUtils {
 
 	public static final String PREAUTHORIZE_COMPLETE = "hasAuthority('" + AUTHORITY_COMPLETE_USER + "')";
 	public static final String PREAUTHORIZE_ADMIN = "hasAuthority('" + AUTHORITY_ADMIN_USER + "')";
+	public static final String PREAUTHORIZE_MODERATOR = "hasAuthority('ROLE_MODERATOR')";
 	
 	public static final int MIN_PASSWORD_SIZE = 6;
 	
