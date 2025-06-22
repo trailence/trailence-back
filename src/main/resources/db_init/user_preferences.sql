@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS public.user_preferences
     photo_max_quality smallint,
     photo_max_size_kb integer,
     photo_cache_days integer,
+    alias character varying(25) NOT NULL DEFAULT '',
     CONSTRAINT user_preferences_pkey PRIMARY KEY (email)
 )

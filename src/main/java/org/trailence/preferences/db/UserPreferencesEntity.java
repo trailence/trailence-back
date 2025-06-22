@@ -36,5 +36,7 @@ public class UserPreferencesEntity {
 	private Short photoMaxQuality;
 	private Integer photoMaxSizeKB;
 	private Integer photoCacheDays;
+	
+	private String alias;
 
 }

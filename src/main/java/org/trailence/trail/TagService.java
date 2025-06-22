@@ -73,7 +73,7 @@ public class TagService {
 		}
 		String owner = auth.getPrincipal().toString();
 		// check collectionUuid
-		return collectionRepo.findExistingUuids(collectionsUuids, owner)
+		return collectionRepo.findExistingUuidsNotPublication(collectionsUuids, owner)
 		.collectList()
 		.flatMap(existingCollections -> {
 			Set<UUID> uuids = new HashSet<>();
@@ -185,7 +185,7 @@ public class TagService {
 		);
 	}
 	
-	public Mono<Void> deleteAllFromCollections(List<UUID> collections, String owner) {
+	public Mono<Void> deleteAllFromCollections(Set<UUID> collections, String owner) {
 		return delete(repo.findAllByCollectionUuidInAndOwner(collections, owner), owner);
 	}
 	

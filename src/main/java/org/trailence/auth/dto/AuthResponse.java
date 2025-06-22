@@ -25,5 +25,6 @@ public class AuthResponse {
 	private boolean isAdmin;
 	private UserQuotas quotas;
 	private List<String> allowedExtensions;
+	private List<String> roles;
 	
 }

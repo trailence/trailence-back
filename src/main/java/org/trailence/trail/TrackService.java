@@ -43,6 +43,8 @@ import org.trailence.trail.dto.Track.WayPoint;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -70,6 +72,25 @@ public class TrackService {
 			TrackEntity entity = new TrackEntity();
 			entity.setUuid(UUID.fromString(track.getUuid()));
 			entity.setOwner(auth.getPrincipal().toString());
+			entity.setCreatedAt(System.currentTimeMillis());
+			entity.setUpdatedAt(entity.getCreatedAt());
+			StoredData data = new StoredData();
+			data.s = track.getS();
+			data.wp = track.getWp();
+			entity.setData(compress(data));
+			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
+			return entity;
+		})
+		.flatMap(self::createTrackWithQuota)
+		.map(this::toDTO);
+	}
+	
+	public Mono<Track> createTrackAsSuperUser(Track track) {
+		return Mono.fromCallable(() -> {
+			validate(track);
+			TrackEntity entity = new TrackEntity();
+			entity.setUuid(UUID.fromString(track.getUuid()));
+			entity.setOwner(track.getOwner());
 			entity.setCreatedAt(System.currentTimeMillis());
 			entity.setUpdatedAt(entity.getCreatedAt());
 			StoredData data = new StoredData();
@@ -227,7 +248,7 @@ public class TrackService {
 	}
 	
 	@SuppressWarnings("java:S112") // generic exception
-	private Track toDTO(TrackEntity entity) {
+	public Track toDTO(TrackEntity entity) {
 		Track dto = new Track();
 		dto.setUuid(entity.getUuid().toString());
 		dto.setOwner(entity.getOwner());
@@ -245,7 +266,7 @@ public class TrackService {
 		return dto;
 	}
 	
-	private byte[] compress(Object value) throws IOException {
+	public static byte[] compress(Object value) throws IOException {
 		try (AccessibleByteArrayOutputStream bos = new AccessibleByteArrayOutputStream(8192);
 			GZIPOutputStream gos = new GZIPOutputStream(bos)) {
 			new ObjectMapper().writeValue(gos, value);
@@ -258,7 +279,7 @@ public class TrackService {
 		}
 	}
 	
-	private <T> T uncompress(byte[] compressed, TypeReference<T> type) throws IOException {
+	public static <T> T uncompress(byte[] compressed, TypeReference<T> type) throws IOException {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(compressed);
 			GZIPInputStream gis = new GZIPInputStream(bis)) {
 			return new ObjectMapper().readValue(gis, type);
@@ -266,6 +287,8 @@ public class TrackService {
 	}
 	
 	@SuppressWarnings("java:S1104") // only used for serialization
+	@NoArgsConstructor
+	@AllArgsConstructor
 	static class StoredData {
 		public Segment[] s;
 		public WayPoint[] wp;

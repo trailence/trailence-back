@@ -7,6 +7,7 @@ import org.apache.commons.lang3.stream.Streams;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.relational.core.sql.Aliased;
+import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.Table;
@@ -70,7 +71,17 @@ public class SqlBuilder {
 		if (pageable.getSort().isSorted())
 			orderBy(pageable.getSort(), sortFieldMapping);
 		if (pageable.isPaged())
-			sql.append(" LIMIT ").append(pageable.getPageSize()).append(" OFFSET ").append(pageable.getOffset());
+			limit(pageable.getPageSize()).offset(pageable.getOffset());
+		return this;
+	}
+	
+	public SqlBuilder limit(int limit) {
+		sql.append(" LIMIT ").append(limit);
+		return this;
+	}
+	
+	public SqlBuilder offset(long offset) {
+		sql.append(" OFFSET ").append(offset);
 		return this;
 	}
 	
@@ -110,7 +121,7 @@ public class SqlBuilder {
 	
 	private void append(Expression e) {
 		sql.append(e.toString());
-		if (e instanceof Aliased a) sql.append(" AS ").append(a.getAlias());
+		if (e instanceof Aliased a && (!(e instanceof Column))) sql.append(" AS ").append(a.getAlias());
 	}
 	
 }

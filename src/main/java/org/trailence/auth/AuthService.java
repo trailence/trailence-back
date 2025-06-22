@@ -266,7 +266,8 @@ public class AuthService {
 			user.getPassword() != null,
 			user.isAdmin(),
 			quotas,
-			extensionsService.getAllowedExtensions(user.isAdmin(), roles)
+			extensionsService.getAllowedExtensions(user.isAdmin(), roles),
+			roles
 		);
 	}
 	
