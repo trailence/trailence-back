@@ -374,6 +374,9 @@ class TestCollections extends AbstractTest {
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 1);
 	}
 	
+	// TODO cannot create 2 collections of a unique type
+	// TODO publication types must not be counted in quotas
+	
 	private UpdateResponse<TrailCollection> getCollections(TestUserLoggedIn user, List<Versioned> known) {
 		var response = user.post("/api/trail-collection/v1/_bulkGetUpdates", known);
 		assertThat(response.statusCode()).isEqualTo(200);

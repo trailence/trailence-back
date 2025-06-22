@@ -29,5 +29,7 @@ public class UserPreferences {
 	private Short photoMaxQuality;
 	private Integer photoMaxSizeKB;
 	private Integer photoCacheDays;
+	
+	private String alias;
 
 }

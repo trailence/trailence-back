@@ -31,10 +31,12 @@ import org.trailence.storage.FileService;
 import org.trailence.storage.db.FileEntity;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
+import org.trailence.trail.db.PublicPhotoEntity;
 import org.trailence.trail.db.ShareEntity;
 import org.trailence.trail.db.ShareRecipientEntity;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
+import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.Photo;
 
 import lombok.RequiredArgsConstructor;
@@ -123,6 +125,14 @@ public class PhotoService {
     		repo, r2dbc
     	).map(this::toDto);
     }
+    
+    public Mono<Photo> updatePhotoAsSuperUser(PhotoEntity entity, Photo dto) {
+		boolean updated = this.updateEntity(entity, dto);
+		if (!updated) return Mono.just(dto);
+		return DbUtils.updateByUuidAndOwner(r2dbc, entity)
+        .flatMap(nb -> nb == 0 ? Mono.empty() : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
+        .map(this::toDto);
+    }
 
     private boolean updateEntity(PhotoEntity entity, Photo dto) {
     	boolean changed = false;
@@ -177,8 +187,31 @@ public class PhotoService {
 			.flatMap(size -> quotaService.photoDeleted(entity.getOwner(), size).thenReturn(size))
 		);
     }
+    
+    public Mono<UUID> transferToPublic(UUID uuid, String owner, UUID publicTrailUuid, CreatePublicTrailRequest.Photo publicPhoto) {
+    	UUID newUuid = UUID.randomUUID();
+    	return repo.findByUuidAndOwner(uuid, owner)
+    	.switchIfEmpty(Mono.error(new NotFoundException("photo", uuid.toString() + "-" + owner)))
+    	.flatMap(privateEntity ->
+    		fileService.getFileSize(privateEntity.getFileId())
+    		.flatMap(fileSize ->
+    			r2dbc.insert(new PublicPhotoEntity(
+    				newUuid,
+        			publicTrailUuid,
+        			privateEntity.getFileId(),
+        			publicPhoto.getDescription(),
+        			publicPhoto.getDate(),
+        			publicPhoto.getLat(),
+        			publicPhoto.getLng(),
+        			publicPhoto.getIndex()
+        		))
+    			.then(repo.deleteByUuidAndOwner(privateEntity.getUuid(), privateEntity.getOwner()))
+    			.then(quotaService.photoDeleted(owner, fileSize))
+    		)
+    	).thenReturn(newUuid);
+    }
 	
-	private Photo toDto(PhotoEntity entity) {
+	public Photo toDto(PhotoEntity entity) {
 		return new Photo(
 			entity.getUuid().toString(),
 			entity.getOwner(),

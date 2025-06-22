@@ -1,5 +1,6 @@
 package org.trailence.global.exceptions;
 
+import java.util.Collection;
 import java.util.UUID;
 
 import org.springframework.util.function.ThrowingConsumer;
@@ -37,6 +38,11 @@ public final class ValidationUtils {
 		
 		public S notEqualTo(T forbiddenValue) {
 			if (forbiddenValue.equals(value)) throw new BadRequestException(INVALID_PREFIX + name + "-value", name + " cannot be " + value);
+			return (S) this;
+		}
+		
+		public S notIn(Collection<T> forbiddenValues) {
+			if (forbiddenValues.contains(value)) throw new BadRequestException(INVALID_PREFIX + name + "-value", name + " cannot be " + value);
 			return (S) this;
 		}
 		

@@ -77,6 +77,7 @@ public class RestExceptions {
 		var body = error.getBody();
 		var result = new ApiError(status, body.getTitle(), body.getDetail());
 		log.warn("Framework error returned by {} {}: {} - {} - {} => {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI(), error.getClass().getSimpleName(), status, error.getMessage(), result);
+		if (status >= 500) log.error("Framework error 500 ?", error);
 		return Mono.fromSupplier(() -> ResponseEntity.status(status).body(result));
 	}
 	

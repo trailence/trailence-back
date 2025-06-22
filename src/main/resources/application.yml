@@ -74,6 +74,8 @@ trailence:
       max-delay: ${TRAILENCE_MAX_MAILS_DELAY:1d}
       min-delay: ${TRAILENCE_MAILS_MIN_DELAY:1m}
       min-delay-count: ${TRAILENCE_MAILS_MIN_DELAY_COUNT:10}
+  translations:
+    url: ${TRAILENCE_TRANSLATION_SERVICE_URL:}
   extensions:
     allowed:
       "[thunderforest.com]":

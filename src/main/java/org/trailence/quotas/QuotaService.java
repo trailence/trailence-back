@@ -43,6 +43,7 @@ import org.trailence.quotas.db.UserSubscriptionRepository;
 import org.trailence.quotas.dto.Plan;
 import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.quotas.dto.UserSubscription;
+import org.trailence.trail.dto.TrailCollectionType;
 
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
@@ -507,7 +508,7 @@ public class QuotaService {
 		+ " GROUP BY user_subscriptions.user_email"
 		+ ") "
 		+ "UPDATE user_quotas SET "
-		+ "collections_used = (SELECT count(*) FROM collections WHERE collections.owner = user_quotas.email),"
+		+ "collections_used = (SELECT count(*) FROM collections WHERE collections.owner = user_quotas.email AND collections.type NOT IN " + TrailCollectionType.EXCLUDE_NOT_IN_QUOTA_TYPES + "),"
 		+ "trails_used = (SELECT count(*) FROM trails WHERE trails.owner = user_quotas.email),"
 		+ "tracks_used = (SELECT count(*) FROM tracks WHERE tracks.owner = user_quotas.email),"
 		+ "tracks_size_used = (SELECT COALESCE(sum(octet_length(tracks.data)), 0) FROM tracks WHERE tracks.owner = user_quotas.email),"

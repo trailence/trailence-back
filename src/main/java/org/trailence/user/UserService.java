@@ -34,6 +34,7 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.notifications.db.NotificationsRepository;
 import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotasEntity;
@@ -76,6 +77,7 @@ public class UserService {
 	private final UserKeyRepository userKeyRepo;
 	private final UserSubscriptionRepository userSubscriptionRepo;
 	private final UserPreferencesRepository userPreferencesRepo;
+	private final NotificationsRepository notificationsRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final VerificationCodeService verificationCodeService;
 	private final EmailService emailService;
@@ -275,6 +277,7 @@ public class UserService {
 			.then(userExtensionRepo.deleteAllByEmail(email))
 			.then(userPreferencesRepo.deleteById(email))
 			.then(userSubscriptionRepo.deleteAllByUserEmail(email))
+			.then(notificationsRepo.deleteByOwner(email))
 			.then()
 		);
 	}

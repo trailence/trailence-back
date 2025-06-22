@@ -1,5 +1,8 @@
 package org.trailence.preferences;
 
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.stereotype.Service;
 import org.trailence.preferences.db.UserPreferencesEntity;
@@ -7,7 +10,10 @@ import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.preferences.dto.UserPreferences;
 
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +61,7 @@ public class UserPreferencesService {
 		entity.setPhotoMaxQuality(dto.getPhotoMaxQuality());
 		entity.setPhotoMaxSizeKB(dto.getPhotoMaxSizeKB());
 		entity.setPhotoCacheDays(dto.getPhotoCacheDays());
+		entity.setAlias(dto.getAlias() != null ? dto.getAlias() : "");
 	}
 	
 	private UserPreferences toDto(UserPreferencesEntity entity) {
@@ -74,7 +81,8 @@ public class UserPreferencesService {
 			entity.getPhotoMaxPixels(),
 			entity.getPhotoMaxQuality(),
 			entity.getPhotoMaxSizeKB(),
-			entity.getPhotoCacheDays()
+			entity.getPhotoCacheDays(),
+			entity.getAlias()
 		);
 	}
 
@@ -142,6 +150,17 @@ public class UserPreferencesService {
 		case "LIGHT": return 2;
 		default: return 0;
 		}
+	}
+	
+	public Mono<Optional<String>> getAlias(String email) {
+		return repo.findById(email)
+		.map(entity -> entity.getAlias() == null ? Optional.<String>empty() : Optional.of(entity.getAlias()))
+		.switchIfEmpty(Mono.just(Optional.<String>empty()));
+	}
+	
+	public Flux<Tuple2<String, String>> getAliases(List<String> emails) {
+		return repo.findAllById(emails)
+		.flatMap(entity -> entity.getAlias() == null ? Mono.empty() : Mono.just(Tuples.of(entity.getEmail(), entity.getAlias())));
 	}
 	
 }

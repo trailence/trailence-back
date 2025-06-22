@@ -37,6 +37,7 @@ import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
+import org.trailence.notifications.NotificationsService;
 import org.trailence.quotas.QuotaService;
 import org.trailence.trail.db.ShareElementEntity;
 import org.trailence.trail.db.ShareEmailEntity;
@@ -53,6 +54,7 @@ import org.trailence.trail.db.TrailTagEntity;
 import org.trailence.trail.dto.CreateShareRequest;
 import org.trailence.trail.dto.Share;
 import org.trailence.trail.dto.ShareElementType;
+import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.trail.dto.UpdateShareRequest;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
@@ -79,6 +81,7 @@ public class ShareService {
 	private final EmailService emailService;
 	private final TokenService tokenService;
 	private final QuotaService quotaService;
+	private final NotificationsService notifService;
 	
 	@Autowired @Lazy @SuppressWarnings("java:S6813")
 	private ShareService self;
@@ -111,7 +114,7 @@ public class ShareService {
 				shareElements.add(new ShareElementEntity(share.getUuid(), uuid, user));
 			}
 			return self.createShareWithQuota(share, shareElements, shareRecipients)
-			.then(Mono.defer(() -> sendInvitationEmails(share.getUuid().toString(), user, new ArrayList<>(recipients), request.getMailLanguage())))
+			.then(Mono.defer(() -> sendInvitationEmails(share.getUuid().toString(), user, new ArrayList<>(recipients), request.getMailLanguage(), request.getName())))
 			.then(Mono.just(toDto(share, shareRecipients.stream().map(r -> r.getRecipient()).toList(), elements, null)))
 			.onErrorResume(DuplicateKeyException.class, e -> getShare(request.getId(), user));
 		}));
@@ -120,9 +123,15 @@ public class ShareService {
 	private Mono<Void> checkCount(CreateShareRequest request, List<UUID> elements, String user) {
 		Mono<Long> count;
 		switch (request.getType()) {
-		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case COLLECTION: count = collectionRepo.findAllByUuidInAndOwner(elements, user).filter(e -> !TrailCollectionType.PUBLICATION_TYPES.contains(e.getType())).count(); break;
 		case TAG: count = tagRepo.findAllByUuidInAndOwner(elements, user).count(); break;
-		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user).count(); break;
+		case TRAIL: count = trailRepo.findAllByUuidInAndOwner(elements, user)
+			.collectList().flatMap(trails -> {
+				var collectionsUuids = new HashSet<UUID>();
+				trails.forEach(t -> collectionsUuids.add(t.getCollectionUuid()));
+				return collectionRepo.findAllByUuidInAndOwner(collectionsUuids, user).filter(e -> !TrailCollectionType.PUBLICATION_TYPES.contains(e.getType())).count()
+					.map(colCount -> colCount.intValue() == collectionsUuids.size() ? (long) trails.size() : 0L);
+			}); break;
 		default: return Mono.error(new BadRequestException("Invalid element type"));
 		}
 
@@ -147,21 +156,22 @@ public class ShareService {
 		.then();
 	}
 	
-	private Mono<Void> sendInvitationEmails(String uuid, String owner, List<String> recipients, String language) {
+	private Mono<Void> sendInvitationEmails(String uuid, String owner, List<String> recipients, String language, String shareName) {
 		if (recipients.isEmpty()) return Mono.empty();
 		return userRepo.findAllByEmailIn(recipients)
 		.collectList()
 		.flatMapMany(existingUsers ->
 			Flux.fromIterable(recipients)
 			.flatMap(recipient ->
-				sendInvitationEmail(uuid, owner, recipient, existingUsers.stream().filter(u -> u.getEmail().equals(recipient)).findAny(), language)
+				sendInvitationEmail(uuid, owner, recipient, existingUsers.stream().filter(u -> u.getEmail().equals(recipient)).findAny(), language, shareName)
 				, 2, 4
 			)
 		).then();
 	}
 	
-	private Mono<Void> sendInvitationEmail(String uuid, String owner, String recipient, Optional<UserEntity> optUser, String language) {
-		return shareEmailRepo.findByShareUuidAndFromEmailAndToEmail(UUID.fromString(uuid), owner, recipient)
+	private Mono<Void> sendInvitationEmail(String uuid, String owner, String recipient, Optional<UserEntity> optUser, String language, String shareName) {
+		return (optUser.isEmpty() ? Mono.empty() : notifService.create(recipient, "shares.new_share_with_you", List.of(owner, shareName, uuid)))
+		.then(shareEmailRepo.findByShareUuidAndFromEmailAndToEmail(UUID.fromString(uuid), owner, recipient))
 		.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
 		.flatMap(optSent -> {
 			if (optSent.isPresent()) return Mono.empty();
@@ -476,7 +486,7 @@ public class ShareService {
 	public Mono<Share> updateShare(String uuid, UpdateShareRequest request, Authentication auth) {
 		String user = auth.getPrincipal().toString();
 		return self.updateShareAndRecipients(uuid, user, request)
-		.flatMap(added -> sendInvitationEmails(uuid, user, added, request.getMailLanguage()))
+		.flatMap(added -> sendInvitationEmails(uuid, user, added, request.getMailLanguage(), request.getName()))
 		.then(Mono.defer(() -> getShare(uuid, user)));
 	}
 	

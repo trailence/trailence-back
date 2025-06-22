@@ -64,7 +64,7 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 			List<GrantedAuthority> authorities = new LinkedList<>();
 			if (Integer.valueOf(1).equals(isComplete)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_COMPLETE_USER));
 			if (Integer.valueOf(1).equals(isAdmin)) authorities.add(new SimpleGrantedAuthority(TrailenceUtils.AUTHORITY_ADMIN_USER));
-			for (String role : roles) authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+			for (String role : roles) authorities.add(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
 			return Mono.just(new UsernamePasswordAuthenticationToken(decoded.getSubject(), token, authorities));
 		});
 	}

@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort.Direction;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.trailence.global.exceptions.BadRequestException;
+import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.storage.db.FileEntity;
 import org.trailence.storage.db.FileRepository;
 import org.trailence.storage.provider.fs.FileSystemProvider;
@@ -79,6 +80,12 @@ public class FileService {
 		return repo.findById(fileId).flatMapMany(entity ->
 			provider.flatMapMany(storage -> storage.getFile(entity.getStorageId(), getPath(fileId)))
 		);
+	}
+	
+	public Mono<Long> getFileSize(long fileId) {
+		return repo.findById(fileId)
+		.switchIfEmpty(Mono.error(new NotFoundException("file", "" + fileId)))
+		.map(entity -> entity.getSize());
 	}
 	
 	private String getPath(long id) {

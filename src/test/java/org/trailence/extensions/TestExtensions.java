@@ -24,7 +24,8 @@ class TestExtensions extends AbstractTest {
 		assertThat(response.getBody().as(UserExtension[].class)).isEmpty();
 		
 		test.asAdmin().setUserRoles(user.getEmail(), List.of("thunderforest"));
-		user.renewToken();
+		var authResponse = user.renewToken();
+		assertThat(authResponse.getRoles()).singleElement().isEqualTo("thunderforest");
 		
 		response = user.post("/api/extensions/v1", List.of(new UserExtension(0, "thunderforest.com", Map.of("apikey", "0123456789abcdef0123456789abcdef"))));
 		assertThat(response.statusCode()).isEqualTo(200);

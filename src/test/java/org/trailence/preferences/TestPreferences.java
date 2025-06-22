@@ -42,7 +42,8 @@ class TestPreferences extends AbstractTest {
 			1, 5000L,
 			30, (short) 17,
 			1000L, 1001L, 1002L,
-			500, (short) 90, 250, 20
+			500, (short) 90, 250, 20,
+			""
 		);
 		
 		response = user.put("/api/preferences/v1", prefs);

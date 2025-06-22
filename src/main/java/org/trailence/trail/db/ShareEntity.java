@@ -24,5 +24,6 @@ public class ShareEntity extends AbstractEntityUuidOwner {
 	public static final Column COL_OWNER = Column.create("owner", TABLE);
 	public static final Column COL_ELEMENT_TYPE = Column.create("element_type", TABLE);
 	public static final Column COL_INCLUDE_PHOTOS = Column.create("include_photos", TABLE);
+	public static final Column COL_NAME = Column.create("name", TABLE);
 	
 }

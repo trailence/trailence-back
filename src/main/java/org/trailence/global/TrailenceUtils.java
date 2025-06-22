@@ -4,6 +4,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.security.core.Authentication;
@@ -22,9 +24,12 @@ public class TrailenceUtils {
 	
 	public static final String AUTHORITY_COMPLETE_USER = "complete";
 	public static final String AUTHORITY_ADMIN_USER = "admin";
+	public static final String ROLE_MODERATOR = "moderator";
+	public static final String AUTHORITY_MODERATOR = "ROLE_MODERATOR";
 
 	public static final String PREAUTHORIZE_COMPLETE = "hasAuthority('" + AUTHORITY_COMPLETE_USER + "')";
 	public static final String PREAUTHORIZE_ADMIN = "hasAuthority('" + AUTHORITY_ADMIN_USER + "')";
+	public static final String PREAUTHORIZE_MODERATOR = "hasAuthority('" + AUTHORITY_MODERATOR + "')";
 	
 	public static final int MIN_PASSWORD_SIZE = 6;
 	
@@ -50,7 +55,19 @@ public class TrailenceUtils {
 	}
 	
 	public static boolean hasRole(Authentication auth, String role) {
-		return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role) || a.getAuthority().equals(AUTHORITY_ADMIN_USER));
+		return auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role.toUpperCase()) || a.getAuthority().equals(AUTHORITY_ADMIN_USER));
+	}
+	
+	public static boolean isAdmin(Authentication auth) {
+		return auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals(AUTHORITY_ADMIN_USER));
+	}
+	
+	public static Optional<UUID> ifUuid(String s) {
+		try {
+			return Optional.of(UUID.fromString(s));
+		} catch (IllegalArgumentException e) {
+			return Optional.empty();
+		}
 	}
 	
 }

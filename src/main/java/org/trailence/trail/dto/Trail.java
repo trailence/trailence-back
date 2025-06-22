@@ -27,10 +27,17 @@ public class Trail implements Versioned.Interface {
     private String sourceType;
     private String source;
     private Long sourceDate;
+    private String followedUuid;
+    private String followedOwner;
+    private String followedUrl;
 
     private String originalTrackUuid;
     private String currentTrackUuid;
 
     private String collectionUuid;
+    
+    private String publishedFromUuid;
+    private String publicationMessageFromAuthor;
+    private String publicationMessageFromModerator;
 
 }

@@ -1,7 +1,9 @@
 package org.trailence.trail;
 
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.db.BulkGetUpdates;
 import org.trailence.global.db.BulkUtils;
 import org.trailence.global.db.DbUtils;
+import org.trailence.global.db.IgnoreException;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.ValidationUtils;
@@ -64,7 +67,25 @@ public class TrailCollectionService {
 	            entity.setUpdatedAt(entity.getCreatedAt());
 	            return entity;
     		},
-    		entities -> self.createCollectionsWithQuota(entities, owner),
+    		entities -> {
+    			var uniques = new LinkedList<TrailCollectionEntity>();
+    			var classic = new LinkedList<TrailCollectionEntity>();
+    			entities.forEach(entity -> {
+    				if (TrailCollectionType.PUBLICATION_TYPES.contains(entity.getType()))
+    					uniques.add(entity);
+    				else
+    					classic.add(entity);
+    			});
+    			var createUniques = uniques.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) :
+    				Flux.fromIterable(uniques).flatMap(entity -> self.createUniqueCollectionWithoutQuota(entity), 1, 1).onErrorResume(IgnoreException.class, e -> Mono.empty()).collectList();
+    			var createClassic = classic.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) : self.createCollectionsWithQuota(classic, owner);
+    			return createUniques.flatMap(uniquesCreated -> createClassic.map(classicCreated -> {
+    				var all = new LinkedList<TrailCollectionEntity>();
+    				all.addAll(uniquesCreated);
+    				all.addAll(classicCreated);
+    				return all;
+    			}));
+    		},
     		repo
     	).map(list -> list.stream().map(this::toDTO).toList());
     }
@@ -78,9 +99,24 @@ public class TrailCollectionService {
     	});
     }
     
+    @Transactional
+    public Mono<TrailCollectionEntity> createUniqueCollectionWithoutQuota(TrailCollectionEntity entity) {
+    	return repo.findOneByTypeAndOwner(entity.getType().name(), entity.getOwner())
+    	.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
+    	.flatMap(opt -> {
+    		if (opt.isPresent()) return Mono.empty();
+    		return r2dbc.insert(entity)
+    		.flatMap(created -> repo.findAllByTypeAndOwner(entity.getType().name(), entity.getOwner()).collectList().flatMap(list -> {
+    			if (list.size() == 1 && list.get(0).getUuid().equals(created.getUuid())) return Mono.just(created);
+    			return Mono.error(new IgnoreException("Collection type already exists for this user"));
+    		}));
+    	});
+    }
+    
     private void validateCreate(TrailCollection dto) {
     	validate(dto);
-    	ValidationUtils.field("type", dto.getType()).notNull().notEqualTo(TrailCollectionType.MY_TRAILS);
+    	ValidationUtils.field("type", dto.getType()).notNull()
+    		.notIn(List.of(TrailCollectionType.MY_TRAILS));
     }
     
     private void validate(TrailCollection dto) {
@@ -98,7 +134,10 @@ public class TrailCollectionService {
     		auth.getPrincipal().toString(),
     		this::validate,
     		(entity, dto, checksAndActions) -> {
-                if (entity.getName().equals(dto.getName())) return false;
+    			if (TrailCollectionType.PUBLICATION_TYPES.contains(entity.getType()))
+    				return false;
+                if (entity.getName().equals(dto.getName()))
+                	return false;
                 entity.setName(dto.getName());
                 return true;
     		},
@@ -109,43 +148,48 @@ public class TrailCollectionService {
 
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
         Set<UUID> ids = new HashSet<>(uuids.stream().map(UUID::fromString).toList());
+        if (ids.isEmpty()) return Mono.empty();
         String owner = auth.getPrincipal().toString();
-        return deleteCollections(r2dbc.query(DbUtils.select(buildSelectDeletable(ids, owner), null, r2dbc), row -> (UUID) row.get("uuid")).all(), owner);
+        return deleteCollections(repo.findDeletables(ids, owner), owner);
     }
     
     public Mono<Void> deleteUser(String email) {
-    	return deleteCollections(repo.findAllUuidsForUser(email), email);
+    	return deleteCollections(repo.findAllByOwner(email), email);
     }
     
-    private Mono<Void> deleteCollections(Flux<UUID> uuids, String owner) {
-    	return uuids.collectList()
-		.flatMap(deletable ->
-	    	trailService.deleteAllFromCollections(deletable, owner)
-	    	.then(tagService.deleteAllFromCollections(deletable, owner))
-	    	.then(shareService.collectionsDeleted(deletable, owner))
-	    	.then(self.deleteCollectionsWithQuota(deletable, owner))
-	    );
+    private Mono<Void> deleteCollections(Flux<TrailCollectionEntity> entities, String owner) {
+    	return entities.collectList()
+		.flatMap(deletable -> {
+			Set<UUID> classic = new HashSet<>();
+			Set<UUID> all = new HashSet<>();
+			for (var entity : deletable) {
+				if (!TrailCollectionType.PUBLICATION_TYPES.contains(entity.getType()))
+					classic.add(entity.getUuid());
+				all.add(entity.getUuid());
+			}
+	    	return trailService.deleteAllFromCollections(all, owner)
+	    	.then(classic.isEmpty() ? Mono.empty() : tagService.deleteAllFromCollections(classic, owner))
+	    	.then(classic.isEmpty() ? Mono.empty() : shareService.collectionsDeleted(classic, owner))
+	    	.then(self.deleteCollectionsWithQuota(deletable, owner));
+		});
     }
     
     @Transactional
-    public Mono<Void> deleteCollectionsWithQuota(List<UUID> uuids, String owner) {
-		log.info("Deleting {} collections for {}", uuids.size(), owner);
-    	return repo.deleteAllByUuidInAndOwner(uuids, owner)
-		.flatMap(nb -> quotaService.collectionsDeleted(owner, nb));
+    public Mono<Void> deleteCollectionsWithQuota(List<TrailCollectionEntity> entities, String owner) {
+		log.info("Deleting {} collections for {}", entities.size(), owner);
+		Set<UUID> withQuota = new HashSet<>();
+		Set<UUID> withoutQuota = new HashSet<>();
+		for (var entity : entities) {
+			if (TrailCollectionType.NOT_IN_QUOTA.contains(entity.getType()))
+				withoutQuota.add(entity.getUuid());
+			else
+				withQuota.add(entity.getUuid());
+		}
+		return (withQuota.isEmpty() ? Mono.empty() : repo.deleteAllByUuidInAndOwner(withQuota, owner).flatMap(nb -> quotaService.collectionsDeleted(owner, nb)))
+		.then(withoutQuota.isEmpty() ? Mono.empty() : repo.deleteAllByUuidInAndOwner(withoutQuota, owner))
+		.then();
     }
     
-    private Select buildSelectDeletable(Set<UUID> uuids, String owner) {
-    	Table table = Table.create("collections");
-    	return Select.builder()
-		.select(Column.create("uuid", table))
-		.from(table)
-		.where(
-			Conditions.in(Column.create("uuid", table), uuids.stream().map(uuid -> SQL.literalOf(uuid.toString())).toList())
-			.and(Conditions.isEqual(Column.create("owner", table), SQL.literalOf(owner)))
-			.and(Conditions.isEqual(Column.create("type", table), SQL.literalOf(TrailCollectionType.CUSTOM.name())))
-		).build();
-    }
-
     private Select buildSelectAccessibleCollections(String email) {
         Table table = Table.create("collections");
         return Select.builder()

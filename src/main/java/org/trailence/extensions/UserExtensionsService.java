@@ -123,7 +123,7 @@ public class UserExtensionsService {
 			log.info("Extension ignored because not enabled: {}", dto.getExtension());
 			return false;
 		}
-		if (!cfg.getRole().isEmpty() && auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_" + cfg.getRole()) || a.getAuthority().equals(TrailenceUtils.AUTHORITY_ADMIN_USER))) {
+		if (!cfg.getRole().isEmpty() && auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_" + cfg.getRole().toUpperCase()) || a.getAuthority().equals(TrailenceUtils.AUTHORITY_ADMIN_USER))) {
 			log.info("Extension ignored because user misses role: {}, {}", cfg.getRole());
 			return false;
 		}

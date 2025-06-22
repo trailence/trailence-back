@@ -25,11 +25,16 @@ public class TrailEntity extends AbstractEntityUuidOwner {
     private String sourceType;
     private String source;
     private Long sourceDate;
+    private UUID followedUuid;
+    private String followedOwner;
+    private String followedUrl;
 
     private UUID originalTrackUuid;
     private UUID currentTrackUuid;
 
     private UUID collectionUuid;
+    
+    private UUID publishedFromUuid;
     
     public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("trails");
     public static final Column COL_UUID = Column.create("uuid", TABLE);
