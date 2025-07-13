@@ -33,13 +33,7 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 		private String name;
 	}
 	
-	@Query("SELECT slug,name FROM public_trails ORDER BY RANDOM() LIMIT 200")
-	Flux<SlugAndName> randomSlugs();
+	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
+	Flux<PublicTrailEntity> random();
 	
-	@Data
-	@NoArgsConstructor
-	public static class SlugAndName {
-		private String slug;
-		private String name;
-	}
 }

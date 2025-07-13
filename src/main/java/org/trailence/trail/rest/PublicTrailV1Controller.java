@@ -3,6 +3,7 @@ package org.trailence.trail.rest;
 import java.time.Instant;
 import java.util.List;
 
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -87,14 +88,29 @@ public class PublicTrailV1Controller {
 	
 	@GetMapping(value = "/random", produces = {"text/html"})
 	public Mono<String> random() {
-		return service.randomSlugs()
+		return service.random()
 		.collectList()
-		.map(slugs -> {
+		.map(trails -> {
 			StringBuilder html = new StringBuilder(65536);
-			html.append("<html><body>");
-			for (var slug : slugs) {
-				html.append("<a href=\"/fr/trail/").append(slug.getSlug()).append("\">").append(slug.getName()).append("</a><br/>");
-				html.append("<a href=\"/en/trail/").append(slug.getSlug()).append("\">").append(slug.getName()).append("</a><br/>");
+			html.append("<html>")
+			.append("<head>")
+			.append("<meta charset=\"utf-8\">")
+			.append("<title>Random Trails / Randonnées au hasard</title>")
+			.append("<style>body { font-family: \"Roboto\", \"Helvetica Neue\", sans-serif; font-size: 14px; } h2 { font-size: 20px; }</style>")
+			.append("</head>")
+			.append("<body>");
+			for (var trail : trails) {
+				html.append("<h2>").append(StringEscapeUtils.escapeHtml4(trail.getName())).append("</h2>");
+				html.append("<p>").append(StringEscapeUtils.escapeHtml4(trail.getDescription()).replace("\n", "<br/>")).append("</p>");
+				html.append("<p>");
+				html.append("Location: ").append(trail.getLocation()).append("<br/>");
+				html.append("Distance: ").append(trail.getDistance() / 1000).append('.').append((trail.getDistance() % 1000) / 10).append(" km<br/>");
+				html.append("</p>");
+				html.append("<ul>");
+				html.append("<li><a href=\"/fr/trail/").append(trail.getSlug()).append("\">Fiche en français</a></li>");
+				html.append("<li><a href=\"/en/trail/").append(trail.getSlug()).append("\">Trail in english</a></li>");
+				html.append("</ul>");
+				html.append("<hr/>");
 			}
 			html.append("</body></html>");
 			return html.toString();

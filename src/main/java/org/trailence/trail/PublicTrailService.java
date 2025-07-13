@@ -50,7 +50,6 @@ import org.trailence.trail.db.PublicTrailFeedbackReplyEntity;
 import org.trailence.trail.db.PublicTrailFeedbackReplyRepository;
 import org.trailence.trail.db.PublicTrailFeedbackRepository;
 import org.trailence.trail.db.PublicTrailRepository;
-import org.trailence.trail.db.PublicTrailRepository.SlugAndName;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.CreateFeedbackRequest;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
@@ -276,6 +275,11 @@ public class PublicTrailService {
 	
 	public Mono<PublicTrail> getBySlug(String slug, Authentication auth) {
 		return publicTrailRepo.findOneBySlug(slug)
+		.switchIfEmpty(Mono.defer(() -> {
+			String slug2 = URLEncoder.encode(slug, StandardCharsets.UTF_8);
+			if (slug2.equals(slug)) return Mono.empty();
+			return publicTrailRepo.findOneBySlug(slug2);
+		}))
 		.flatMap(trail ->
 			publicPhotoRepo.findAllByTrailUuid(trail.getUuid()).collectList()
 			.flatMap(photos ->
@@ -605,8 +609,8 @@ public class PublicTrailService {
 		});
 	}
 	
-	public Flux<SlugAndName> randomSlugs() {
-		return publicTrailRepo.randomSlugs();
+	public Flux<PublicTrailEntity> random() {
+		return publicTrailRepo.random();
 	}
 	
 }
