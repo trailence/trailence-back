@@ -127,7 +127,7 @@ public class PublicTrailV1Controller {
 	
 	@GetMapping("/sitemap.xml")
 	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemap(ServerHttpRequest request) {
-		String baseUrl = request.getURI().resolve("/").toString();
+		String baseUrl = "https://trailence.org/";
 		return Mono.just(ResponseEntity.ok()
 			.contentType(MediaType.APPLICATION_XML)
 			.body(Flux.concat(
