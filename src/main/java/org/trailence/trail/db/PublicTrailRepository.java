@@ -33,12 +33,22 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 		private String name;
 	}
 	
-	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
-	Flux<PublicTrailEntity> random();
-	
 	@Query("SELECT uuid FROM public_trails WHERE author_uuid = :uuid AND author = :author")
 	Mono<UUID> getPublicUuidFromPrivate(UUID uuid, String author);
 	
 	Mono<PublicTrailEntity> findFirst1ByAuthorAndAuthorUuid(String auther, UUID authorUuid);
+	
+	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
+	Flux<PublicTrailEntity> random();
+	
+	@Query("SELECT slug, updated_at FROM public_trails")
+	Flux<SlugAndDate> allSlugs();
+	
+	@Data
+	@NoArgsConstructor
+	public static class SlugAndDate {
+		private String slug;
+		private long updatedAt;
+	}
 	
 }

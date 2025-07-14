@@ -1,12 +1,17 @@
 package org.trailence.trail.rest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
 import org.apache.commons.lang3.StringEscapeUtils;
+import org.apache.commons.lang3.time.DateFormatUtils;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -117,5 +122,34 @@ public class PublicTrailV1Controller {
 		});
 	}
 	
+	private static final byte[] SITEMAP_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\r\n".getBytes(StandardCharsets.UTF_8);
+	private static final byte[] SITEMAP_FOOTER = "</urlset>".getBytes(StandardCharsets.UTF_8);
+	
+	@GetMapping("/sitemap.xml")
+	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemap(ServerHttpRequest request) {
+		String baseUrl = request.getURI().resolve("/").toString();
+		return Mono.just(ResponseEntity.ok()
+			.contentType(MediaType.APPLICATION_XML)
+			.body(Flux.concat(
+				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_HEADER)),
+				service.allSlugs().map(slug -> {
+					StringBuilder s = new StringBuilder(2048);
+					String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(slug.getUpdatedAt());
+					s.append("<url><loc>").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
+					s.append("<url><loc>").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
+					s.append("<url><loc>").append(baseUrl).append("trail/trailence/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
+					return s;
+				})
+				.buffer(20)
+				.map(list -> {
+					if (list.isEmpty()) return DefaultDataBufferFactory.sharedInstance.wrap(new byte[0]);
+					StringBuilder s = list.getFirst();
+					for (var i = 1; i < list.size(); ++i) s.append(list.get(i));
+					return DefaultDataBufferFactory.sharedInstance.wrap(s.toString().getBytes(StandardCharsets.UTF_8));
+				}),
+				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_FOOTER))
+			))
+		);
+	}
 	
 }

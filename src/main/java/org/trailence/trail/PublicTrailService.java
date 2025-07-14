@@ -50,6 +50,7 @@ import org.trailence.trail.db.PublicTrailFeedbackReplyEntity;
 import org.trailence.trail.db.PublicTrailFeedbackReplyRepository;
 import org.trailence.trail.db.PublicTrailFeedbackRepository;
 import org.trailence.trail.db.PublicTrailRepository;
+import org.trailence.trail.db.PublicTrailRepository.SlugAndDate;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.CreateFeedbackRequest;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
@@ -632,6 +633,10 @@ public class PublicTrailService {
 	
 	public Flux<PublicTrailEntity> random() {
 		return publicTrailRepo.random();
+	}
+	
+	public Flux<SlugAndDate> allSlugs() {
+		return publicTrailRepo.allSlugs();
 	}
 	
 	public Mono<String> getCurrentPublicUuid(String trailUuid, String trailOwner) {
