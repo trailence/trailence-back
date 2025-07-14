@@ -73,6 +73,8 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple3;
+import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
@@ -93,18 +95,32 @@ public class PublicTrailService {
 	
 	@Transactional
 	public Mono<String> create(CreatePublicTrailRequest request, Authentication auth) {
-		UUID uuid = UUID.randomUUID();
 		String author = request.getAuthor().toLowerCase();
 		if (author.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
-		return trailRepo.findTrailToReview(UUID.fromString(request.getTrailUuid()), author)
-		.switchIfEmpty(Mono.error(new NotFoundException("trail", request.getTrailUuid() + "-" + author)))
-		.flatMap(fromTrail ->
-			r2dbc.insert(toTrackEntity(uuid, request))
-			.then(Flux.fromIterable(request.getPhotos()).flatMap(p -> photoService.transferToPublic(UUID.fromString(p.getUuid()), author, uuid, p), 1, 1).then())
-			.then(generateSlug(request.getName()).flatMap(slug -> r2dbc.insert(toTrailEntity(uuid, slug, request))))
-			.then(trailService.delete(Flux.just(fromTrail), author))
-			.then(notificationsService.create(author, "publications.accepted", List.of(request.getName(), uuid.toString())))
-		).thenReturn(uuid.toString());
+		String authorUuid = request.getAuthorUuid();
+		Mono<Tuple3<UUID, String, Optional<PublicTrailEntity>>> newData;
+		if (authorUuid == null) newData = generateSlug(request.getName()).map(slug -> Tuples.of(UUID.randomUUID(), slug, Optional.empty()));
+		else newData = publicTrailRepo.findFirst1ByAuthorAndAuthorUuid(author, UUID.fromString(authorUuid))
+			.flatMap(existing -> 
+				publicTrackRepo.deleteById(existing.getUuid())
+				.then(publicPhotoRepo.deleteAllByTrailUuid(existing.getUuid()))
+				.then(publicTrailRepo.deleteById(existing.getUuid()))
+				.then(Mono.just(Tuples.of(existing.getUuid(), existing.getSlug(), Optional.of(existing))))
+			)
+			.switchIfEmpty(Mono.defer(() -> generateSlug(request.getName()).map(slug -> Tuples.of(UUID.randomUUID(), slug, Optional.empty()))));
+		return newData
+		.flatMap(tuple ->
+			trailRepo.findTrailToReview(UUID.fromString(request.getTrailUuid()), author)
+			.switchIfEmpty(Mono.error(new NotFoundException("trail", request.getTrailUuid() + "-" + author)))
+			.flatMap(fromTrail ->
+				r2dbc.insert(toTrackEntity(tuple.getT1(), request))
+				.then(Flux.fromIterable(request.getPhotos()).flatMap(p -> photoService.transferToPublic(UUID.fromString(p.getUuid()), author, tuple.getT1(), p), 1, 1).then())
+				.then(r2dbc.insert(toTrailEntity(tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), request)))
+				.then(trailService.delete(Flux.just(fromTrail), author))
+				.then(notificationsService.create(author, "publications.accepted", List.of(request.getName(), tuple.getT1().toString())))
+			)
+			.thenReturn(tuple.getT1().toString())
+		);
 	}
 	
 	private Mono<String> generateSlug(String name) {
@@ -144,13 +160,13 @@ public class PublicTrailService {
 		});
 	}
 	
-	private static PublicTrailEntity toTrailEntity(UUID uuid, String slug, CreatePublicTrailRequest request) {
+	private static PublicTrailEntity toTrailEntity(UUID uuid, String slug, PublicTrailEntity existing, CreatePublicTrailRequest request) {
 		long now = System.currentTimeMillis();
 		return new PublicTrailEntity(
 			uuid,
 			request.getAuthor().toLowerCase(),
 			request.getAuthorUuid() != null ? UUID.fromString(request.getAuthorUuid()) : null,
-			now,
+			existing != null ? existing.getCreatedAt() : now,
 			now,
 			slug,
 			request.getName(),
@@ -179,7 +195,12 @@ public class PublicTrailService {
 			request.getTile128ByZoom().get(8),
 			request.getTile128ByZoom().get(9),
 			request.getSimplifiedPath().stream().map(v -> Double.valueOf(Math.floor(v * 1000000)).intValue()).toArray(size -> new Integer[size]),
-			0L, 0L, 0L, 0L, 0L, 0L // rating
+			existing != null ? existing.getNbRate0() : 0L,
+			existing != null ? existing.getNbRate1() : 0L,
+			existing != null ? existing.getNbRate2() : 0L,
+			existing != null ? existing.getNbRate3() : 0L,
+			existing != null ? existing.getNbRate4() : 0L,
+			existing != null ? existing.getNbRate5() : 0L
 		);
 	}
 	
@@ -611,6 +632,12 @@ public class PublicTrailService {
 	
 	public Flux<PublicTrailEntity> random() {
 		return publicTrailRepo.random();
+	}
+	
+	public Mono<String> getCurrentPublicUuid(String trailUuid, String trailOwner) {
+		return publicTrailRepo.getPublicUuidFromPrivate(UUID.fromString(trailUuid), trailOwner)
+		.map(UUID::toString)
+		.switchIfEmpty(Mono.just(""));
 	}
 	
 }

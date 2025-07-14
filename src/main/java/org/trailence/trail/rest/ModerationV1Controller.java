@@ -127,4 +127,14 @@ public class ModerationV1Controller {
 		return service.reject(trail, auth);
 	}
 	
+	@GetMapping("/trailToReview/{trailUuid}/{trailOwner}/currentPublic")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<String> getPublicUuidForTrailToReview(
+		@PathVariable("trailUuid") String trailUuid,
+		@PathVariable("trailOwner") String trailOwner,
+		Authentication auth
+	) {
+		return publicTrailService.getCurrentPublicUuid(trailUuid, trailOwner);
+	}
+	
 }
