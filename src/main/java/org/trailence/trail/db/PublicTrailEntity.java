@@ -7,6 +7,7 @@ import org.springframework.data.geo.Box;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.data.relational.core.sql.Column;
 
+import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -63,6 +64,10 @@ public class PublicTrailEntity {
 	private long nbRate3;
 	private long nbRate4;
 	private long nbRate5;
+	
+	private String lang;
+	private Json nameTranslations;
+	private Json descriptionTranslations;
 	
 	public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("public_trails");
 	public static final Column COL_UUID = Column.create("uuid", TABLE);

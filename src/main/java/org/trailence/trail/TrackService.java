@@ -24,6 +24,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.AccessibleByteArrayOutputStream;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
@@ -269,7 +270,7 @@ public class TrackService {
 	public static byte[] compress(Object value) throws IOException {
 		try (AccessibleByteArrayOutputStream bos = new AccessibleByteArrayOutputStream(8192);
 			GZIPOutputStream gos = new GZIPOutputStream(bos)) {
-			new ObjectMapper().writeValue(gos, value);
+			TrailenceUtils.mapper.writeValue(gos, value);
 			byte[] result = bos.getData();
 			int len = bos.getLength();
 			if (result.length == len) return result;
@@ -282,7 +283,7 @@ public class TrackService {
 	public static <T> T uncompress(byte[] compressed, TypeReference<T> type) throws IOException {
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(compressed);
 			GZIPInputStream gis = new GZIPInputStream(bis)) {
-			return new ObjectMapper().readValue(gis, type);
+			return TrailenceUtils.mapper.readValue(gis, type);
 		}
 	}
 	

@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS public.public_trails
     nb_rate3 bigint DEFAULT 0,
     nb_rate4 bigint DEFAULT 0,
     nb_rate5 bigint DEFAULT 0,
-    alternative_of uuid
+    lang character varying(2) NOT NULL DEFAULT 'fr',
+    name_translations jsonb,
+    description_translations jsonb
 );
 
 CREATE INDEX IF NOT EXISTS public_trails_bounds

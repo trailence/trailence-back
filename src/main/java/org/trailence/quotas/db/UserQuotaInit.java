@@ -1,5 +1,6 @@
 package org.trailence.quotas.db;
 
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.SQL;
 import org.trailence.global.TrailenceUtils;
@@ -24,7 +25,7 @@ public class UserQuotaInit implements Migration {
 	}
 	
 	@Override
-	public void execute(R2dbcEntityTemplate db) throws Exception {
+	public void execute(R2dbcEntityTemplate db, ApplicationContext context) throws Exception {
 		db.getDatabaseClient().sql(QUERY_INSERT_USERS).fetch().rowsUpdated().block();
 		db.getDatabaseClient().sql(QUERY_SUBSCRIBE_USERS_TO_FREE_PLAN).fetch().rowsUpdated().block();
 	}

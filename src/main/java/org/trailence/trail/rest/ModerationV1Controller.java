@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.trail.ModerationService;
@@ -21,6 +22,7 @@ import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailAndPhotos;
+import org.trailence.translations.TranslationService;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -33,6 +35,7 @@ public class ModerationV1Controller {
 	
 	private final ModerationService service;
 	private final PublicTrailService publicTrailService;
+	private final TranslationService translation;
 
 	@GetMapping("/trailsToReview")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
@@ -135,6 +138,18 @@ public class ModerationV1Controller {
 		Authentication auth
 	) {
 		return publicTrailService.getCurrentPublicUuid(trailUuid, trailOwner);
+	}
+	
+	@PostMapping("/detectLanguage")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<String> detectLanguage(@RequestBody String text) {
+		return translation.detectLanguage(text).switchIfEmpty(Mono.just(""));
+	}
+
+	@PostMapping("/translate")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<String> detectLanguage(@RequestBody String text, @RequestParam("from") String from, @RequestParam("to") String to) {
+		return translation.translate(text, from, to).switchIfEmpty(Mono.just(""));
 	}
 	
 }

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.UnauthorizedException;
 import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.MyPublicTrail;
@@ -136,7 +137,10 @@ public class PublicTrailV1Controller {
 				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_HEADER)),
 				service.allSlugs().map(slug -> {
 					StringBuilder s = new StringBuilder(2048);
-					String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(slug.getUpdatedAt());
+					long ts = slug.getUpdatedAt();
+					if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
+					if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
+					String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
 					s.append("<url><loc>").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
 					s.append("<url><loc>").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
 					s.append("<url><loc>").append(baseUrl).append("trail/trailence/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");

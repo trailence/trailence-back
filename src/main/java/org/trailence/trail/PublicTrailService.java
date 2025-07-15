@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -68,10 +70,12 @@ import org.trailence.trail.dto.PublicTrailSearch.SearchByTileResponse;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple3;
@@ -79,6 +83,7 @@ import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PublicTrailService {
 	
 	private final PublicTrailRepository publicTrailRepo;
@@ -161,8 +166,20 @@ public class PublicTrailService {
 		});
 	}
 	
-	private static PublicTrailEntity toTrailEntity(UUID uuid, String slug, PublicTrailEntity existing, CreatePublicTrailRequest request) {
+	private PublicTrailEntity toTrailEntity(UUID uuid, String slug, PublicTrailEntity existing, CreatePublicTrailRequest request) {
 		long now = System.currentTimeMillis();
+		Json nameTranslations = null;
+		Json descriptionTranslations = null;
+		try {
+			nameTranslations = Json.of(TrailenceUtils.mapper.writeValueAsBytes(request.getNameTranslations()));
+		} catch (Exception e) {
+			log.error("Mapping error", e);
+		}
+		try {
+			descriptionTranslations = Json.of(TrailenceUtils.mapper.writeValueAsBytes(request.getDescriptionTranslations()));
+		} catch (Exception e) {
+			log.error("Mapping error", e);
+		}
 		return new PublicTrailEntity(
 			uuid,
 			request.getAuthor().toLowerCase(),
@@ -201,7 +218,10 @@ public class PublicTrailService {
 			existing != null ? existing.getNbRate2() : 0L,
 			existing != null ? existing.getNbRate3() : 0L,
 			existing != null ? existing.getNbRate4() : 0L,
-			existing != null ? existing.getNbRate5() : 0L
+			existing != null ? existing.getNbRate5() : 0L,
+			request.getLang(),
+			nameTranslations,
+			descriptionTranslations
 		);
 	}
 	
@@ -340,6 +360,18 @@ public class PublicTrailService {
 	}
 	
 	private PublicTrail toPublicTrailDto(PublicTrailEntity entity, Stream<PublicPhotoEntity> photos, Optional<String> authorAlias, Authentication auth) {
+		Map<String, String> nameTranslations = new HashMap<>();
+		Map<String, String> descriptionTranslations = new HashMap<>();
+		try {
+			nameTranslations = TrailenceUtils.mapper.readValue(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {});
+		} catch (Exception e) {
+			log.error("Mapping error", e);
+		}
+		try {
+			descriptionTranslations = TrailenceUtils.mapper.readValue(entity.getDescriptionTranslations().asArray(), new TypeReference<Map<String, String>>() {});
+		} catch (Exception e) {
+			log.error("Mapping error", e);
+		}
 		return new PublicTrail(
 			entity.getUuid().toString(),
 			entity.getSlug(),
@@ -380,7 +412,10 @@ public class PublicTrailService {
 				pe.getLatitude(),
 				pe.getLongitude(),
 				pe.getIndex()
-			)).toList()
+			)).toList(),
+			entity.getLang(),
+			nameTranslations,
+			descriptionTranslations
 		);
 	}
 	

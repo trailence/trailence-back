@@ -1,6 +1,7 @@
 package org.trailence.trail.dto;
 
 import java.util.List;
+import java.util.Map;
 
 import lombok.Data;
 
@@ -39,6 +40,10 @@ public class CreatePublicTrailRequest {
 	private Track.WayPoint[] wayPoints;
 	
 	private List<Photo> photos;
+	
+	private String lang;
+	private Map<String, String> nameTranslations;
+	private Map<String, String> descriptionTranslations;
 	
 	@Data
 	public static class Photo {

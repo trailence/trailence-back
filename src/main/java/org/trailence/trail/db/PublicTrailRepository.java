@@ -41,7 +41,7 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
 	Flux<PublicTrailEntity> random();
 	
-	@Query("SELECT slug, updated_at FROM public_trails")
+	@Query("SELECT slug, MAX(updated_at) as updated_at, MAX(public_trail_feedback.date) as latestFeedbackAt FROM public_trails LEFT JOIN public_trail_feedback ON public_trail_feedback.public_trail_uuid = public_trails.uuid GROUP BY slug")
 	Flux<SlugAndDate> allSlugs();
 	
 	@Data
@@ -49,6 +49,7 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 	public static class SlugAndDate {
 		private String slug;
 		private long updatedAt;
+		private Long latestFeedbackAt;
 	}
 	
 }

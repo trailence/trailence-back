@@ -29,7 +29,7 @@ public class TrailenceApp implements SmartLifecycle, ApplicationContextAware {
 	public void initApp() {
 		InitDB init = new InitDB();
 		context.getAutowireCapableBeanFactory().autowireBean(init);
-		init.init();
+		init.init(context);
 		checks(context);
 	}
 	

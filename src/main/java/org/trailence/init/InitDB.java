@@ -8,10 +8,12 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.SQL;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.init.migrations.AddLanguageAndTranslationsToPublicTrails;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotaInit;
 import org.trailence.user.UserService;
@@ -57,11 +59,13 @@ public class InitDB {
 		new DatabaseMigration("0.18_trails_add_followed"),
 		new DatabaseMigration("0.18_preferences_add_alias"),
 		new DatabaseMigration("0.18_trails_add_published_from"),
+		new DatabaseMigration("0.18_public_trails_language"),
+		new AddLanguageAndTranslationsToPublicTrails(),
 	};
 	
-	public void init() {
+	public void init(ApplicationContext context) {
 		for (var table : TABLES) createTable(table);
-		doMigrations();
+		doMigrations(context);
 		log.info("Configuring free plan: {}", freePlan);
 		setFreePlan();
 		quotaService.computeQuotas().block();
@@ -82,7 +86,7 @@ public class InitDB {
 	}
 	
 	@SuppressWarnings("java:S112") // RuntimeException
-	private void doMigrations() {
+	private void doMigrations(ApplicationContext context) {
 		log.info("Retrieving migrations...");
 		List<String> done = db.getDatabaseClient().sql("SELECT id FROM migrations ORDER BY id").map((row,meta) -> row.get(0, String.class)).all().collectList().block();
 		List<Migration> todo = new LinkedList<>(Arrays.asList(migrations).stream().filter(m -> !done.contains(m.id())).toList());
@@ -91,7 +95,7 @@ public class InitDB {
 			try {
 				log.info("Doing migration {}", migration.id());
 				long start = System.currentTimeMillis();
-				migration.execute(db);
+				migration.execute(db, context);
 				db.getDatabaseClient().sql("INSERT INTO migrations (id) VALUES ($1)").bind(0, migration.id()).then().block();
 				log.info("Migration done: {} in {} ms.", migration.id(), System.currentTimeMillis() - start);
 			} catch (Exception e) {

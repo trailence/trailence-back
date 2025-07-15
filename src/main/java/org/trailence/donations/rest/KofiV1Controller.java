@@ -8,11 +8,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.donations.DonationService;
 import org.trailence.donations.dto.CreateDonationRequest;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -35,7 +35,7 @@ public class KofiV1Controller {
 	public Mono<Void> kofiPaymentReceived(KofiBody data) {
 		KofiData k;
 		try {
-			k = new ObjectMapper().readValue(data.data, KofiData.class);
+			k = TrailenceUtils.mapper.readValue(data.data, KofiData.class);
 			if (token != null && !token.isBlank() && !token.equals(k.verificationToken))
 				return Mono.error(new ForbiddenException());
 			CreateDonationRequest request = new CreateDonationRequest(
