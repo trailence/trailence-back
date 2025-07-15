@@ -71,6 +71,8 @@ public class PublicTrailV1Controller {
 		return service.getMines(auth);
 	}
 	
+	private static final long PHOTO_CACHE_SECONDS = 100 * 24 * 60 * 60;
+	
 	@GetMapping("/photo/{trailUuid}/{photoUuid}")
 	public Mono<ResponseEntity<Flux<DataBuffer>>> getPhotoContent(
 		@PathVariable("trailUuid") String trailUuid,
@@ -80,8 +82,8 @@ public class PublicTrailV1Controller {
 		.map(flux -> ResponseEntity
 			.ok()
 			.contentType(MediaType.APPLICATION_OCTET_STREAM)
-			.header("Cache-Control", "public, max-age=86400")
-			.header("Expires", Instant.now().plusSeconds(86400).toString())
+			.header("Cache-Control", "public, max-age=" + PHOTO_CACHE_SECONDS)
+			.header("Expires", Instant.now().plusSeconds(PHOTO_CACHE_SECONDS).toString())
 			.body(flux)
 		);
 	}

@@ -51,8 +51,9 @@ public class JwtAuthenticationManager implements ReactiveAuthenticationManager, 
 	public Mono<Authentication> authenticate(Authentication authentication) {
 		return Mono.defer(() -> {
 			String token = authentication.getCredentials().toString();
-			DecodedJWT decoded = JWT.decode(token);
+			DecodedJWT decoded;
 			try {
+				decoded = JWT.decode(token);
 				verifier.verify(token);
 			} catch (Exception e) {
 				log.info("Invalid token: {}", e.getMessage());
