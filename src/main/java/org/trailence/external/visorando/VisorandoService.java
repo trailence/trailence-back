@@ -39,7 +39,7 @@ public class VisorandoService {
 		if (!this.isAvailable(auth)) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("https://www.visorando.com").build();
 		return client.get()
-		.uri("/?component=rando&task=searchCircuitV2&geolocation=0&metaData=&minDuration=0&maxDuration=720&minDifficulty=1&maxDifficulty=5&loc=&retourDepart=0&&bbox=" + bbox)
+		.uri("/?component=rando&task=searchCircuitV2&geolocation=0&metaData=&minDuration=0&maxDuration=720&minDifficulty=1&maxDifficulty=5&loc=&retourDepart=0&multilang=on&bbox=" + bbox)
 		.header("X-Requested-With", "XMLHttpRequest")
 		.header("Accept", "application/json")
 		.exchangeToMono(response -> response.bodyToMono(List.class))
