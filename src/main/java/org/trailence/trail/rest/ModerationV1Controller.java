@@ -148,7 +148,7 @@ public class ModerationV1Controller {
 
 	@PostMapping("/translate")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Mono<String> detectLanguage(@RequestBody String text, @RequestParam("from") String from, @RequestParam("to") String to) {
+	public Mono<String> translate(@RequestBody String text, @RequestParam("from") String from, @RequestParam("to") String to) {
 		return translation.translate(text, from, to).switchIfEmpty(Mono.just(""));
 	}
 	

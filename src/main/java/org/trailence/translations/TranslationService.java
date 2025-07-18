@@ -66,7 +66,7 @@ public class TranslationService {
 		})
 		.map(response -> response.getTranslatedText())
 		.onErrorResume(e -> {
-			log.error("Error translating from {} to {}  text {}", from, to, text, e);
+			log.error("Error translating from {} to {} text {}", from, to, text, e);
 			return Mono.empty();
 		});
 	}

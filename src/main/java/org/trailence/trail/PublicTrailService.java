@@ -78,6 +78,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
 
@@ -212,7 +213,7 @@ public class PublicTrailService {
 			request.getTile128ByZoom().get(7),
 			request.getTile128ByZoom().get(8),
 			request.getTile128ByZoom().get(9),
-			request.getSimplifiedPath().stream().map(v -> Double.valueOf(Math.floor(v * 1000000)).intValue()).toArray(size -> new Integer[size]),
+			request.getSimplifiedPath().stream().map(v -> (int) Math.floor(v * 1000000)).toArray(size -> new Integer[size]),
 			existing != null ? existing.getNbRate0() : 0L,
 			existing != null ? existing.getNbRate1() : 0L,
 			existing != null ? existing.getNbRate2() : 0L,
@@ -345,7 +346,7 @@ public class PublicTrailService {
 					.map(trail -> this.toPublicTrailDto(
 						trail,
 						photos.stream().filter(p -> p.getTrailUuid().equals(trail.getUuid())),
-						aliases.stream().filter(a -> a.getT1().equals(trail.getAuthor())).map(a -> a.getT2()).findAny(),
+						aliases.stream().filter(a -> a.getT1().equals(trail.getAuthor())).map(Tuple2::getT2).findAny(),
 						auth
 					))
 					.toList()
@@ -523,7 +524,7 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.error(new NotFoundException("feedback", feedbackUuid)))
 		.flatMap(feedback -> 
 			r2dbc.insert(new PublicTrailFeedbackReplyEntity(UUID.randomUUID(), uuid, email, date, c))
-			.doOnNext(r -> {
+			.doOnNext(r ->
 				feedbackReplyRepo.findAllByReplyTo(feedback.getUuid())
 				.map(re -> re.getEmail())
 				.distinct()
@@ -540,8 +541,8 @@ public class PublicTrailService {
 						.then()
 					);
 				})
-				.subscribe();
-			})
+				.subscribe()
+			)
 		)
 		.flatMap(entity ->
 			prefService.getPreferences(email)

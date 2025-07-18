@@ -14,10 +14,7 @@ import reactor.core.publisher.Mono;
 public final class RetryRest {
 
 	public static boolean isRetryable(Throwable t) {
-		if (t instanceof UncategorizedR2dbcException) {
-			return true;
-		}
-		return false;
+		return (t instanceof UncategorizedR2dbcException);
 	}
 
 	public static <T> Mono<T> retry(Mono<T> transaction) {
@@ -46,7 +43,7 @@ public final class RetryRest {
 	
 	private static Mono<Integer> delay(int numRetry) {
 		if (numRetry == 0) return Mono.just(1).delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(10, 200)));
-		return Mono.just(1).delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(numRetry * 10, numRetry * 200)));
+		return Mono.just(1).delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(numRetry * 10L, numRetry * 200L)));
 	}
 	
 }

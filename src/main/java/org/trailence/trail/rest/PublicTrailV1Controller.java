@@ -72,7 +72,7 @@ public class PublicTrailV1Controller {
 		return service.getMines(auth);
 	}
 	
-	private static final long PHOTO_CACHE_SECONDS = 100 * 24 * 60 * 60;
+	private static final long PHOTO_CACHE_SECONDS = 100L * 24 * 60 * 60;
 	
 	@GetMapping("/photo/{trailUuid}/{photoUuid}")
 	public Mono<ResponseEntity<Flux<DataBuffer>>> getPhotoContent(
