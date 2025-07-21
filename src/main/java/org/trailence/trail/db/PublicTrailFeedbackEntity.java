@@ -22,5 +22,6 @@ public class PublicTrailFeedbackEntity {
 	private long date;
 	private Integer rate;
 	private String comment;
+	private boolean reviewed;
 	
 }

@@ -489,6 +489,7 @@ public class TrailService {
     			feedback.setEmail(owner);
     			feedback.setDate(trail.getCreatedAt());
     			feedback.setPublicTrailUuid(publicTrail.getUuid());
+    			feedback.setReviewed(true);
     			return r2dbc.insert(feedback);
     		});
     	}).subscribe();

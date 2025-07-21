@@ -1,0 +1,2 @@
+ALTER TABLE public.public_trail_feedback ADD COLUMN IF NOT EXISTS reviewed boolean DEFAULT FALSE;
+ALTER TABLE public.public_trail_feedback_reply ADD COLUMN IF NOT EXISTS reviewed boolean DEFAULT FALSE;

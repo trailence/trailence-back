@@ -1,5 +1,7 @@
 package org.trailence.trail.rest;
 
+import java.util.List;
+
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import org.trailence.global.TrailenceUtils;
 import org.trailence.trail.ModerationService;
 import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
+import org.trailence.trail.dto.FeedbackToReview;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
@@ -150,6 +153,24 @@ public class ModerationV1Controller {
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
 	public Mono<String> translate(@RequestBody String text, @RequestParam("from") String from, @RequestParam("to") String to) {
 		return translation.translate(text, from, to).switchIfEmpty(Mono.just(""));
+	}
+	
+	@GetMapping("/commentsToReview")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<List<FeedbackToReview>> getFeedbackToReview(Authentication auth) {
+		return service.getFeedbackToReview(auth);
+	}
+	
+	@PutMapping("/commentsToReview/validate/{feedbackUuid}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> validateFeedback(@PathVariable("feedbackUuid") String feedbackUuid) {
+		return service.feedbackValidated(feedbackUuid);
+	}
+	
+	@PutMapping("/commentsToReview/reply/validate/{replyUuid}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> validateFeedbackReply(@PathVariable("replyUuid") String replyUuid) {
+		return service.feedbackReplyValidated(replyUuid);
 	}
 	
 }

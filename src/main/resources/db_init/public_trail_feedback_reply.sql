@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS public.public_trail_feedback_reply
     reply_to uuid NOT NULL,
     email character varying(250) COLLATE pg_catalog."default" NOT NULL,
     date bigint NOT NULL,
-    comment character varying(50000) COLLATE pg_catalog."default" NOT NULL
+    comment character varying(50000) COLLATE pg_catalog."default" NOT NULL,
+    reviewed boolean DEFAULT FALSE
 );
 
 CREATE INDEX IF NOT EXISTS public_trail_feedback_reply_to

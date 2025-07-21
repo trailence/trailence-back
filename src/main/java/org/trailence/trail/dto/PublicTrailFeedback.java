@@ -17,6 +17,7 @@ public class PublicTrailFeedback {
 	private long date;
 	private Integer rate;
 	private String comment;
+	private boolean reviewed;
 	private List<Reply> replies;
 	
 	@Data
@@ -28,6 +29,7 @@ public class PublicTrailFeedback {
 		private boolean you;
 		private long date;
 		private String comment;
+		private boolean reviewed;
 	}
 	
 }

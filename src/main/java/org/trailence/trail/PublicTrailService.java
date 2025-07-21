@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -487,7 +488,8 @@ public class PublicTrailService {
 			email,
 			date,
 			rate,
-			comment
+			comment,
+			comment == null // reviewed if no comment
 		);
 		return r2dbc.insert(entity)
 		.flatMap(feedback -> {
@@ -523,7 +525,7 @@ public class PublicTrailService {
 		return feedbackRepo.findById(uuid)
 		.switchIfEmpty(Mono.error(new NotFoundException("feedback", feedbackUuid)))
 		.flatMap(feedback -> 
-			r2dbc.insert(new PublicTrailFeedbackReplyEntity(UUID.randomUUID(), uuid, email, date, c))
+			r2dbc.insert(new PublicTrailFeedbackReplyEntity(UUID.randomUUID(), uuid, email, date, c, false))
 			.doOnNext(r ->
 				feedbackReplyRepo.findAllByReplyTo(feedback.getUuid())
 				.map(re -> re.getEmail())
@@ -546,7 +548,7 @@ public class PublicTrailService {
 		)
 		.flatMap(entity ->
 			prefService.getPreferences(email)
-			.map(pref -> new PublicTrailFeedback.Reply(entity.getUuid().toString(), pref.getAlias(), true, entity.getDate(), c))
+			.map(pref -> new PublicTrailFeedback.Reply(entity.getUuid().toString(), pref.getAlias(), true, entity.getDate(), c, entity.isReviewed()))
 		);
 	}
 	
@@ -570,6 +572,23 @@ public class PublicTrailService {
 	}
 	
 	public Mono<List<PublicTrailFeedback>> getFeedbacks(String trailUuid, long pageFromDate, int size, String excludeFromStartingDate, Integer filterRate, Authentication auth) {
+		return this.fetchFeedbacks(trailUuid, sql -> {
+			if (pageFromDate > 0)
+				sql.append(" AND public_trail_feedback.date <= ").append(pageFromDate);
+			if (filterRate != null) {
+				sql.append(" AND public_trail_feedback.rate = ").append(filterRate);
+			}
+			if (excludeFromStartingDate != null) {
+				String notIn = String.join(",", Stream.of(excludeFromStartingDate.split(",")).map(TrailenceUtils::ifUuid).filter(o -> o.isPresent()).map(Optional::get).map(uuid -> "'" + uuid.toString() + "'").toList());
+				if (!notIn.isEmpty())
+					sql.append(" AND public_trail_feedback.uuid NOT IN (").append(notIn).append(')');
+			}
+			sql.append(" ORDER BY public_trail_feedback.date DESC");
+			sql.append(" LIMIT ").append(size > 100 || size < 1 ? 100 : size);
+		}, auth);
+	}
+	
+	public Mono<List<PublicTrailFeedback>> fetchFeedbacks(String trailUuid, Consumer<StringBuilder> addWhereAndPaging, Authentication auth) {
 		String youEmail = auth == null ? "" : auth.getPrincipal().toString();
 		var sql = new StringBuilder(2048)
 		.append("SELECT ")
@@ -577,23 +596,13 @@ public class PublicTrailService {
 		.append(",public_trail_feedback.date")
 		.append(",public_trail_feedback.rate")
 		.append(",public_trail_feedback.comment")
+		.append(",public_trail_feedback.reviewed")
 		.append(",user_preferences.alias")
 		.append(",public_trail_feedback.email")
 		.append(" FROM public_trail_feedback")
 		.append(" LEFT JOIN user_preferences ON user_preferences.email = public_trail_feedback.email")
 		.append(" WHERE public_trail_feedback.public_trail_uuid = '").append(trailUuid).append('\'');
-		if (pageFromDate > 0)
-			sql.append(" AND public_trail_feedback.date <= ").append(pageFromDate);
-		if (filterRate != null) {
-			sql.append(" AND public_trail_feedback.rate = ").append(filterRate);
-		}
-		if (excludeFromStartingDate != null) {
-			String notIn = String.join(",", Stream.of(excludeFromStartingDate.split(",")).map(TrailenceUtils::ifUuid).filter(o -> o.isPresent()).map(Optional::get).map(uuid -> "'" + uuid.toString() + "'").toList());
-			if (!notIn.isEmpty())
-				sql.append(" AND public_trail_feedback.uuid NOT IN (").append(notIn).append(')');
-		}
-		sql.append(" ORDER BY public_trail_feedback.date DESC");
-		sql.append(" LIMIT ").append(size > 100 || size < 1 ? 100 : size);
+		addWhereAndPaging.accept(sql);
 		return r2dbc.query(DbUtils.operation(sql.toString(), null), row -> new PublicTrailFeedback(
 			row.get("uuid", UUID.class).toString(),
 			row.get("alias", String.class),
@@ -601,11 +610,12 @@ public class PublicTrailService {
 			row.get("date", Long.class),
 			row.get("rate", Integer.class),
 			row.get("comment", String.class),
+			row.get("reviewed", Boolean.class),
 			new LinkedList<>()
 		)).all().collectList()
 		.flatMap(feedbacks -> {
 			if (feedbacks.isEmpty()) return Mono.just(feedbacks);
-			String sqlReplies = "SELECT public_trail_feedback_reply.reply_to, public_trail_feedback_reply.uuid, user_preferences.alias, public_trail_feedback_reply.date, public_trail_feedback_reply.comment, public_trail_feedback_reply.email FROM public_trail_feedback_reply LEFT JOIN user_preferences ON user_preferences.email = public_trail_feedback_reply.email WHERE public_trail_feedback_reply.reply_to IN ("
+			String sqlReplies = "SELECT public_trail_feedback_reply.reply_to, public_trail_feedback_reply.uuid, user_preferences.alias, public_trail_feedback_reply.date, public_trail_feedback_reply.comment, public_trail_feedback_reply.email, public_trail_feedback_reply.reviewed FROM public_trail_feedback_reply LEFT JOIN user_preferences ON user_preferences.email = public_trail_feedback_reply.email WHERE public_trail_feedback_reply.reply_to IN ("
 						+ String.join(",", feedbacks.stream().map(f -> "'" + f.getUuid() + "'").collect(Collectors.toSet())) + ") ORDER BY public_trail_feedback_reply.date DESC";
 			return r2dbc.query(DbUtils.operation(sqlReplies, null), row -> new TmpReply(
 				row.get("reply_to", UUID.class).toString(),
@@ -613,12 +623,13 @@ public class PublicTrailService {
 				row.get("alias", String.class),
 				youEmail.equals(row.get("email", String.class)),
 				row.get("date", Long.class),
-				row.get("comment", String.class)
+				row.get("comment", String.class),
+				row.get("reviewed", Boolean.class)
 			)).all().collectList()
 			.map(replies -> {
 				for (var reply : replies) {
 					var feedbackOpt = feedbacks.stream().filter(f -> f.getUuid().equals(reply.getCommentUuid())).findAny();
-					if (feedbackOpt.isPresent()) feedbackOpt.get().getReplies().add(new Reply(reply.getUuid(), reply.getAlias(), reply.isYou(), reply.getDate(), reply.getComment()));
+					if (feedbackOpt.isPresent()) feedbackOpt.get().getReplies().add(new Reply(reply.getUuid(), reply.getAlias(), reply.isYou(), reply.getDate(), reply.getComment(), reply.isReviewed()));
 				}
 				return feedbacks;
 			});
@@ -635,6 +646,7 @@ public class PublicTrailService {
 		private boolean you;
 		private long date;
 		private String comment;
+		private boolean reviewed;
 	}
 	
 	@Transactional

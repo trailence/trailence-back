@@ -1,5 +1,6 @@
 package org.trailence.trail.db;
 
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.r2dbc.repository.Query;
@@ -50,6 +51,17 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 		private String slug;
 		private long updatedAt;
 		private Long latestFeedbackAt;
+	}
+	
+	@Query("SELECT uuid, name, description FROM public_trails WHERE uuid IN (:uuids)")
+	Flux<TrailNameAndDescription> getTrailsNameAndDescription(Set<UUID> uuids);
+
+	@Data
+	@NoArgsConstructor
+	public static class TrailNameAndDescription {
+		private UUID uuid;
+		private String name;
+		private String description;
 	}
 	
 }

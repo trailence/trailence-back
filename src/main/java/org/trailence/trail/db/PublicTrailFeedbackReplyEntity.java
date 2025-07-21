@@ -21,5 +21,6 @@ public class PublicTrailFeedbackReplyEntity {
 	private String email;
 	private long date;
 	private String comment;
+	private boolean reviewed;
 	
 }

@@ -1,6 +1,10 @@
 package org.trailence.trail;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.core.io.buffer.DataBuffer;
@@ -13,9 +17,14 @@ import org.trailence.notifications.NotificationsService;
 import org.trailence.storage.FileService;
 import org.trailence.trail.db.ModerationMessageRepository;
 import org.trailence.trail.db.PhotoRepository;
+import org.trailence.trail.db.PublicTrailFeedbackReplyRepository;
+import org.trailence.trail.db.PublicTrailFeedbackRepository;
+import org.trailence.trail.db.PublicTrailFeedbackRepository.UuidAndTrailUuid;
+import org.trailence.trail.db.PublicTrailRepository;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailRepository;
+import org.trailence.trail.dto.FeedbackToReview;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
@@ -35,11 +44,15 @@ public class ModerationService {
 	private final PhotoRepository photoRepo;
 	private final TrailCollectionRepository collectionRepo;
 	private final ModerationMessageRepository messageRepo;
+	private final PublicTrailFeedbackRepository feedbackRepo;
+	private final PublicTrailFeedbackReplyRepository feedbackReplyRepo;
+	private final PublicTrailRepository publicTrailRepo;
 	private final TrailService trailService;
 	private final TrackService trackService;
 	private final PhotoService photoService;
 	private final FileService fileService;
 	private final NotificationsService notifService;
+	private final PublicTrailService publicTrailService;
 
 	public Flux<TrailAndPhotos> getTrailsToReview(Authentication auth) {
 		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : auth.getPrincipal().toString())
@@ -157,6 +170,60 @@ public class ModerationService {
 				return trailService.updateTrailAsModerator(trail, newDto, false);
 			})
 		);
+	}
+	
+	public Mono<List<FeedbackToReview>> getFeedbackToReview(Authentication auth) {
+		return feedbackRepo.getToReview().collectList()
+		.flatMap(uuids -> {
+			Set<UUID> notIn = new HashSet<>();
+			for (var u : uuids) notIn.add(u.getUuid());
+			if (notIn.isEmpty()) notIn.add(UUID.randomUUID());
+			return feedbackReplyRepo.getToReview(notIn).collectList()
+			.map(moreUuids -> {
+				if (moreUuids.isEmpty()) return uuids;
+				List<UuidAndTrailUuid> all = new ArrayList<>(uuids.size() + moreUuids.size());
+				all.addAll(uuids);
+				for (var m : moreUuids) if (!all.contains(m)) all.add(m);
+				return all;
+			});
+		})
+		.flatMap(feedbackUuids -> {
+			if (feedbackUuids.isEmpty()) return Mono.just(List.<FeedbackToReview>of());
+			Set<UUID> trailsUuids = new HashSet<>();
+			for (var f : feedbackUuids) trailsUuids.add(f.getPublicTrailUuid());
+			return publicTrailRepo.getTrailsNameAndDescription(trailsUuids)
+			.flatMap(trail -> {
+				FeedbackToReview result = new FeedbackToReview(trail.getUuid().toString(), trail.getName(), trail.getDescription(), new LinkedList<>());
+				return publicTrailService.fetchFeedbacks(trail.getUuid().toString(), sql -> {
+					sql.append(" AND public_trail_feedback.uuid IN (")
+					.append(String.join(",",feedbackUuids.stream().filter(f -> f.getPublicTrailUuid().equals(trail.getUuid())).map(u -> "'" + u.getUuid() + "'").toList()))
+					.append(')');
+				}, auth)
+				.map(feedbacks -> {
+					result.getFeedbacks().addAll(feedbacks);
+					return result;
+				});
+			})
+			.collectList();
+		});
+	}
+	
+	public Mono<Void> feedbackValidated(String feedbackUuid) {
+		return feedbackRepo.findById(UUID.fromString(feedbackUuid))
+		.flatMap(entity -> {
+			entity.setReviewed(true);
+			return feedbackRepo.save(entity);
+		})
+		.then();
+	}
+
+	public Mono<Void> feedbackReplyValidated(String replyUuid) {
+		return feedbackReplyRepo.findById(UUID.fromString(replyUuid))
+		.flatMap(entity -> {
+			entity.setReviewed(true);
+			return feedbackReplyRepo.save(entity);
+		})
+		.then();
 	}
 	
 }
