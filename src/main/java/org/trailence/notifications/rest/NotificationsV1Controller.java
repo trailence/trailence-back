@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.notifications.NotificationsService;
 import org.trailence.notifications.dto.Notification;
@@ -22,8 +23,12 @@ public class NotificationsV1Controller {
 	private final NotificationsService service;
 	
 	@GetMapping
-	public Flux<Notification> getMyNotifications(Authentication auth) {
-		return service.getMyNotifications(auth);
+	public Flux<Notification> getMyNotifications(
+		@RequestParam(name = "page", required = false, defaultValue = "0") int page,
+		@RequestParam(name = "size", required = false, defaultValue = "100") int size,
+		Authentication auth
+	) {
+		return service.getMyNotifications(page, size, auth);
 	}
 	
 	@PutMapping("/{uuid}")

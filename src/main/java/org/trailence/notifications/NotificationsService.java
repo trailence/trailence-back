@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
@@ -36,8 +38,10 @@ public class NotificationsService {
 		return r2dbc.insert(entity).then();
 	}
 	
-	public Flux<Notification> getMyNotifications(Authentication auth) {
-		return repo.findAllByOwner(auth.getPrincipal().toString()).map(NotificationsService::toDto);
+	public Flux<Notification> getMyNotifications(int page, int size, Authentication auth) {
+		if (page < 0) page = 0;
+		if (size < 1) size = 1; else if (size > 200) size = 200;
+		return repo.findAllByOwner(auth.getPrincipal().toString(), PageRequest.of(page, size, Direction.DESC, "date")).map(NotificationsService::toDto);
 	}
 	
 	public Mono<Notification> updateNotification(String uuid, Notification dto, Authentication auth) {
@@ -54,7 +58,7 @@ public class NotificationsService {
 	
 	@Scheduled(fixedRate = 24, timeUnit = TimeUnit.HOURS, initialDelay = 1)
 	public void clean() {
-		repo.deleteByDateLessThan(System.currentTimeMillis() - 100L * 24 * 60 * 60 * 1000).subscribe();
+		repo.deleteByDateLessThan(System.currentTimeMillis() - 200L * 24 * 60 * 60 * 1000).subscribe();
 	}
 	
 	private static Notification toDto(NotificationEntity entity) {
