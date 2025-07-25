@@ -476,7 +476,17 @@ public class TrailService {
     }
     
     private void handleFollowedTrails(List<TrailEntity> trails, String owner) {
-    	List<TrailEntity> eligibles = trails.stream().filter(trail -> trail.getFollowedUrl() != null && trail.getFollowedUrl().startsWith(protocol + "://" + hostname + "/trail/trailence/")).toList();
+    	List<TrailEntity> eligibles = trails.stream()
+    		.filter(trail -> 
+    			// followed url is on trailence
+    			trail.getFollowedUrl() != null && 
+    			trail.getFollowedUrl().startsWith(protocol + "://" + hostname + "/trail/trailence/") &&
+    			// source is the recorder
+    			"trailence_recorder".equals(trail.getSourceType()) &&
+    			// record occurred at creation date (not a copy for example) 
+    			trail.getSourceDate() != null && Math.abs(trail.getSourceDate() - trail.getCreatedAt()) < 60000
+    		)
+    		.toList();
     	if (eligibles.isEmpty()) return;
     	Flux.fromIterable(eligibles)
     	.flatMap(trail -> {
