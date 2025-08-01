@@ -19,6 +19,7 @@ public final class PublicTrailSearch {
 		private FilterNumeric negativeElevation;
 		private List<String> loopTypes;
 		private List<String> activities;
+		private FilterNumeric rate;
 	}
 	
 	@Data

@@ -2,17 +2,10 @@ package org.trailence.global.db;
 
 import org.springframework.data.relational.core.sql.Expression;
 
-import lombok.RequiredArgsConstructor;
-
-@RequiredArgsConstructor
-public class MinusExpression implements Expression {
-
-	private final Expression left;
-	private final Expression right;
+public class MinusExpression extends BinaryOperatorExpression {
 	
-	@Override
-	public String toString() {
-		return left.toString() + " - " + right.toString();
+	public MinusExpression(Expression left, Expression right) {
+		super("-", left, right);
 	}
 	
 }

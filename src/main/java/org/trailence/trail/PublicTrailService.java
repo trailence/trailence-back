@@ -34,7 +34,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
+import org.trailence.global.db.DivideFloatExpression;
 import org.trailence.global.db.MinusExpression;
+import org.trailence.global.db.MultiplyExpression;
+import org.trailence.global.db.PlusExpression;
 import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.ForbiddenException;
@@ -253,6 +256,7 @@ public class PublicTrailService {
 			where = applyFilterNumeric(where, request.getFilters().getNegativeElevation(), PublicTrailEntity.COL_NEGATIVE_ELEVATION);
 			where = applyFilterList(where, request.getFilters().getLoopTypes(), PublicTrailEntity.COL_LOOP_TYPE);
 			where = applyFilterList(where, request.getFilters().getActivities(), PublicTrailEntity.COL_ACTIVITY);
+			where = applyFilterRate(where, request.getFilters().getRate());
 		}
 		
 		String sql = new SqlBuilder()
@@ -282,6 +286,54 @@ public class PublicTrailService {
 	private Condition applyFilterList(Condition where, List<String> values, Expression valueExpression) {
 		if (values == null || values.isEmpty()) return where;
 		where = where.and(Conditions.in(valueExpression, values.stream().map(SQL::literalOf).toList()));
+		return where;
+	}
+	
+	private Condition applyFilterRate(Condition where, PublicTrailSearch.FilterNumeric filter) {
+		if (filter == null) return where;
+		if (filter.getFrom() == null && filter.getTo() == null) return where;
+		Expression ratesCount = new PlusExpression(
+			PublicTrailEntity.COL_NB_RATE0,
+			new PlusExpression(
+				PublicTrailEntity.COL_NB_RATE1,
+				new PlusExpression(
+					PublicTrailEntity.COL_NB_RATE2,
+					new PlusExpression(
+						PublicTrailEntity.COL_NB_RATE3,
+						new PlusExpression(
+							PublicTrailEntity.COL_NB_RATE4,
+							PublicTrailEntity.COL_NB_RATE5
+						)
+					)
+				)
+			)
+		);
+		Expression ratesTotal = new PlusExpression(
+			PublicTrailEntity.COL_NB_RATE1,
+			new PlusExpression(
+				new MultiplyExpression(PublicTrailEntity.COL_NB_RATE2, SQL.literalOf(2)),
+				new PlusExpression(
+					new MultiplyExpression(PublicTrailEntity.COL_NB_RATE3, SQL.literalOf(3)),
+					new PlusExpression(
+						new MultiplyExpression(PublicTrailEntity.COL_NB_RATE4, SQL.literalOf(4)),
+						new MultiplyExpression(PublicTrailEntity.COL_NB_RATE5, SQL.literalOf(5))
+					)
+				)
+			)
+		);
+		Expression rateValue = new DivideFloatExpression(ratesTotal, ratesCount);
+		if (filter.getFrom() != null) {
+			where = where.and(Conditions.isGreater(ratesCount, SQL.literalOf(0)));
+			where = where.and(Conditions.isGreaterOrEqualTo(rateValue, SQL.literalOf(filter.getFrom())));
+			if (filter.getTo() != null) {
+				where = where.and(Conditions.isLessOrEqualTo(rateValue, SQL.literalOf(filter.getTo())));
+			}
+		} else {
+			where = where.and(
+				Conditions.isEqual(ratesCount, SQL.literalOf(0))
+				.or(Conditions.isLessOrEqualTo(rateValue, SQL.literalOf(filter.getTo())))
+			);
+		}
 		return where;
 	}
 	

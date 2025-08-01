@@ -79,5 +79,11 @@ public class PublicTrailEntity {
 	public static final Column COL_NEGATIVE_ELEVATION = Column.create("negative_elevation", TABLE);
 	public static final Column COL_LOOP_TYPE = Column.create("loop_type", TABLE);
 	public static final Column COL_ACTIVITY = Column.create("activity", TABLE);
+	public static final Column COL_NB_RATE0 = Column.create("nb_rate0", TABLE);
+	public static final Column COL_NB_RATE1 = Column.create("nb_rate1", TABLE);
+	public static final Column COL_NB_RATE2 = Column.create("nb_rate2", TABLE);
+	public static final Column COL_NB_RATE3 = Column.create("nb_rate3", TABLE);
+	public static final Column COL_NB_RATE4 = Column.create("nb_rate4", TABLE);
+	public static final Column COL_NB_RATE5 = Column.create("nb_rate5", TABLE);
 	
 }
