@@ -23,12 +23,14 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.geo.Box;
 import org.springframework.data.geo.Point;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.sql.CaseExpression;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.Expressions;
 import org.springframework.data.relational.core.sql.SQL;
+import org.springframework.data.relational.core.sql.When;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -330,8 +332,13 @@ public class PublicTrailService {
 			}
 		} else {
 			where = where.and(
-				Conditions.isEqual(ratesCount, SQL.literalOf(0))
-				.or(Conditions.isLessOrEqualTo(rateValue, SQL.literalOf(filter.getTo())))
+				Conditions.isEqual(
+					CaseExpression.create(
+						When.when(Conditions.isEqual(ratesCount, SQL.literalOf(0)), SQL.literalOf(true))
+					)
+					.elseExpression(Conditions.isLessOrEqualTo(rateValue, SQL.literalOf(filter.getTo()))),
+					SQL.literalOf(true)
+				)
 			);
 		}
 		return where;
