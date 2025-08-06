@@ -73,6 +73,7 @@ import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsResponse;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileResponse;
+import org.trailence.trail.exceptions.TrailNotFound;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 
@@ -124,7 +125,7 @@ public class PublicTrailService {
 		return newData
 		.flatMap(tuple ->
 			trailRepo.findTrailToReview(UUID.fromString(request.getTrailUuid()), author)
-			.switchIfEmpty(Mono.error(new NotFoundException("trail", request.getTrailUuid() + "-" + author)))
+			.switchIfEmpty(Mono.error(new TrailNotFound(request.getTrailUuid(), author)))
 			.flatMap(fromTrail ->
 				r2dbc.insert(toTrackEntity(tuple.getT1(), request))
 				.then(Flux.fromIterable(request.getPhotos()).flatMap(p -> photoService.transferToPublic(UUID.fromString(p.getUuid()), author, tuple.getT1(), p), 1, 1).then())

@@ -25,6 +25,7 @@ public class AddLanguageAndTranslationsToPublicTrails implements Migration {
 	}
 	
 	@Override
+	@SuppressWarnings("java:S3776")
 	public void execute(R2dbcEntityTemplate db, ApplicationContext context) throws Exception {
 		var service = context.getBean(TranslationService.class);
 		db.query(
@@ -52,17 +53,16 @@ public class AddLanguageAndTranslationsToPublicTrails implements Migration {
 						try {
 							var b = bindings.bind(Json.of(TrailenceUtils.mapper.writeValueAsBytes(Map.of(target, translations.getT1().get()))));
 							sql.append(", name_translations = " + b.getPlaceholder());
-						} catch (Exception e) {}
+						} catch (Exception e) { /* ignore */ }
 					}
 					if (translations.getT2().isPresent()) {
 						try {
 							var b = bindings.bind(Json.of(TrailenceUtils.mapper.writeValueAsBytes(Map.of(target, translations.getT2().get()))));
 							sql.append(", description_translations = " + b.getPlaceholder());
-						} catch (Exception e) {}
+						} catch (Exception e) { /* ignore */ }
 					}
 					var uuidBinding = bindings.bind(trail.getT1());
 					sql.append(" WHERE uuid = " + uuidBinding.getPlaceholder());
-					System.out.println(sql.toString() + " // " + bindings.toString());
 					return db.getDatabaseClient().sql(DbUtils.operation(sql.toString(), bindings)).fetch().rowsUpdated();
 				});
 			})

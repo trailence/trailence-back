@@ -201,10 +201,8 @@ public class OutdoorActiveService {
 		if (map.get("communityInfo") instanceof Map communityInfo && communityInfo.get("rating") instanceof Number rating) {
 			rando.rating = rating.doubleValue();
 		}
-		if (map.get("category") instanceof Map category) {
-			if (category.get("id") instanceof String categoryId) {
-				rando.activity = categoryIdToActivity(categoryId);
-			}
+		if (map.get("category") instanceof Map category && category.get("id") instanceof String categoryId) {
+			rando.activity = categoryIdToActivity(categoryId);
 		}
 		if (rando.points != null && rando.points.size() > 2) return rando;
 		return null;
@@ -223,27 +221,27 @@ public class OutdoorActiveService {
 	
 	private String categoryIdToActivity(String id) {
 		switch (id) {
-		case "5210": case "5710":
+		case "5210", "5710":
 			return "walk";
-		case "5143": case "5140": case "5141": case "5142": case "5191": case "5643": case "5640": case "5641": case "5642": case "5691":
+		case "5143", "5140", "5141", "5142", "5191", "5643", "5640", "5641", "5642", "5691":
 			return "hiking";
-		case "5102": case "5602":
+		case "5102", "5602":
 			return "road-biking";
-		case "5101": case "5104": case "5262": case "5603": case "5601": case "5604": case "5762":
+		case "5101", "5104", "5262", "5603", "5601", "5604", "5762":
 			return "moutain-biking";
-		case "5170": case "5171": case "5670": case "5671":
+		case "5170", "5171", "5670", "5671":
 			return "running";
-		case "5190": case "5690":
+		case "5190", "5690":
 			return "via-ferrata";
-		case "5122": case "5125": case "5622": case "5625":
+		case "5122", "5125", "5622", "5625":
 			return "snowshoeing";
-		case "5124": case "5120": case "5323": case "5121": case "5624": case "5620": case "5823": case "5621":
+		case "5124", "5120", "5323", "5121", "5624", "5620", "5823", "5621":
 			return "skiing";
-		case "5330": case "5830":
+		case "5330", "5830":
 			return "rock-climbing";
-		case "5061": case "5062": case "5329": case "5339": case "5561": case "5562": case "5829": case "5839":
+		case "5061", "5062", "5329", "5339", "5561", "5562", "5829", "5839":
 			return "on-water";
-		case "5081": case "5581":
+		case "5081", "5581":
 			return "horseback-riding";
 		default: return null;
 		}

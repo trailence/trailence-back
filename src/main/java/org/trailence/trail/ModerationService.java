@@ -30,6 +30,7 @@ import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailAndPhotos;
 import org.trailence.trail.dto.TrailCollectionType;
+import org.trailence.trail.exceptions.TrailNotFound;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -69,7 +70,7 @@ public class ModerationService {
 		owner = owner.toLowerCase();
 		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findTrailToReview(UUID.fromString(trailUuid), owner)
-		.switchIfEmpty(Mono.error(new NotFoundException("trail", trailUuid + '-' + owner)))
+		.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, owner)))
 		.flatMap(trail ->
 			photoRepo.findAllByTrailUuidInAndOwner(List.of(trail.getUuid()), trail.getOwner())
 			.map(photoService::toDto)
@@ -107,7 +108,7 @@ public class ModerationService {
 		String owner = trail.getOwner().toLowerCase();
 		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findByUuidAndOwner(UUID.fromString(trail.getUuid()), owner)
-		.switchIfEmpty(Mono.error(new NotFoundException("trail", trail.getUuid() + '-' + owner)))				
+		.switchIfEmpty(Mono.error(new TrailNotFound(trail.getUuid(), owner)))				
 		.flatMap(entity -> trailService.updateTrailAsModerator(entity, trail, false));
 	}
 	
@@ -115,7 +116,7 @@ public class ModerationService {
 		String owner = trail.getOwner().toLowerCase();
 		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findByUuidAndOwner(UUID.fromString(trail.getUuid()), owner)
-		.switchIfEmpty(Mono.error(new NotFoundException("trail", trail.getUuid() + '-' + owner)))
+		.switchIfEmpty(Mono.error(new TrailNotFound(trail.getUuid(), owner)))
 		.flatMap(entity -> trailService.updateTrailAsModerator(entity, trail, true))
 		.flatMap(result -> notifService.create(owner, "publications.rejected", List.of(trail.getName(), trail.getUuid(), owner)).thenReturn(result));
 	}
@@ -127,13 +128,13 @@ public class ModerationService {
 		.switchIfEmpty(Mono.error(new NotFoundException("photo", photo.getUuid() + '-' + owner)))
 		.flatMap(entity ->
 			trailRepo.findByUuidAndOwner(entity.getTrailUuid(), owner)
-			.switchIfEmpty(Mono.error(new NotFoundException("trail", entity.getTrailUuid().toString() + '-' + owner)))
+			.switchIfEmpty(Mono.error(new TrailNotFound(entity.getTrailUuid().toString(), owner)))
 			.flatMap(trail ->
 				collectionRepo.findByUuidAndOwner(trail.getCollectionUuid(), owner)
 				.switchIfEmpty(Mono.error(new NotFoundException("collection", "PUB_SUBMIT-" + owner)))
 				.flatMap(collection -> {
 					if (!TrailCollectionType.PUB_SUBMIT.equals(collection.getType()))
-						return Mono.error(new NotFoundException("trail", entity.getTrailUuid().toString() + '-' + owner));
+						return Mono.error(new TrailNotFound(entity.getTrailUuid().toString(), owner));
 					return photoService.updatePhotoAsSuperUser(entity, photo);
 				})
 			)
@@ -161,7 +162,7 @@ public class ModerationService {
 		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		track.setOwner(owner);
 		return trailRepo.findTrailToReview(UUID.fromString(trailUuid), owner)
-		.switchIfEmpty(Mono.error(new NotFoundException("trail", trailUuid + '-' + owner)))
+		.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, owner)))
 		.flatMap(trail ->
 			trackService.createTrackAsSuperUser(track)
 			.flatMap(newTrack -> {
@@ -173,6 +174,29 @@ public class ModerationService {
 	}
 	
 	public Mono<List<FeedbackToReview>> getFeedbackToReview(Authentication auth) {
+		return getFeedbackUuidWithTrailToReview()
+		.flatMap(feedbackUuids -> {
+			if (feedbackUuids.isEmpty()) return Mono.just(List.<FeedbackToReview>of());
+			Set<UUID> trailsUuids = new HashSet<>();
+			for (var f : feedbackUuids) trailsUuids.add(f.getPublicTrailUuid());
+			return publicTrailRepo.getTrailsNameAndDescription(trailsUuids)
+			.flatMap(trail -> {
+				FeedbackToReview result = new FeedbackToReview(trail.getUuid().toString(), trail.getName(), trail.getDescription(), new LinkedList<>());
+				return publicTrailService.fetchFeedbacks(trail.getUuid().toString(), sql -> 
+					sql.append(" AND public_trail_feedback.uuid IN (")
+					.append(String.join(",",feedbackUuids.stream().filter(f -> f.getPublicTrailUuid().equals(trail.getUuid())).map(u -> "'" + u.getUuid() + "'").toList()))
+					.append(')')
+				, auth)
+				.map(feedbacks -> {
+					result.getFeedbacks().addAll(feedbacks);
+					return result;
+				});
+			})
+			.collectList();
+		});
+	}
+	
+	private Mono<List<UuidAndTrailUuid>> getFeedbackUuidWithTrailToReview() {
 		return feedbackRepo.getToReview().collectList()
 		.flatMap(uuids -> {
 			Set<UUID> notIn = new HashSet<>();
@@ -186,25 +210,6 @@ public class ModerationService {
 				for (var m : moreUuids) if (!all.contains(m)) all.add(m);
 				return all;
 			});
-		})
-		.flatMap(feedbackUuids -> {
-			if (feedbackUuids.isEmpty()) return Mono.just(List.<FeedbackToReview>of());
-			Set<UUID> trailsUuids = new HashSet<>();
-			for (var f : feedbackUuids) trailsUuids.add(f.getPublicTrailUuid());
-			return publicTrailRepo.getTrailsNameAndDescription(trailsUuids)
-			.flatMap(trail -> {
-				FeedbackToReview result = new FeedbackToReview(trail.getUuid().toString(), trail.getName(), trail.getDescription(), new LinkedList<>());
-				return publicTrailService.fetchFeedbacks(trail.getUuid().toString(), sql -> {
-					sql.append(" AND public_trail_feedback.uuid IN (")
-					.append(String.join(",",feedbackUuids.stream().filter(f -> f.getPublicTrailUuid().equals(trail.getUuid())).map(u -> "'" + u.getUuid() + "'").toList()))
-					.append(')');
-				}, auth)
-				.map(feedbacks -> {
-					result.getFeedbacks().addAll(feedbacks);
-					return result;
-				});
-			})
-			.collectList();
 		});
 	}
 	

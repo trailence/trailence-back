@@ -88,6 +88,7 @@ public class GeonamesService {
 		});
 	}
 	
+	@SuppressWarnings("java:S3740")
 	private void handleSearchResult(Map<String, Object> elementMap, List<Place> result) {
 		List<String> names = new LinkedList<>();
 		getPlaceElement(names, elementMap, "toponymName");

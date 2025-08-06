@@ -38,6 +38,7 @@ import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.Photo;
+import org.trailence.trail.exceptions.TrailNotFound;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -85,7 +86,7 @@ public class PhotoService {
 				return content.then(Mono.just(existing.getT1().get()));
 			}
 			if (existing.getT2().isEmpty()) {
-				return Mono.error(new NotFoundException("trail", trailUuid));
+				return Mono.error(new TrailNotFound(trailUuid, owner));
 			}
 			return quotaService.addPhoto(owner, size)
 			.then(
