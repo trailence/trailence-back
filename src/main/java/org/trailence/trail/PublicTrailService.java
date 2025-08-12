@@ -753,4 +753,8 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.just(""));
 	}
 	
+	public Mono<List<String>> searchExamples(int nb) {
+		return publicTrailRepo.searchExamples(nb).collectList();
+	}
+	
 }

@@ -64,4 +64,6 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 		private String description;
 	}
 	
+	@Query("SELECT uuid FROM public_trails ORDER BY RANDOM() LIMIT :nb")
+	Flux<String> searchExamples(int nb);
 }

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.UnauthorizedException;
@@ -156,6 +157,11 @@ public class PublicTrailV1Controller {
 				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_FOOTER))
 			))
 		);
+	}
+	
+	@GetMapping("/examples")
+	public Mono<List<String>> searchExamples(@RequestParam(name = "nb", required = false, defaultValue = "5") int nb) {
+		return service.searchExamples(nb);
 	}
 	
 }
