@@ -26,6 +26,14 @@ spring:
 
   codec:
     max-in-memory-size: 1MB
+    
+  application:
+    admin:
+      enabled: false
+  sql:
+    init:
+      enabled: false
+      mode: never
 
 trailence:
   jwt:

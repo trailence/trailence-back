@@ -126,7 +126,7 @@ public class PublicTrailV1Controller {
 		});
 	}
 	
-	private static final byte[] SITEMAP_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\r\n".getBytes(StandardCharsets.UTF_8);
+	private static final byte[] SITEMAP_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\n".getBytes(StandardCharsets.UTF_8);
 	private static final byte[] SITEMAP_FOOTER = "</urlset>".getBytes(StandardCharsets.UTF_8);
 	
 	@GetMapping("/sitemap.xml")
@@ -142,9 +142,22 @@ public class PublicTrailV1Controller {
 					if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
 					if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
 					String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
-					s.append("<url><loc>").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
-					s.append("<url><loc>").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
-					s.append("<url><loc>").append(baseUrl).append("trail/trailence/").append(slug.getSlug()).append("</loc><lastmod>").append(date).append("</lastmod></url>\r\n");
+					s.append("<url>\n");
+						s.append("<loc>").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("</loc>\n");
+						s.append("<lastmod>").append(date).append("</lastmod>\n");
+						s.append("<xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("\" />\n");
+						s.append("<xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("\" />\n");
+					s.append("</url>\n");
+					s.append("<url>\n");
+						s.append("<loc>").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("</loc>\n");
+						s.append("<lastmod>").append(date).append("</lastmod>\n");
+						s.append("<xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("\" />\n");
+						s.append("<xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("\" />\n");
+					s.append("</url>\n");
+					s.append("<url>\n");
+						s.append("<loc>").append(baseUrl).append("trail/trailence/").append(slug.getSlug()).append("</loc>\n");
+						s.append("<lastmod>").append(date).append("</lastmod>\n");
+					s.append("</url>\n");
 					return s;
 				})
 				.buffer(20)
