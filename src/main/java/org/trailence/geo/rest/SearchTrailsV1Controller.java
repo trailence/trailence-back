@@ -2,6 +2,9 @@ package org.trailence.geo.rest;
 
 import java.util.List;
 
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,11 +16,14 @@ import org.trailence.external.outdooractive.OutdoorActiveService;
 import org.trailence.external.visorando.VisorandoService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/search-trails/v1")
 @RequiredArgsConstructor
+@Slf4j
 public class SearchTrailsV1Controller {
 
 	private final VisorandoService visorando;
@@ -46,6 +52,16 @@ public class SearchTrailsV1Controller {
 	@PostMapping("/outdooractive/trails")
 	public Mono<List<OutdoorActiveService.Rando>> getTrails(@RequestBody List<String> ids, @RequestParam("lang") String lang, Authentication auth) {
 		return outdoor.getDetails(ids, lang, auth);
+	}
+	
+	@GetMapping(path = "/outdooractive/photo", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public ResponseEntity<Flux<DataBuffer>> getOutdoorActivePhoto(
+		@RequestParam("id") String photoId,
+		@RequestParam("size") String size,
+		Authentication auth
+	) {
+		var flux = outdoor.getPhoto(photoId, size, auth).doOnError(e -> log.warn("Error retrieving outdoor active photo " + photoId + " " + size, e));
+		return ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux);
 	}
 	
 }

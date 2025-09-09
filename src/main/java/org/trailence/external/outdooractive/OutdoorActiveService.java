@@ -9,16 +9,20 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyExtractors;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.exceptions.ForbiddenException;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -245,6 +249,17 @@ public class OutdoorActiveService {
 			return "horseback-riding";
 		default: return null;
 		}
+	}
+	
+	public Flux<DataBuffer> getPhoto(String id, String size, Authentication auth) {
+		if (!this.available(auth)) return Flux.error(new ForbiddenException());
+		WebClient client = WebClient.builder()
+				.baseUrl("https://img1.oastatic.com/img2")
+				.exchangeStrategies(ExchangeStrategies.builder().codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(1024 * 1024)).build())
+				.build();
+		return client.get()
+			.uri("/" + id + "/" + size + "/variant.jpg")
+			.exchangeToFlux(response -> response.body(BodyExtractors.toDataBuffers()));
 	}
 	
 }
