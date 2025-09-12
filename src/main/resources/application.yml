@@ -68,8 +68,8 @@ trailence:
     trails: ${FREE_PLAN_TRAILS:1000}
     tracks: ${FREE_PLAN_TRACKS:2000}
     tracks_size: ${FREE_PLAN_TRACKS_SIZE:10485760}
-    photos: ${FREE_PLAN_PHOTOS:500}
-    photos_size: ${FREE_PLAN_PHOTOS_SIZE:104857600}
+    photos: ${FREE_PLAN_PHOTOS:1000}
+    photos_size: ${FREE_PLAN_PHOTOS_SIZE:209715200}
     tags: ${FREE_PLAN_TAGS:500}
     trail_tags: ${FREE_PLAN_TRAIL_TAGS:2000}
     shares: ${FREE_PLAN_SHARES:50}

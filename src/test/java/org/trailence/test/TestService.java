@@ -338,7 +338,7 @@ public class TestService {
 					track1.getUuid(),
 					track2.getUuid(),
 					collection.getUuid(),
-					null, null, null
+					null, null, null, null
 				);
 				trails.add(trail);
 			}

@@ -21,5 +21,6 @@ CREATE TABLE IF NOT EXISTS public.trails
     current_track_uuid uuid NOT NULL,
     collection_uuid uuid NOT NULL,
     published_from_uuid uuid,
+    publication_data jsonb,
     CONSTRAINT trails_pkey PRIMARY KEY (uuid, owner)
 )

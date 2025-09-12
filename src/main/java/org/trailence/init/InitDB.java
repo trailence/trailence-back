@@ -62,6 +62,7 @@ public class InitDB {
 		new DatabaseMigration("0.18_public_trails_language"),
 		new AddLanguageAndTranslationsToPublicTrails(),
 		new DatabaseMigration("0.18_feedback_add_reviewed"),
+		new DatabaseMigration("1.0_trails_add_publication_data"),
 	};
 	
 	public void init(ApplicationContext context) {

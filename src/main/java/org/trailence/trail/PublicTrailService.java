@@ -735,8 +735,31 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.error(new NotFoundException("feedback-reply", uuid)))
 		.flatMap(entity -> {
 			if (!moderator && !entity.getEmail().equals(user)) return Mono.error(new ForbiddenException());
-			return feedbackRepo.deleteById(entity.getUuid());
+			return feedbackReplyRepo.deleteById(entity.getUuid());
 		});
+	}
+	
+	public Mono<Void> deletePublicTrail(String uuid, Authentication auth) {
+		UUID trailUuid = UUID.fromString(uuid);
+		return publicTrailRepo.findById(trailUuid)
+		.flatMap(trail ->
+			publicTrailRepo.delete(trail)
+			.then(publicTrackRepo.deleteByTrailUuid(trailUuid))
+			.then(
+				publicPhotoRepo.findAllByTrailUuid(trailUuid)
+				.flatMap(photo ->
+					fileService.deleteFile(photo.getFileId())
+					.then(publicPhotoRepo.delete(photo))
+				).then()
+			)
+			.then(
+				feedbackRepo.findAllByPublicTrailUuid(trailUuid)
+				.flatMap(comment ->
+					feedbackReplyRepo.deleteAllByReplyTo(comment.getUuid())
+					.then(feedbackRepo.delete(comment))
+				).then()
+			)
+		);
 	}
 	
 	public Flux<PublicTrailEntity> random() {

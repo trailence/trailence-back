@@ -173,4 +173,11 @@ public class ModerationV1Controller {
 		return service.feedbackReplyValidated(replyUuid);
 	}
 	
+	@DeleteMapping("/publicTrail/{trailUuid}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<Void> deletePublicTrail(@PathVariable("trailUuid") String trailUuid, Authentication auth) {
+		return publicTrailService.deletePublicTrail(trailUuid, auth);
+	}
+
+	
 }

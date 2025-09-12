@@ -1,8 +1,10 @@
 package org.trailence.trail;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -53,6 +55,9 @@ import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.user.db.UserEntity;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -139,6 +144,13 @@ public class TrailService {
                 entity.setCurrentTrackUuid(UUID.fromString(dto.getCurrentTrackUuid()));
                 if (dto.getPublishedFromUuid() != null)
                 	entity.setPublishedFromUuid(UUID.fromString(dto.getPublishedFromUuid()));
+                if (dto.getPublicationData() != null) {
+                	try {
+                		entity.setPublicationData(Json.of(TrailenceUtils.mapper.writeValueAsBytes(dto.getPublicationData())));
+            		} catch (Exception e) {
+            			log.error("Mapping error", e);
+            		}
+                }
                 entity.setCreatedAt(dto.getCreatedAt());
                 entity.setUpdatedAt(entity.getCreatedAt());
                 return entity;
@@ -212,6 +224,8 @@ public class TrailService {
     	ValidationUtils.field("followedUrl", dto.getFollowedUrl()).nullable().maxLength(2000);
     }
     
+    private static final List<String> SUPPORTED_LANGS = List.of("fr", "en");
+    
     private void validate(Trail dto) {
     	ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
     	ValidationUtils.field("name", dto.getName()).nullable().maxLength(200);
@@ -221,6 +235,32 @@ public class TrailService {
     	ValidationUtils.field("activity", dto.getActivity()).nullable().maxLength(20);
     	ValidationUtils.field("currentTrackUuid", dto.getCurrentTrackUuid()).notNull().isUuid();
     	ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
+    	var pubData = dto.getPublicationData();
+    	if (pubData != null) {
+        	var validPubData = new HashMap<String, Object>();
+    		if (pubData.get("lang") instanceof String lang && SUPPORTED_LANGS.contains(lang)) {
+    			validPubData.put("lang", lang);
+        		if (pubData.get("nameTranslations") instanceof Map m) {
+        			var nameTranslations = new HashMap<String, String>();
+        			for (var l : SUPPORTED_LANGS) {
+        				if (l.equals(lang) || !m.containsKey(l)) continue;
+        				var t = m.get(l);
+        				if (t instanceof String ts) nameTranslations.put(l, ts);
+        			}
+        			if (!nameTranslations.isEmpty()) validPubData.put("nameTranslations", nameTranslations);
+        		}
+        		if (pubData.get("descriptionTranslations") instanceof Map m) {
+        			var descriptionTranslations = new HashMap<String, String>();
+        			for (var l : SUPPORTED_LANGS) {
+        				if (l.equals(lang) || !m.containsKey(l)) continue;
+        				var t = m.get(l);
+        				if (t instanceof String ts) descriptionTranslations.put(l, ts);
+        			}
+        			if (!descriptionTranslations.isEmpty()) validPubData.put("descriptionTranslations", descriptionTranslations);
+        		}
+    		}
+    		dto.setPublicationData(validPubData);
+    	}
     }
 
     public Flux<Trail> bulkUpdate(List<Trail> dtos, Authentication auth) {
@@ -358,6 +398,20 @@ public class TrailService {
         	entity.setActivity(dto.getActivity());
         	changed = true;
         }
+        if (dto.getPublicationData() == null && entity.getPublicationData() != null) {
+        	entity.setPublicationData(null);
+        	changed = true;
+        } else if (dto.getPublicationData() != null) {
+        	try {
+        		var newData = Json.of(TrailenceUtils.mapper.writeValueAsBytes(dto.getPublicationData()));
+        		if (!Objects.equals(newData, entity.getPublicationData())) {
+        			entity.setPublicationData(newData);
+        			changed = true;
+        		}
+    		} catch (Exception e) {
+    			log.error("Mapping error", e);
+    		}
+        }
         return changed;
     }
 
@@ -450,6 +504,14 @@ public class TrailService {
     }
 
     public Trail toDTO(TrailEntity entity) {
+    	Map<String, Object> pubData = null;
+    	if (entity.getPublicationData() != null) {
+    		try {
+    			pubData = TrailenceUtils.mapper.readValue(entity.getPublicationData().asArray(), new TypeReference<Map<String, Object>>() {});
+    		} catch (Exception e) {
+    			log.error("Mapping error", e);
+    		}
+    	}
         return new Trail(
             entity.getUuid().toString(),
             entity.getOwner(),
@@ -471,7 +533,8 @@ public class TrailService {
             entity.getCurrentTrackUuid().toString(),
             entity.getCollectionUuid().toString(),
             entity.getPublishedFromUuid() != null ? entity.getPublishedFromUuid().toString() : null,
-            null, null
+            null, null,
+            pubData
         );
     }
     
