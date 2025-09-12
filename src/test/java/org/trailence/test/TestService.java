@@ -253,7 +253,8 @@ public class TestService {
 			for (var i = 0; i < wayPoints.length; ++i) {
 				wayPoints[i] = new WayPoint(
 					random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
-					RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100)
+					RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100),
+					null, null
 				);
 			}
 			return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints, 0);
@@ -338,7 +339,7 @@ public class TestService {
 					track1.getUuid(),
 					track2.getUuid(),
 					collection.getUuid(),
-					null, null, null
+					null, null, null, null
 				);
 				trails.add(trail);
 			}

@@ -42,8 +42,10 @@ public class ModerationV1Controller {
 
 	@GetMapping("/trailsToReview")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Flux<TrailAndPhotos> getTrailsToReview(Authentication auth) {
-		return service.getTrailsToReview(auth);
+	public Flux<TrailAndPhotos> getTrailsToReview(@RequestParam(name = "size", defaultValue = "100") int size, Authentication auth) {
+		if (size < 1) size = 100;
+		if (size > 500) size = 500;
+		return service.getTrailsToReview(size, auth);
 	}
 	
 	@GetMapping("/trailToReview/{trailUuid}/{trailOwner}")
@@ -172,5 +174,12 @@ public class ModerationV1Controller {
 	public Mono<Void> validateFeedbackReply(@PathVariable("replyUuid") String replyUuid) {
 		return service.feedbackReplyValidated(replyUuid);
 	}
+	
+	@DeleteMapping("/publicTrail/{trailUuid}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<Void> deletePublicTrail(@PathVariable("trailUuid") String trailUuid, Authentication auth) {
+		return publicTrailService.deletePublicTrail(trailUuid, auth);
+	}
+
 	
 }

@@ -1,5 +1,7 @@
 package org.trailence.trail.dto;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 
@@ -57,6 +59,8 @@ public class Track {
 		private Long t;
 		private String na;
 		private String de;
+		private Map<String, String> nt;
+		private Map<String, String> dt;
 	}
 	
 }

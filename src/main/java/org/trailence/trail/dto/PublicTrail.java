@@ -54,6 +54,8 @@ public class PublicTrail {
 	private Map<String, String> nameTranslations;
 	private Map<String, String> descriptionTranslations;
 	
+	private String sourceUrl;
+	
 	@Data
 	@AllArgsConstructor
 	public static class Photo {

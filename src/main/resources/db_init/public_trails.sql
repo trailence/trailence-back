@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS public.public_trails
     nb_rate5 bigint DEFAULT 0,
     lang character varying(2) NOT NULL DEFAULT 'fr',
     name_translations jsonb,
-    description_translations jsonb
+    description_translations jsonb,
+    source_url character varying(500) COLLATE pg_catalog."default"
 );
 
 CREATE INDEX IF NOT EXISTS public_trails_bounds

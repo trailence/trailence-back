@@ -45,6 +45,8 @@ public class CreatePublicTrailRequest {
 	private Map<String, String> nameTranslations;
 	private Map<String, String> descriptionTranslations;
 	
+	private String sourceUrl;
+	
 	@Data
 	public static class Photo {
 		private String uuid;

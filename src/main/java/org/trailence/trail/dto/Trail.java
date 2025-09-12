@@ -1,5 +1,7 @@
 package org.trailence.trail.dto;
 
+import java.util.Map;
+
 import org.trailence.global.dto.Versioned;
 
 import lombok.AllArgsConstructor;
@@ -39,5 +41,7 @@ public class Trail implements Versioned.Interface {
     private String publishedFromUuid;
     private String publicationMessageFromAuthor;
     private String publicationMessageFromModerator;
+    
+    private Map<String, Object> publicationData;
 
 }

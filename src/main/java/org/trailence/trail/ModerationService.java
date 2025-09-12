@@ -55,8 +55,8 @@ public class ModerationService {
 	private final NotificationsService notifService;
 	private final PublicTrailService publicTrailService;
 
-	public Flux<TrailAndPhotos> getTrailsToReview(Authentication auth) {
-		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : auth.getPrincipal().toString())
+	public Flux<TrailAndPhotos> getTrailsToReview(int size, Authentication auth) {
+		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : auth.getPrincipal().toString(), size)
 		.flatMap(trail ->
 			photoRepo.findAllByTrailUuidInAndOwner(List.of(trail.getUuid()), trail.getOwner())
 			.map(photoService::toDto)

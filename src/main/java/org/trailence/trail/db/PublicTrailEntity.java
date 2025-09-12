@@ -69,6 +69,8 @@ public class PublicTrailEntity {
 	private Json nameTranslations;
 	private Json descriptionTranslations;
 	
+	private String sourceUrl;
+	
 	public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("public_trails");
 	public static final Column COL_UUID = Column.create("uuid", TABLE);
 	public static final Column COL_DURATION = Column.create("duration", TABLE);

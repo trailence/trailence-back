@@ -6,6 +6,7 @@ import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.data.relational.core.sql.Column;
 import org.trailence.global.db.AbstractEntityUuidOwner;
 
+import io.r2dbc.postgresql.codec.Json;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -35,6 +36,8 @@ public class TrailEntity extends AbstractEntityUuidOwner {
     private UUID collectionUuid;
     
     private UUID publishedFromUuid;
+    
+    private Json publicationData;
     
     public static final org.springframework.data.relational.core.sql.Table TABLE = org.springframework.data.relational.core.sql.Table.create("trails");
     public static final Column COL_UUID = Column.create("uuid", TABLE);

@@ -129,7 +129,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(Trail[].class);
@@ -191,7 +191,7 @@ class TestTrails extends AbstractTest {
 			track1.getUuid(),
 			track1.getUuid(),
 			col2.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 404, "collection-not-found");
 		
@@ -208,7 +208,7 @@ class TestTrails extends AbstractTest {
 			track1.getUuid(),
 			track2.getUuid(),
 			col1.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 404, "track-not-found");
 		response = user1.post("/api/trail/v1/_bulkCreate", List.of(new Trail(
@@ -223,7 +223,7 @@ class TestTrails extends AbstractTest {
 			track2.getUuid(),
 			track1.getUuid(),
 			col1.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 404, "track-not-found");
 		
@@ -240,7 +240,7 @@ class TestTrails extends AbstractTest {
 			track1.getUuid(),
 			track1.getUuid(),
 			col1.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var trail = response.getBody().as(Trail[].class)[0];
@@ -303,7 +303,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "missing-uuid");
 		
@@ -319,7 +319,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-uuid");
 		
@@ -335,7 +335,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-name-too-long");
 		
@@ -351,7 +351,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-description-too-long");
 		
@@ -367,7 +367,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-location-too-long");
 		
@@ -383,7 +383,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-loopType-too-long");
 		
@@ -399,7 +399,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-activity-too-long");
 		
@@ -415,7 +415,7 @@ class TestTrails extends AbstractTest {
 			null,
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "missing-originalTrackUuid");
 		
@@ -431,7 +431,7 @@ class TestTrails extends AbstractTest {
 			"123",
 			track.getUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-originalTrackUuid");
 		
@@ -447,7 +447,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			null,
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "missing-currentTrackUuid");
 		
@@ -463,7 +463,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			"123",
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-currentTrackUuid");
 		
@@ -479,7 +479,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			null,
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "missing-collectionUuid");
 		
@@ -495,7 +495,7 @@ class TestTrails extends AbstractTest {
 			track.getUuid(),
 			track.getUuid(),
 			"123",
-			null, null, null
+			null, null, null, null
 		)));
 		TestUtils.expectError(response, 400, "invalid-collectionUuid");
 	}
@@ -588,7 +588,7 @@ class TestTrails extends AbstractTest {
 			null, null, null, null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		);
 		var response = user.post("/api/trail/v1/_bulkCreate", List.of(trail2));
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -613,7 +613,7 @@ class TestTrails extends AbstractTest {
 			null, null, null, null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		);
 		var response = user.put("/api/trail/v1/_bulkUpdate", List.of(update1));
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -631,7 +631,7 @@ class TestTrails extends AbstractTest {
 			null, null, null, null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		);
 		response = user.put("/api/trail/v1/_bulkUpdate", List.of(update2));
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -650,7 +650,7 @@ class TestTrails extends AbstractTest {
 			trail.getName(), trail.getDescription(), trail.getLocation(), null, trail.getLoopType(), trail.getActivity(), null, null, null, null, null, null,
 			trail.getOriginalTrackUuid(), trail.getCurrentTrackUuid(),
 			col.getUuid(),
-			null, null, null
+			null, null, null, null
 		);
 		var response = user.put("/api/trail/v1/_bulkUpdate", List.of(update1));
 		assertThat(response.statusCode()).isEqualTo(200);
