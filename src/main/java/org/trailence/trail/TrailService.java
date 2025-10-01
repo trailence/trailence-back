@@ -135,8 +135,7 @@ public class TrailService {
                 entity.setSourceType(dto.getSourceType());
                 entity.setSource(dto.getSource());
                 entity.setSourceDate(dto.getSourceDate());
-                if (dto.getFollowedUuid() != null)
-                	entity.setFollowedUuid(UUID.fromString(dto.getFollowedUuid()));
+               	entity.setFollowedUuid(dto.getFollowedUuid());
                 entity.setFollowedOwner(dto.getFollowedOwner());
                 entity.setFollowedUrl(dto.getFollowedUrl());
                 entity.setCollectionUuid(UUID.fromString(dto.getCollectionUuid()));
@@ -219,7 +218,7 @@ public class TrailService {
     	validate(dto);
     	ValidationUtils.field("originalTrackUuid", dto.getOriginalTrackUuid()).notNull().isUuid();
     	ValidationUtils.field("source", dto.getSource()).nullable().maxLength(2000);
-    	ValidationUtils.field("followedUuid", dto.getFollowedUuid()).nullable().isUuid();
+    	ValidationUtils.field("followedUuid", dto.getFollowedUuid()).nullable().maxLength(250);
     	ValidationUtils.field("followedOwner", dto.getFollowedOwner()).nullable().maxLength(250);
     	ValidationUtils.field("followedUrl", dto.getFollowedUrl()).nullable().maxLength(2000);
     }

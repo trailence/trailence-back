@@ -26,7 +26,7 @@ public class TrailEntity extends AbstractEntityUuidOwner {
     private String sourceType;
     private String source;
     private Long sourceDate;
-    private UUID followedUuid;
+    private String followedUuid;
     private String followedOwner;
     private String followedUrl;
 
