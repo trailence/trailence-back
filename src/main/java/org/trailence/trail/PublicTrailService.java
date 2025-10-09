@@ -369,6 +369,7 @@ public class PublicTrailService {
 	
 	public Mono<PublicTrail> getById(String uuid, Authentication auth) {
 		return publicTrailRepo.findById(UUID.fromString(uuid))
+		.switchIfEmpty(Mono.error(new NotFoundException("public-trail", uuid)))
 		.flatMap(trail ->
 			publicPhotoRepo.findAllByTrailUuid(trail.getUuid()).collectList()
 			.flatMap(photos ->
@@ -383,7 +384,8 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.defer(() -> {
 			String slug2 = URLEncoder.encode(slug, StandardCharsets.UTF_8);
 			if (slug2.equals(slug)) return Mono.empty();
-			return publicTrailRepo.findOneBySlug(slug2);
+			return publicTrailRepo.findOneBySlug(slug2)
+			.switchIfEmpty(Mono.error(new NotFoundException("public-trail", slug)));
 		}))
 		.flatMap(trail ->
 			publicPhotoRepo.findAllByTrailUuid(trail.getUuid()).collectList()

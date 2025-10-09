@@ -1,5 +1,7 @@
 package org.trailence.trail.rest;
 
+import java.util.List;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +19,6 @@ import org.trailence.trail.dto.UpdateShareRequest;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -33,8 +34,8 @@ public class ShareV2Controller {
 	}
 	
 	@GetMapping
-	public Flux<Share> getShares(Authentication auth) {
-		return RetryRest.retry(service.getShares(auth));
+	public Mono<List<Share>> getShares(Authentication auth) {
+		return RetryRest.retry(service.getShares(auth).collectList());
 	}
 	
 	@DeleteMapping("/{from}/{id}")
