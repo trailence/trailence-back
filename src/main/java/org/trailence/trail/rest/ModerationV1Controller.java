@@ -157,6 +157,12 @@ public class ModerationV1Controller {
 		return translation.translate(text, from, to).switchIfEmpty(Mono.just(""));
 	}
 	
+	@PostMapping("/translateai")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<String> translateWithAI(@RequestBody String text) {
+		return translation.translateWithAI(text);
+	}
+	
 	@GetMapping("/commentsToReview")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
 	public Mono<List<FeedbackToReview>> getFeedbackToReview(Authentication auth) {

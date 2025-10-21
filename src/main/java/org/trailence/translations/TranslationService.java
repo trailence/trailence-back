@@ -3,19 +3,24 @@ package org.trailence.translations;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.trailence.external.aistudio.AIStudioService;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class TranslationService {
+	
+	private final AIStudioService ai;
 
 	@Value("${trailence.translations.url:}")
 	private String baseUrl;
@@ -69,6 +74,10 @@ public class TranslationService {
 			log.error("Error translating from {} to {} text {}", from, to, text, e);
 			return Mono.empty();
 		});
+	}
+	
+	public Mono<String> translateWithAI(String text) {
+		return this.ai.generateContent(text);
 	}
 	
 	@Data

@@ -32,6 +32,7 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
+import org.trailence.global.exceptions.ConflictException;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
@@ -293,8 +294,8 @@ public class TrailService {
     	return before.then(Mono.defer(() -> {
     		boolean updated = this.updateEntity(entity, dto, checksAndActions, entity.getOwner(), false);
     		if (!updated) return Mono.just(dto);
-    		return checksAndActions.execute().then(DbUtils.updateByUuidAndOwner(r2dbc, entity))
-            .flatMap(nb -> nb == 0 ? Mono.empty() : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
+    		return checksAndActions.execute(DbUtils.updateByUuidAndOwner(r2dbc, entity), nb -> nb > 0)
+            .flatMap(nb -> nb == 0 ? Mono.error(new ConflictException("trail-conflict", "Conflict with another version")) : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
             .map(this::toDTO)
             .flatMap(response ->
             	moderationMessageRepo.findOneByUuidAndOwner(entity.getUuid(), entity.getOwner())
@@ -355,7 +356,7 @@ public class TrailService {
         		.switchIfEmpty(Mono.just(Optional.<Throwable>of(new NotFoundException("collection", newUuid.toString()))))
         	);
         	if (fromOwner) {
-	        	checksAndActions.addAction(
+	        	checksAndActions.addActionOnSuccess(
 	        		trailTagService.trailsDeleted(Set.of(entity.getUuid()), owner)
 	        	);
         	}
@@ -369,7 +370,7 @@ public class TrailService {
         		.map(exists -> exists.booleanValue() ? Optional.empty() : Optional.of(new TrackNotFound(owner, newUuid.toString())))
         	);
         	if (!entity.getCurrentTrackUuid().equals(entity.getOriginalTrackUuid()))
-        		checksAndActions.addAction(trackService.deleteTracksWithQuota(Set.of(entity.getCurrentTrackUuid()), owner));
+        		checksAndActions.addActionOnSuccess(trackService.deleteTracksWithQuota(Set.of(entity.getCurrentTrackUuid()), owner));
             entity.setCurrentTrackUuid(newUuid);
             changed = true;
         }

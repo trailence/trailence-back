@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.apache.commons.lang3.function.FailableConsumer;
 import org.apache.commons.lang3.function.FailableFunction;
@@ -149,19 +150,24 @@ public final class BulkUtils {
 				ChecksAndActions checksAndActions = new ChecksAndActions();
 				boolean updated = entityUpdater.apply(entity, dto, checksAndActions);
 				if (!updated) return Mono.just(entity);
-				return checksAndActions.execute()
-				.then(DbUtils.updateByUuidAndOwner(r2dbc, entity))
+				return checksAndActions.execute(DbUtils.updateByUuidAndOwner(r2dbc, entity), nb -> nb > 0)
 	            .flatMap(nb -> nb == 0 ? Mono.empty() : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()));
 			}
 		);
 	}
 	
 	public static class ChecksAndActions {
-		private Mono<Boolean> actions = Mono.just(true);
+		private Mono<Boolean> actionsBefore = Mono.just(true);
+		private Mono<Void> actionsOnSuccess = Mono.empty();
 		private Mono<Optional<Throwable>> checks = Mono.just(Optional.empty());
 		
-		public ChecksAndActions addAction(Mono<?> action) {
-			this.actions = this.actions.then(action.thenReturn(true));
+		public ChecksAndActions addActionBefore(Mono<?> action) {
+			this.actionsBefore = this.actionsBefore.then(action.thenReturn(true));
+			return this;
+		}
+		
+		public ChecksAndActions addActionOnSuccess(Mono<?> action) {
+			this.actionsOnSuccess = this.actionsOnSuccess.then(action.then());
 			return this;
 		}
 		
@@ -173,11 +179,17 @@ public final class BulkUtils {
 			return this;
 		}
 
-		public Mono<Void> execute() {
+		public <T> Mono<T> execute(Mono<T> operation, Predicate<T> isSuccess) {
 			return checks.flatMap(error -> {
 	        	if (error.isPresent()) return Mono.error(error.get());
-	        	return actions.then();
-	        });
+	        	return actionsBefore.then();
+	        })
+			.then(operation)
+			.flatMap(result -> {
+				boolean success = isSuccess.test(result);
+				if (success) return this.actionsOnSuccess.thenReturn(result);
+				return Mono.just(result);
+			});
 		}
 	}
 	
