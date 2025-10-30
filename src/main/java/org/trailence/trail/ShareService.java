@@ -204,10 +204,10 @@ public class ShareService {
 	
 	public Flux<Share> getShares(Authentication auth) {
 		String user = auth.getPrincipal().toString();
-		Flux<Share> sharedByMe = shareRepo.findAllByOwner(user).flatMap(this::myShareWithElements);
+		Flux<Share> sharedByMe = shareRepo.findAllByOwner(user).flatMap(this::myShareWithElements, 1, 1);
 		Flux<Share> sharedWithMe = shareRecipientRepo.findAllByRecipient(user).collectList()
 			.flatMapMany(this::getSharesFromRecipients)
-			.flatMap(share -> getTrails(share).map(trails -> toDto(share, List.of(user), null, trails)));
+			.flatMap(share -> getTrails(share).map(trails -> toDto(share, List.of(user), null, trails)), 1, 1);
 		return Flux.concat(sharedByMe, sharedWithMe);
 	}
 	
