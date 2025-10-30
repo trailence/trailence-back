@@ -12,8 +12,10 @@ import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +26,7 @@ import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.UnauthorizedException;
 import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.MyPublicTrail;
+import org.trailence.trail.dto.PatchPublicTrailRequest;
 import org.trailence.trail.dto.PublicTrack;
 import org.trailence.trail.dto.PublicTrail;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
@@ -93,6 +96,18 @@ public class PublicTrailV1Controller {
 	@GetMapping("/track/{trailUuid}")
 	public Mono<PublicTrack> getTrack(@PathVariable("trailUuid") String trailUuid) {
 		return service.getTrack(trailUuid);
+	}
+	
+	@PatchMapping("/trail/{trailUuid}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<PublicTrail> patchPublicTrail(@PathVariable("trailUuid") String trailUuid, @RequestBody PatchPublicTrailRequest request, Authentication auth) {
+		return service.patchPublicTrail(trailUuid, request, auth);
+	}
+	
+	@GetMapping("/trail")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<List<String>> getAllIds(@RequestParam("offset") long offset, @RequestParam("limit") int limit, Authentication auth) {
+		return service.getAllIds(offset, limit);
 	}
 	
 	@GetMapping(value = "/random", produces = {"text/html"})

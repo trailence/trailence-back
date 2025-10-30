@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.geo.Box;
 import org.springframework.data.geo.Point;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
@@ -64,6 +65,7 @@ import org.trailence.trail.dto.CreateFeedbackRequest;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.MyFeedback;
 import org.trailence.trail.dto.MyPublicTrail;
+import org.trailence.trail.dto.PatchPublicTrailRequest;
 import org.trailence.trail.dto.PublicTrack;
 import org.trailence.trail.dto.PublicTrail;
 import org.trailence.trail.dto.PublicTrailFeedback;
@@ -365,6 +367,19 @@ public class PublicTrailService {
 			uuids.size() <= l ? uuids : uuids.subList(0, l),
 			uuids.size() > l
 		));
+	}
+	
+	public Mono<List<String>> getAllIds(long offset, int limit) {
+		String sql = new SqlBuilder()
+		.select(PublicTrailEntity.COL_UUID)
+		.from(PublicTrailEntity.TABLE)
+		.orderBy(List.of(Order.asc("uuid")), Map.of("uuid", "uuid"))
+		.offset(offset)
+		.limit(limit)
+		.build();
+		
+		return r2dbc.query(DbUtils.operation(sql, null), row -> row.get("uuid", UUID.class).toString()).all()
+		.collectList();
 	}
 	
 	public Mono<PublicTrail> getById(String uuid, Authentication auth) {
@@ -746,6 +761,7 @@ public class PublicTrailService {
 	public Mono<Void> deletePublicTrail(String uuid, Authentication auth) {
 		UUID trailUuid = UUID.fromString(uuid);
 		return publicTrailRepo.findById(trailUuid)
+		.switchIfEmpty(Mono.error(new TrailNotFound(uuid, "trailence")))
 		.flatMap(trail ->
 			publicTrailRepo.delete(trail)
 			.then(publicTrackRepo.deleteByTrailUuid(trailUuid))
@@ -764,6 +780,18 @@ public class PublicTrailService {
 				).then()
 			)
 		);
+	}
+	
+	public Mono<PublicTrail> patchPublicTrail(String uuid, PatchPublicTrailRequest request, Authentication auth) {
+		UUID trailUuid = UUID.fromString(uuid);
+		return publicTrailRepo.findById(trailUuid)
+		.switchIfEmpty(Mono.error(new TrailNotFound(uuid, "trailence")))
+		.flatMap(trail -> {
+			if (request.getLoopType() != null) trail.setLoopType(request.getLoopType());
+			return publicTrailRepo.save(trail);
+		})
+		.flatMap(trail -> this.getById(uuid, auth))
+		;
 	}
 	
 	public Flux<PublicTrailEntity> random() {
