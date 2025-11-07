@@ -26,11 +26,12 @@ public class GeonamesService {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Mono<List<List<String>>> findNearbyPlaceName(double lat, double lng, String language) {
+	public Mono<List<List<String>>> findNearbyPlaceName(double lat, double lng, long metersRadius, String language) {
 		if (username.isEmpty()) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl(url).build();
+		long radius = Math.round(metersRadius / 1000.0d);
 		return client.get()
-		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}&radius=2", Map.of("lat", lat, "lng", lng, "lang", language, "username", username))
+		.uri("/findNearbyPlaceNameJSON?lat={lat}&lng={lng}&lang={lang}&style=full&localCountry=false&username={username}&radius={radius}", Map.of("lat", lat, "lng", lng, "lang", language, "username", username, "radius", radius))
 		.exchangeToMono(response -> response.bodyToMono(Map.class))
 		.map(response -> {
 			Object geonames = response.get("geonames");

@@ -20,8 +20,15 @@ public class PlaceV1Controller {
 	private final GeonamesService geonames;
 	
 	@GetMapping
-	public Mono<List<List<String>>> getPlaces(@RequestParam("lat") double lat, @RequestParam("lng") double lng, @RequestParam("lang") String language) {
-		return geonames.findNearbyPlaceName(lat, lng, language);
+	public Mono<List<List<String>>> getPlaces(
+		@RequestParam("lat") double lat, @RequestParam("lng") double lng,
+		@RequestParam(name = "radius", defaultValue = "5000", required = false) Long metersRadius,
+		@RequestParam("lang") String language
+	) {
+		if (metersRadius == null) metersRadius = 5000L;
+		if (metersRadius < 1000) metersRadius = 1000L;
+		if (metersRadius > 50000) metersRadius = 50000L;
+		return geonames.findNearbyPlaceName(lat, lng, metersRadius, language);
 	}
 	
 	@GetMapping("/search")
