@@ -28,7 +28,7 @@ public final class GeonamesStub {
 			.withQueryParam("lang", equalTo(lang))
 			.withQueryParam("style", equalTo("full"))
 			.withQueryParam("localCountry", equalTo("false"))
-			.withQueryParam("radius", equalTo("2"))
+			.withQueryParam("radius", equalTo("5"))
 			.withQueryParam("username", equalTo("geo_user"))
 			.willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(TestUtils.getResource("geonames/places.json")))
 		);
