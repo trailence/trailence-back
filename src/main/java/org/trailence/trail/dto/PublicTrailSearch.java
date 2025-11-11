@@ -20,6 +20,8 @@ public final class PublicTrailSearch {
 		private List<String> loopTypes;
 		private List<String> activities;
 		private FilterNumeric rate;
+		private String textSearch;
+		private String textSearchLang;
 	}
 	
 	@Data

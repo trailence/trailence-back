@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS public.public_trails
     lang character varying(2) NOT NULL DEFAULT 'fr',
     name_translations jsonb,
     description_translations jsonb,
-    source_url character varying(500) COLLATE pg_catalog."default"
+    source_url character varying(500) COLLATE pg_catalog."default",
+    search_text_fr tsvector DEFAULT NULL,
+    search_text_en tsvector DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS public_trails_bounds
@@ -77,6 +79,42 @@ CREATE INDEX IF NOT EXISTS public_trails_zoom9
 CREATE INDEX IF NOT EXISTS public_trails_zoom10
     ON public.public_trails USING btree
     (tile_zoom10);
+
+DO
+$$
+BEGIN
+  IF EXISTS (
+    SELECT column_name
+    FROM information_schema.columns
+	WHERE table_schema = current_schema()
+	AND table_name = 'public_trails'
+	AND column_name = 'search_text_fr'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS public_trails_search_text_fr
+      ON public.public_trails USING GIN (search_text_fr);
+  END IF;
+END;
+$$
+LANGUAGE plpgsql;
+
+DO
+$$
+BEGIN
+  IF EXISTS (
+    SELECT column_name
+    FROM information_schema.columns
+	WHERE table_schema = current_schema()
+	AND table_name = 'public_trails'
+	AND column_name = 'search_text_en'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS public_trails_search_text_en
+      ON public.public_trails USING GIN (search_text_en);
+  END IF;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
     
 CREATE TABLE IF NOT EXISTS public.public_tracks

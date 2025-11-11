@@ -19,11 +19,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Triple;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.geo.Box;
 import org.springframework.data.geo.Point;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.r2dbc.dialect.DialectResolver;
 import org.springframework.data.relational.core.sql.CaseExpression;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Condition;
@@ -32,6 +34,7 @@ import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.Expressions;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.When;
+import org.springframework.r2dbc.core.binding.MutableBindings;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -110,6 +113,8 @@ public class PublicTrailService {
 	private final NotificationsService notificationsService;
 	private final UserPreferencesService prefService;
 	
+	private static final Map<String, String> TEXT_SEARCH_LANGS = Map.of("fr", "french", "en", "english");
+	
 	@Transactional
 	public Mono<String> create(CreatePublicTrailRequest request, Authentication auth) {
 		String author = request.getAuthor().toLowerCase();
@@ -132,7 +137,7 @@ public class PublicTrailService {
 			.flatMap(fromTrail ->
 				r2dbc.insert(toTrackEntity(tuple.getT1(), request))
 				.then(Flux.fromIterable(request.getPhotos()).flatMap(p -> photoService.transferToPublic(UUID.fromString(p.getUuid()), author, tuple.getT1(), p), 1, 1).then())
-				.then(r2dbc.insert(toTrailEntity(tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), request)))
+				.then(r2dbc.insert(toTrailEntity(tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), request)).flatMap(entity -> updateTextSearch(entity)))
 				.then(trailService.delete(Flux.just(fromTrail), author))
 				.then(notificationsService.create(author, "publications.accepted", List.of(request.getName(), tuple.getT1().toString())))
 			)
@@ -237,6 +242,42 @@ public class PublicTrailService {
 		);
 	}
 	
+	private Mono<Void> updateTextSearch(PublicTrailEntity entity) {
+		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
+		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create());
+		
+		Map<String, String> nameTranslations = new HashMap<>();
+		try {
+			nameTranslations = TrailenceUtils.mapper.readValue(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {});
+		} catch (Exception e) {
+			log.error("Mapping error", e);
+		}
+		List<Tuple3<String, String, String>> searchTexts = new LinkedList<>();
+		for (var entry : TEXT_SEARCH_LANGS.entrySet()) {
+			String langCode = entry.getKey();
+			String langName = entry.getValue();
+			String value;
+			if (langCode.equals(entity.getLang())) value = entity.getName();
+			else if (nameTranslations.containsKey(langCode)) value = nameTranslations.get(langCode);
+			else value = entity.getName();
+			if (entity.getLocation() != null) value += " " + entity.getLocation();
+			searchTexts.add(Tuples.of(langCode, langName, value));
+		}
+		
+		StringBuilder sql = new StringBuilder(256);
+		sql.append("UPDATE ").append(PublicTrailEntity.TABLE.toString());
+		sql.append(" SET ");
+		boolean first = true;
+		for (var lang : searchTexts) {
+			var marker = bindings.bind(lang.getT3());
+			if (first) first = false; else sql.append(',');
+			sql.append("search_text_").append(lang.getT1()).append(" = to_tsvector('").append(lang.getT2()).append("', unaccent(lower(").append(marker.getPlaceholder()).append(")))");
+		}
+		sql.append(" WHERE ").append(PublicTrailEntity.COL_UUID.toString()).append(" = '").append(entity.getUuid().toString()).append('\'');
+		
+		return r2dbc.getDatabaseClient().sql(DbUtils.operation(sql.toString(), bindings)).fetch().rowsUpdated().then();
+	}
+	
 	private static PublicTrackEntity toTrackEntity(UUID uuid, CreatePublicTrailRequest request) {
 		try {
 			return new PublicTrackEntity(
@@ -254,7 +295,9 @@ public class PublicTrailService {
 
 		Column zoomColumn = Column.create("tile_zoom" + request.getZoom(), PublicTrailEntity.TABLE);
 		
-		Condition where = getConditionOnTilesAndFilters(zoomColumn, request.getTiles(), request.getFilters());
+		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
+		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create()); 
+		Condition where = getConditionOnTilesAndFilters(zoomColumn, request.getTiles(), request.getFilters(), bindings);
 		
 		String sql = new SqlBuilder()
 		.select(
@@ -266,7 +309,7 @@ public class PublicTrailService {
 		.groupBy(zoomColumn)
 		.build();
 
-		return r2dbc.query(DbUtils.operation(sql, null), row -> new PublicTrailSearch.NbTrailsByTile(row.get("tile", Integer.class), row.get("nb_trails", Long.class)))
+		return r2dbc.query(DbUtils.operation(sql, bindings), row -> new PublicTrailSearch.NbTrailsByTile(row.get("tile", Integer.class), row.get("nb_trails", Long.class)))
 			.all().collectList()
 			.flatMap(counts -> {
 				SearchByTileResponse response = new SearchByTileResponse(counts, null);
@@ -289,16 +332,18 @@ public class PublicTrailService {
 	}
 	
 	private Mono<List<String>> getUuidsFromTilesSearch(Column zoomColumn, List<Integer> tiles, Filters filters) {
+		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
+		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create()); 
 		String sql = new SqlBuilder()
 		.select(PublicTrailEntity.COL_UUID)
 		.from(PublicTrailEntity.TABLE)
-		.where(getConditionOnTilesAndFilters(zoomColumn, tiles, filters))
+		.where(getConditionOnTilesAndFilters(zoomColumn, tiles, filters, bindings))
 		.build();
-		return r2dbc.query(DbUtils.operation(sql, null), row -> row.get(0, UUID.class).toString())
+		return r2dbc.query(DbUtils.operation(sql, bindings), row -> row.get(0, UUID.class).toString())
 		.all().collectList();
 	}
 	
-	private Condition getConditionOnTilesAndFilters(Column zoomColumn, List<Integer> tiles, Filters filters) {
+	private Condition getConditionOnTilesAndFilters(Column zoomColumn, List<Integer> tiles, Filters filters, MutableBindings bindings) {
 		Condition where = Conditions.in(zoomColumn,tiles.stream().map(SQL::literalOf).toList());
 		if (filters != null) {
 			where = applyFilterNumeric(where, filters.getDuration(), new MinusExpression(PublicTrailEntity.COL_DURATION, PublicTrailEntity.COL_BREAKS_DURATION));
@@ -309,6 +354,15 @@ public class PublicTrailService {
 			where = applyFilterList(where, filters.getLoopTypes(), PublicTrailEntity.COL_LOOP_TYPE);
 			where = applyFilterList(where, filters.getActivities(), PublicTrailEntity.COL_ACTIVITY);
 			where = applyFilterRate(where, filters.getRate());
+			if (filters.getTextSearch() != null && filters.getTextSearchLang() != null && !filters.getTextSearch().isBlank() && TEXT_SEARCH_LANGS.keySet().contains(filters.getTextSearchLang())) {
+				var marker = bindings.bind(filters.getTextSearch());
+				where = where.and(
+					Conditions.just(
+						"search_text_" + filters.getTextSearchLang() +
+						" @@ websearch_to_tsquery('" + TEXT_SEARCH_LANGS.get(filters.getTextSearchLang()) + "', unaccent(lower(" + marker.getPlaceholder() + ")))"
+					)
+				);
+			}
 		}
 		return where;
 	}

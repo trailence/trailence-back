@@ -65,6 +65,7 @@ public class InitDB {
 		new DatabaseMigration("1.0_trails_add_publication_data"),
 		new DatabaseMigration("1.0_public_trails_add_source_url"),
 		new DatabaseMigration("1.0_trails_followed_uuid_varchar"),
+		new DatabaseMigration("1.2_public_trails_search_text"),
 	};
 	
 	public void init(ApplicationContext context) {
