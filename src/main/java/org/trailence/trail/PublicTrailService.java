@@ -71,6 +71,7 @@ import org.trailence.trail.dto.PublicTrail;
 import org.trailence.trail.dto.PublicTrailFeedback;
 import org.trailence.trail.dto.PublicTrailFeedback.Reply;
 import org.trailence.trail.dto.PublicTrailSearch;
+import org.trailence.trail.dto.PublicTrailSearch.Filters;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsResponse;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileRequest;
@@ -253,17 +254,7 @@ public class PublicTrailService {
 
 		Column zoomColumn = Column.create("tile_zoom" + request.getZoom(), PublicTrailEntity.TABLE);
 		
-		Condition where = Conditions.in(zoomColumn, request.getTiles().stream().map(SQL::literalOf).toList());
-		if (request.getFilters() != null) {
-			where = applyFilterNumeric(where, request.getFilters().getDuration(), new MinusExpression(PublicTrailEntity.COL_DURATION, PublicTrailEntity.COL_BREAKS_DURATION));
-			where = applyFilterNumeric(where, request.getFilters().getEstimatedDuration(), PublicTrailEntity.COL_ESTIMATED_DURATION);
-			where = applyFilterNumeric(where, request.getFilters().getDistance(), PublicTrailEntity.COL_DISTANCE);
-			where = applyFilterNumeric(where, request.getFilters().getPositiveElevation(), PublicTrailEntity.COL_POSITIVE_ELEVATION);
-			where = applyFilterNumeric(where, request.getFilters().getNegativeElevation(), PublicTrailEntity.COL_NEGATIVE_ELEVATION);
-			where = applyFilterList(where, request.getFilters().getLoopTypes(), PublicTrailEntity.COL_LOOP_TYPE);
-			where = applyFilterList(where, request.getFilters().getActivities(), PublicTrailEntity.COL_ACTIVITY);
-			where = applyFilterRate(where, request.getFilters().getRate());
-		}
+		Condition where = getConditionOnTilesAndFilters(zoomColumn, request.getTiles(), request.getFilters());
 		
 		String sql = new SqlBuilder()
 		.select(
@@ -276,7 +267,50 @@ public class PublicTrailService {
 		.build();
 
 		return r2dbc.query(DbUtils.operation(sql, null), row -> new PublicTrailSearch.NbTrailsByTile(row.get("tile", Integer.class), row.get("nb_trails", Long.class)))
-			.all().collectList().map(SearchByTileResponse::new);
+			.all().collectList()
+			.flatMap(counts -> {
+				SearchByTileResponse response = new SearchByTileResponse(counts, null);
+				Integer maxCount = request.getReturnUuidsWhenLessThan();
+				if (maxCount != null && (maxCount.intValue() < 1 || maxCount.intValue() > 200)) maxCount = null;
+				if (maxCount == null) return Mono.just(response);
+				long total = 0;
+				List<Integer> tiles = new LinkedList<>();
+				for (var tile : counts) {
+					total += tile.getNbTrails();
+					tiles.add(tile.getTile());
+				}
+				if (total == 0 || total > maxCount.longValue()) return Mono.just(response);
+				return getUuidsFromTilesSearch(zoomColumn, tiles, request.getFilters())
+				.map(uuids -> {
+					response.setUuids(uuids);
+					return response;
+				});
+			});
+	}
+	
+	private Mono<List<String>> getUuidsFromTilesSearch(Column zoomColumn, List<Integer> tiles, Filters filters) {
+		String sql = new SqlBuilder()
+		.select(PublicTrailEntity.COL_UUID)
+		.from(PublicTrailEntity.TABLE)
+		.where(getConditionOnTilesAndFilters(zoomColumn, tiles, filters))
+		.build();
+		return r2dbc.query(DbUtils.operation(sql, null), row -> row.get(0, UUID.class).toString())
+		.all().collectList();
+	}
+	
+	private Condition getConditionOnTilesAndFilters(Column zoomColumn, List<Integer> tiles, Filters filters) {
+		Condition where = Conditions.in(zoomColumn,tiles.stream().map(SQL::literalOf).toList());
+		if (filters != null) {
+			where = applyFilterNumeric(where, filters.getDuration(), new MinusExpression(PublicTrailEntity.COL_DURATION, PublicTrailEntity.COL_BREAKS_DURATION));
+			where = applyFilterNumeric(where, filters.getEstimatedDuration(), PublicTrailEntity.COL_ESTIMATED_DURATION);
+			where = applyFilterNumeric(where, filters.getDistance(), PublicTrailEntity.COL_DISTANCE);
+			where = applyFilterNumeric(where, filters.getPositiveElevation(), PublicTrailEntity.COL_POSITIVE_ELEVATION);
+			where = applyFilterNumeric(where, filters.getNegativeElevation(), PublicTrailEntity.COL_NEGATIVE_ELEVATION);
+			where = applyFilterList(where, filters.getLoopTypes(), PublicTrailEntity.COL_LOOP_TYPE);
+			where = applyFilterList(where, filters.getActivities(), PublicTrailEntity.COL_ACTIVITY);
+			where = applyFilterRate(where, filters.getRate());
+		}
+		return where;
 	}
 	
 	private Condition applyFilterNumeric(Condition where, PublicTrailSearch.FilterNumeric filter, Expression valueExpression) {

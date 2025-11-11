@@ -33,12 +33,14 @@ public final class PublicTrailSearch {
 		private int zoom;
 		private List<Integer> tiles;
 		private Filters filters;
+		private Integer returnUuidsWhenLessThan;
 	}
 	
 	@Data
 	@AllArgsConstructor
 	public static class SearchByTileResponse {
 		private List<NbTrailsByTile> trailsByTile;
+		private List<String> uuids;
 	}
 	
 	@Data
