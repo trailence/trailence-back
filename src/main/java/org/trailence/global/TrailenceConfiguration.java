@@ -20,6 +20,7 @@ import org.springframework.security.config.web.server.ServerHttpSecurity.HttpBas
 import org.springframework.security.config.web.server.ServerHttpSecurity.LogoutSpec;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.security.web.server.firewall.StrictServerWebExchangeFirewall;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.server.session.WebSessionManager;
@@ -96,6 +97,17 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 		var resolver = new ReactivePageableHandlerMethodArgumentResolver();
 		resolver.setFallbackPageable(Pageable.unpaged());
 		configurer.addCustomResolver(resolver);
+	}
+	
+	@Bean
+	StrictServerWebExchangeFirewall httpFirewall() {
+		StrictServerWebExchangeFirewall firewall = new StrictServerWebExchangeFirewall();
+		firewall.setAllowSemicolon(true);
+		firewall.setAllowUrlEncodedDoubleSlash(true);
+		firewall.setAllowUrlEncodedPercent(true);
+		firewall.setAllowUrlEncodedPeriod(true);
+		firewall.setAllowUrlEncodedSlash(true);
+		return firewall;
 	}
 	
 }
