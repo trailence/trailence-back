@@ -20,4 +20,9 @@ public class ModerationMessageEntity {
 	private String authorMessage;
 	private String moderatorMessage;
 	
+	private String messageType;
+	
+	public static final String TYPE_PUBLISH = "publish";
+	public static final String TYPE_REMOVE = "remove";
+	
 }

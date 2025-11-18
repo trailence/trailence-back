@@ -15,6 +15,7 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.notifications.NotificationsService;
 import org.trailence.storage.FileService;
+import org.trailence.trail.db.ModerationMessageEntity;
 import org.trailence.trail.db.ModerationMessageRepository;
 import org.trailence.trail.db.PhotoRepository;
 import org.trailence.trail.db.PublicTrailFeedbackReplyRepository;
@@ -26,6 +27,7 @@ import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.FeedbackToReview;
 import org.trailence.trail.dto.Photo;
+import org.trailence.trail.dto.PublicTrailRemoveRequest;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailAndPhotos;
@@ -81,7 +83,7 @@ public class ModerationService {
 	}
 	
 	private Mono<TrailAndPhotos> addMessages(TrailAndPhotos trail) {
-		return messageRepo.findOneByUuidAndOwner(UUID.fromString(trail.getTrail().getUuid()), trail.getTrail().getOwner())
+		return messageRepo.findOneByUuidAndOwnerAndMessageType(UUID.fromString(trail.getTrail().getUuid()), trail.getTrail().getOwner(), ModerationMessageEntity.TYPE_PUBLISH)
 		.map(message -> {
 			trail.getTrail().setPublicationMessageFromAuthor(message.getAuthorMessage());
 			trail.getTrail().setPublicationMessageFromModerator(message.getModeratorMessage());
@@ -229,6 +231,39 @@ public class ModerationService {
 			return feedbackReplyRepo.save(entity);
 		})
 		.then();
+	}
+	
+	public Mono<List<PublicTrailRemoveRequest>> getRemoveRequests(Authentication auth) {
+		if (auth == null) return Mono.error(new ForbiddenException());
+		Flux<ModerationMessageEntity> messages;
+		if (TrailenceUtils.isAdmin(auth)) messages = messageRepo.getRemoveRequests(ModerationMessageEntity.TYPE_REMOVE);
+		else if (TrailenceUtils.hasRole(auth, TrailenceUtils.ROLE_MODERATOR)) messages = messageRepo.getRemoveRequestsNotFrom(ModerationMessageEntity.TYPE_REMOVE, auth.getPrincipal().toString());
+		else return Mono.error(new ForbiddenException());
+		return messages.map(entity -> new PublicTrailRemoveRequest(entity.getUuid().toString(), entity.getOwner(), entity.getAuthorMessage())).collectList();
+	}
+	
+	public Mono<Void> declineRemoveRequests(List<String> uuids, Authentication auth) {
+		if (auth == null) return Mono.error(new ForbiddenException());
+		List<UUID> toRemove = uuids.stream().map(UUID::fromString).toList();
+		return messageRepo.findAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE).collectList()
+		.flatMap(entities -> {
+			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
+			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
+			return messageRepo.deleteAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE);
+		});
+	}
+	
+	public Mono<Void> acceptRemoveRequests(List<String> uuids, Authentication auth) {
+		if (auth == null) return Mono.error(new ForbiddenException());
+		List<UUID> toRemove = uuids.stream().map(UUID::fromString).toList();
+		return messageRepo.findAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE).collectList()
+		.flatMap(entities -> {
+			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
+			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
+			return Flux.fromIterable(entities)
+			.flatMap(entity -> publicTrailService.deletePublicTrail(entity.getUuid().toString(), auth))
+			.then();
+		});
 	}
 	
 }

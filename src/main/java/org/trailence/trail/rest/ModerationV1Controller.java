@@ -22,6 +22,7 @@ import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.FeedbackToReview;
 import org.trailence.trail.dto.Photo;
+import org.trailence.trail.dto.PublicTrailRemoveRequest;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailAndPhotos;
@@ -179,6 +180,24 @@ public class ModerationV1Controller {
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
 	public Mono<Void> validateFeedbackReply(@PathVariable("replyUuid") String replyUuid) {
 		return service.feedbackReplyValidated(replyUuid);
+	}
+	
+	@GetMapping("/removeRequests")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<List<PublicTrailRemoveRequest>> getRemoveRequests(Authentication auth) {
+		return service.getRemoveRequests(auth);
+	}
+	
+	@PostMapping("/removeRequests/decline")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> declineRemoveRequests(@RequestBody List<String> uuids, Authentication auth) {
+		return service.declineRemoveRequests(uuids, auth);
+	}
+	
+	@PostMapping("/removeRequests/accept")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> acceptRemoveRequests(@RequestBody List<String> uuids, Authentication auth) {
+		return service.acceptRemoveRequests(uuids, auth);
 	}
 	
 	@DeleteMapping("/publicTrail/{trailUuid}")

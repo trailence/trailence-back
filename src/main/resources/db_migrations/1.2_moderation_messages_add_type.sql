@@ -1,0 +1,1 @@
+ALTER TABLE public.moderation_messages ADD COLUMN IF NOT EXISTS message_type character varying(10) COLLATE pg_catalog."default" NOT NULL DEFAULT 'publish';

@@ -194,7 +194,7 @@ public class TrailService {
     			if (TrailCollectionType.PUB_SUBMIT.equals(collection.getType())) {
     				var dto = dtos.stream().filter(d -> d.getUuid().equals(entity.getUuid().toString())).findAny().get();
     				if (dto.getPublicationMessageFromAuthor() != null && !dto.getPublicationMessageFromAuthor().isBlank())
-    					actions.add(r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), entity.getOwner(), dto.getPublicationMessageFromAuthor(), null)).then());
+    					actions.add(r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), entity.getOwner(), dto.getPublicationMessageFromAuthor(), null, ModerationMessageEntity.TYPE_PUBLISH)).then());
     			}
     			if (!ALLOWED_CREATE_COLLECTION_TYPES.contains(collection.getType()))
     				errors.add(new ForbiddenException("Cannot create a trail in this type of collection"));
@@ -298,7 +298,7 @@ public class TrailService {
             .flatMap(nb -> nb == 0 ? Mono.error(new ConflictException("trail-conflict", "Conflict with another version")) : repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
             .map(this::toDTO)
             .flatMap(response ->
-            	moderationMessageRepo.findOneByUuidAndOwner(entity.getUuid(), entity.getOwner())
+            	moderationMessageRepo.findOneByUuidAndOwnerAndMessageType(entity.getUuid(), entity.getOwner(), ModerationMessageEntity.TYPE_PUBLISH)
             	.doOnNext(messageEntity -> {
             		response.setPublicationMessageFromAuthor(messageEntity.getAuthorMessage());
         			response.setPublicationMessageFromModerator(messageEntity.getModeratorMessage());
@@ -328,25 +328,25 @@ public class TrailService {
         		.flatMap(col -> {
         			Mono<Void> action = Mono.empty();
         			if (fromOwner && TrailCollectionType.PUB_SUBMIT.equals(col.getType())) {
-        				action = moderationMessageRepo.findOneByUuidAndOwner(entity.getUuid(), owner)
+        				action = moderationMessageRepo.findOneByUuidAndOwnerAndMessageType(entity.getUuid(), owner, ModerationMessageEntity.TYPE_PUBLISH)
         				.flatMap(messages -> {
         					messages.setAuthorMessage(dto.getPublicationMessageFromAuthor());
         					return DbUtils.updateByUuidAndOwner(r2dbc, messages);
         				})
         				.switchIfEmpty(Mono.defer(() -> {
         					if (dto.getPublicationMessageFromAuthor() != null && !dto.getPublicationMessageFromAuthor().isBlank())
-        						return r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), owner, dto.getPublicationMessageFromAuthor(), null)).thenReturn(1L);
+        						return r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), owner, dto.getPublicationMessageFromAuthor(), null, ModerationMessageEntity.TYPE_PUBLISH)).thenReturn(1L);
         					return Mono.empty();
         				})).then();
         			} else if (!fromOwner && TrailCollectionType.PUB_REJECT.equals(col.getType())) {
-        				action = moderationMessageRepo.findOneByUuidAndOwner(entity.getUuid(), owner)
+        				action = moderationMessageRepo.findOneByUuidAndOwnerAndMessageType(entity.getUuid(), owner, ModerationMessageEntity.TYPE_PUBLISH)
         				.flatMap(messages -> {
         					messages.setModeratorMessage(dto.getPublicationMessageFromModerator());
         					return DbUtils.updateByUuidAndOwner(r2dbc, messages);
         				})
         				.switchIfEmpty(Mono.defer(() -> {
         					if (dto.getPublicationMessageFromModerator() != null && !dto.getPublicationMessageFromModerator().isBlank())
-        						return r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), owner, null, dto.getPublicationMessageFromModerator())).thenReturn(1L);
+        						return r2dbc.insert(new ModerationMessageEntity(entity.getUuid(), owner, null, dto.getPublicationMessageFromModerator(), ModerationMessageEntity.TYPE_PUBLISH)).thenReturn(1L);
         					return Mono.empty();
         				})).then();
         			}
@@ -447,7 +447,7 @@ public class TrailService {
     	log.info("Deleting {} trails for {}", uuids.size(), owner);
     	return repo.deleteAllByUuidInAndOwner(uuids, owner)
     	.flatMap(nb -> quotaService.trailsDeleted(owner, nb))
-    	.then(moderationMessageRepo.deleteAllByUuidInAndOwner(uuids, owner))
+    	.then(moderationMessageRepo.deleteAllByUuidInAndOwnerAndMessageType(uuids, owner, ModerationMessageEntity.TYPE_PUBLISH))
     	.then(Mono.fromRunnable(() -> log.info("Trails deleted ({} for {})", uuids.size(), owner)));
     }
 
@@ -490,7 +490,7 @@ public class TrailService {
     	)
     	.flatMap(response -> {
     		var uuids = Stream.concat(response.getCreated().stream(), response.getUpdated().stream()).map(t -> UUID.fromString(t.getUuid())).toList();
-    		return moderationMessageRepo.findAllByUuidInAndOwner(uuids, user)
+    		return moderationMessageRepo.findAllByUuidInAndOwnerAndMessageType(uuids, user, ModerationMessageEntity.TYPE_PUBLISH)
     		.doOnNext(messageEntity -> {
     			var dtoOpt = Stream.concat(response.getCreated().stream(), response.getUpdated().stream()).filter(d -> d.getUuid().equals(messageEntity.getUuid().toString())).findAny();
     			if (dtoOpt.isPresent()) {

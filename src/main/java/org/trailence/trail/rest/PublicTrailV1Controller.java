@@ -110,6 +110,11 @@ public class PublicTrailV1Controller {
 		return service.getAllIds(offset, limit);
 	}
 	
+	@PostMapping("/trail/{trailUuid}/requestRemove")
+	public Mono<Void> requestRemove(@PathVariable("trailUuid") String trailUuid, @RequestBody String message, Authentication auth) {
+		return service.requestRemove(trailUuid, message, auth);
+	}
+	
 	@GetMapping(value = "/random", produces = {"text/html"})
 	public Mono<String> random() {
 		return service.random()

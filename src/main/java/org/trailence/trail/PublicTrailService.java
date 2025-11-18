@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Triple;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.geo.Box;
@@ -52,6 +51,8 @@ import org.trailence.notifications.NotificationsService;
 import org.trailence.preferences.UserPreferencesService;
 import org.trailence.storage.FileService;
 import org.trailence.trail.TrackService.StoredData;
+import org.trailence.trail.db.ModerationMessageEntity;
+import org.trailence.trail.db.ModerationMessageRepository;
 import org.trailence.trail.db.PublicPhotoEntity;
 import org.trailence.trail.db.PublicPhotoRepository;
 import org.trailence.trail.db.PublicTrackEntity;
@@ -112,6 +113,7 @@ public class PublicTrailService {
 	private final FileService fileService;
 	private final NotificationsService notificationsService;
 	private final UserPreferencesService prefService;
+	private final ModerationMessageRepository messageRepo;
 	
 	private static final Map<String, String> TEXT_SEARCH_LANGS = Map.of("fr", "french", "en", "english");
 	
@@ -867,6 +869,9 @@ public class PublicTrailService {
 					.then(feedbackRepo.delete(comment))
 				).then()
 			)
+			.then(
+				messageRepo.deleteAllByUuidInAndMessageType(List.of(trailUuid), ModerationMessageEntity.TYPE_REMOVE)
+			)
 		);
 	}
 	
@@ -898,6 +903,25 @@ public class PublicTrailService {
 	
 	public Mono<List<String>> searchExamples(int nb) {
 		return publicTrailRepo.searchExamples(nb).collectList();
+	}
+	
+	public Mono<Void> requestRemove(String trailUuid, String message, Authentication auth) {
+		if (auth == null) return Mono.error(new ForbiddenException());
+		if (trailUuid == null || message == null || message.isBlank()) return Mono.error(new BadRequestException("trailUuid and message are mandatory"));
+		UUID uuid = UUID.fromString(trailUuid);
+		return publicTrailRepo.findById(uuid)
+		.filter(entity -> auth.getPrincipal().toString().equals(entity.getAuthor()))
+		.switchIfEmpty(Mono.error(new NotFoundException("public-trail", trailUuid)))
+		.flatMap(publicTrail ->
+			messageRepo.findOneByUuidAndOwnerAndMessageType(publicTrail.getUuid(), publicTrail.getAuthor(), ModerationMessageEntity.TYPE_REMOVE)
+			.flatMap(messageEntity -> {
+				messageEntity.setAuthorMessage(message);
+				return messageRepo.save(messageEntity);
+			})
+			.switchIfEmpty(Mono.defer(() ->
+				r2dbc.insert(new ModerationMessageEntity(publicTrail.getUuid(), publicTrail.getAuthor(), message, null, ModerationMessageEntity.TYPE_REMOVE))
+			))
+		).then();
 	}
 	
 }
