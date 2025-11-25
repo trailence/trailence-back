@@ -67,6 +67,7 @@ public class InitDB {
 		new DatabaseMigration("1.0_trails_followed_uuid_varchar"),
 		new DatabaseMigration("1.2_public_trails_search_text"),
 		new DatabaseMigration("1.2_moderation_messages_add_type"),
+		new DatabaseMigration("1.2_preferences_add_elevation_calibration"),
 	};
 	
 	public void init(ApplicationContext context) {

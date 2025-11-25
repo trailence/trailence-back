@@ -2,6 +2,8 @@ package org.trailence.preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import org.trailence.preferences.dto.UserPreferences;
 import org.trailence.test.AbstractTest;
@@ -43,7 +45,8 @@ class TestPreferences extends AbstractTest {
 			30, (short) 17,
 			1000L, 1001L, 1002L,
 			500, (short) 90, 250, 20,
-			""
+			"",
+			Map.of("hello", 123)
 		);
 		
 		response = user.put("/api/preferences/v1", prefs);

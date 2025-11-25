@@ -1,0 +1,1 @@
+ALTER TABLE public.user_preferences ADD COLUMN IF NOT EXISTS elevation_calibration jsonb DEFAULT NULL;

@@ -3,6 +3,7 @@ package org.trailence.preferences.db;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
+import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -38,5 +39,7 @@ public class UserPreferencesEntity {
 	private Integer photoCacheDays;
 	
 	private String alias;
+	
+	private Json elevationCalibration;
 
 }

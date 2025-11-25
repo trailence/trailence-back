@@ -1,5 +1,7 @@
 package org.trailence.preferences.dto;
 
+import java.util.Map;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -32,4 +34,5 @@ public class UserPreferences {
 	
 	private String alias;
 
+	private Map<String, Integer> elevationCalibrationByDevice;
 }

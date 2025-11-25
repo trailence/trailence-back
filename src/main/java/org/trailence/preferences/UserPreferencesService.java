@@ -1,15 +1,23 @@
 package org.trailence.preferences;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.stereotype.Service;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.preferences.db.UserPreferencesEntity;
 import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.preferences.dto.UserPreferences;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+
+import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
@@ -17,6 +25,7 @@ import reactor.util.function.Tuples;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @SuppressWarnings("java:S1301") // switch instead of if
 public class UserPreferencesService {
 	
@@ -62,6 +71,7 @@ public class UserPreferencesService {
 		entity.setPhotoMaxSizeKB(dto.getPhotoMaxSizeKB());
 		entity.setPhotoCacheDays(dto.getPhotoCacheDays());
 		entity.setAlias(dto.getAlias() != null ? dto.getAlias() : "");
+		entity.setElevationCalibration(toElevationCalibrationJson(dto.getElevationCalibrationByDevice()));
 	}
 	
 	private UserPreferences toDto(UserPreferencesEntity entity) {
@@ -82,7 +92,8 @@ public class UserPreferencesService {
 			entity.getPhotoMaxQuality(),
 			entity.getPhotoMaxSizeKB(),
 			entity.getPhotoCacheDays(),
-			entity.getAlias()
+			entity.getAlias(),
+			toElevationCalibrationDto(entity.getElevationCalibration())
 		);
 	}
 
@@ -150,6 +161,32 @@ public class UserPreferencesService {
 		case "LIGHT": return 2;
 		default: return 0;
 		}
+	}
+	
+	private Json toElevationCalibrationJson(Map<String, Integer> dto) {
+		if (dto == null) return null;
+		Map<String, Integer> valid = new HashMap<>();
+		for (var entry : dto.entrySet()) {
+			if (entry.getKey().length() > 0 && entry.getKey().length() <= 100) valid.put(entry.getKey(), entry.getValue());
+		}
+		if (valid.isEmpty()) return null;
+		try {
+			return Json.of(TrailenceUtils.mapper.writeValueAsString(valid));
+		} catch (JsonProcessingException e) {
+			log.error("Invalid elevatino calibration", e);
+			return null;
+		}
+	}
+	
+	private Map<String, Integer> toElevationCalibrationDto(Json db) {
+		if (db == null) return null;
+		try {
+			return TrailenceUtils.mapper.readValue(db.asString(), new TypeReference<Map<String, Integer>>() {});
+		} catch (Exception e) {
+			log.error("Error decoding elevation calibration", e);
+			return null;
+		}
+
 	}
 	
 	public Mono<Optional<String>> getAlias(String email) {
