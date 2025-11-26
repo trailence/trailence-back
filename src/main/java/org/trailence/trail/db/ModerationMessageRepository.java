@@ -26,5 +26,8 @@ public interface ModerationMessageRepository extends ReactiveCrudRepository<Mode
 	Flux<ModerationMessageEntity> findAllByUuidInAndMessageType(Collection<UUID> uuids, String messageType);
 	
 	Mono<Void> deleteAllByUuidInAndMessageType(Collection<UUID> uuids, String messageType);
+
+	@Query("SELECT COUNT(*) FROM moderation_messages WHERE message_type = :type")
+	Mono<Long> countRemoveRequests(String type);
 	
 }

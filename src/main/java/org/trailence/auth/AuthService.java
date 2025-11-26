@@ -434,5 +434,10 @@ public class AuthService {
 			});
 		}));
 	}
+
 	
+	public Mono<List<String>> getConnectedUsersSince(long since, int max) {
+		return keyRepo.findAllByLastUsage(since, max).collectList();
+	}
+
 }

@@ -115,6 +115,7 @@ public class PublicTrailV1Controller {
 		return service.requestRemove(trailUuid, message, auth);
 	}
 	
+	@SuppressWarnings("deprecation")
 	@GetMapping(value = "/random", produces = {"text/html"})
 	public Mono<String> random() {
 		return service.random()

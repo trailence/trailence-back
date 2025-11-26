@@ -15,6 +15,8 @@ public interface UserRepository extends ReactiveCrudRepository<UserEntity, Strin
 
 	Flux<UserEntity> findAllByEmailIn(List<String> emails);
 	
+	Flux<UserEntity> findAllByCreatedAtGreaterThan(long since);
+	
 	Mono<Void> deleteByEmail(String email);
 
 }

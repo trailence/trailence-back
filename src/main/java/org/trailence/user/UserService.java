@@ -426,4 +426,12 @@ public class UserService {
 		.map(entity -> toRolesList(entity.getRoles()));
 	}
 	
+	public Mono<List<UserEntity>> getNewUsersSince(long since, int max) {
+		return userRepo.findAllByCreatedAtGreaterThan(since)
+		.buffer(max)
+		.take(1)
+		.flatMap(list -> list.isEmpty() ? Mono.empty() : Mono.just(list))
+		.singleOrEmpty();
+	}
+	
 }

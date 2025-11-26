@@ -266,4 +266,19 @@ public class ModerationService {
 		});
 	}
 	
+	public Mono<Long> getNumberOfTrailsToReview() {
+		return trailRepo.countTrailsToReview();
+	}
+	
+	public Mono<Long> getNumberOfCommentsToReview() {
+		return feedbackRepo.countToReview();
+	}
+	
+	public Mono<Long> getNumberOfCommentRepliesToReview() {
+		return feedbackReplyRepo.countToReview();
+	}
+	
+	public Mono<Long> getNumberOfRemovalRequestsToReview() {
+		return messageRepo.countRemoveRequests(ModerationMessageEntity.TYPE_REMOVE);
+	}
 }

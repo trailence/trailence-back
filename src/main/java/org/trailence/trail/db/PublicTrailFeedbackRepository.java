@@ -20,6 +20,9 @@ public interface PublicTrailFeedbackRepository extends ReactiveCrudRepository<Pu
 	
 	@Query("SELECT uuid, public_trail_uuid FROM public_trail_feedback WHERE reviewed = FALSE ORDER BY date ASC LIMIT 25")
 	Flux<UuidAndTrailUuid> getToReview();
+
+	@Query("SELECT COUNT(uuid) FROM public_trail_feedback WHERE reviewed = FALSE")
+	Mono<Long> countToReview();
 	
 	@Data
 	@NoArgsConstructor
