@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.apache.commons.lang3.StringEscapeUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.trailence.auth.AuthService;
@@ -32,6 +33,9 @@ public class AdminEmailService {
 	private final AuthService authService;
 	private final ModerationService moderationService;
 	private final EmailJob emailJob;
+
+	@Value("${trailence.hostname:trailence.org}")
+	private String hostname;
 
 	private long latestEmail = System.currentTimeMillis() - 24L * 60 * 60 * 1000;
 	
@@ -80,7 +84,7 @@ public class AdminEmailService {
 			html.append("News since ").append(Instant.ofEpochMilli(previousEmail).toString()).append(": <ul>");
 			for (var part : parts) html.append("<li>").append(part).append("</li>");
 			html.append("</ul>");
-			return emailJob.send(new Email(emailJob.getFromTrailenceEmail(), "Trailence news", "News", html.toString()), 99);
+			return emailJob.send(new Email(emailJob.getFromTrailenceEmail(), "Trailence Report - " + hostname, "News", html.toString()), 99);
 		}).subscribe();
 	}
 	

@@ -122,6 +122,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.trailence.captcha.CaptchaService;
+import org.trailence.external.aistudio.AIStudioService;
 import org.trailence.external.geonames.GeonamesService;
 import org.trailence.external.outdooractive.OutdoorActiveService;
 import org.trailence.init.InitDB;
@@ -274,6 +275,7 @@ public class TrailenceApp implements SmartLifecycle, ApplicationContextAware {
 		} else {
 			log.warn(" ❌ Outdoor Active API not configured, it will not be available.");
 		}
+		ctx.getBean(AIStudioService.class).logStatus(log);
 	}
 
 	private boolean running = false;
