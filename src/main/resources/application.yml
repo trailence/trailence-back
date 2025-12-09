@@ -60,7 +60,7 @@ trailence:
     aistudio:
       apiKey: ${AISTUDIO_API_KEY:}
       baseUrl: "${AISTUDIO_API_URL:https://generativelanguage.googleapis.com/v1beta/models}"
-      models: "${AISTUDIO_MODELS:gemini-2.5-pro,gemini-2.5-flash,gemini-3-pro-preview,gemini-2.5-flash-lite}"
+      models: "${AISTUDIO_MODELS:gemini-2.5-pro,gemini-2.5-flash,gemini-3-pro-preview,gemini-2.5-flash-lite,gemma-3-4b-it,gemma-3-12b-it}"
   storage:
     type: ${TRAILENCE_STORAGE_TYPE:fs}
     username: ${TRAILENCE_STORAGE_USERNAME:}

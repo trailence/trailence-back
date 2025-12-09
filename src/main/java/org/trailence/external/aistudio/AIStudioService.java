@@ -25,7 +25,7 @@ public class AIStudioService {
 	private String baseUrl;
 	@Value("${trailence.external.aistudio.apiKey:}")
 	private String apiKey;
-	@Value("${trailence.external.aistudio.models:gemini-2.5-pro,gemini-2.5-flash-tts,gemini-2.5-flash}")
+	@Value("${trailence.external.aistudio.models:gemini-2.5-pro,gemini-2.5-flash-tts,gemini-2.5-flash,gemma-3-4b-it,gemma-3-12b-it}")
 	private String configuredModels;
 	
 	@PostConstruct
