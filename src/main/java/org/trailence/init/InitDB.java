@@ -37,7 +37,7 @@ public class InitDB {
 		"user_quotas", "user_subscriptions", "plans", "donations", "donation_goals",
 		"contact_messages", "public_trails", "notifications", "moderation_messages",
 		"public_trail_feedback", "public_trail_feedback_reply",
-		"user_selection",
+		"user_selection", "trail_links",
 		"migrations"
 	};
 	

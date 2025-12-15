@@ -86,6 +86,9 @@ public class TrailService {
     
     @Autowired @Lazy @SuppressWarnings("java:S6813")
     private TrailService self;
+
+    @Autowired @Lazy @SuppressWarnings("java:S6813")
+    private TrailLinkService trailLinkService;
     
 	@Value("${trailence.hostname:trailence.org}")
 	private String hostname;
@@ -435,6 +438,7 @@ public class TrailService {
 				tracksUuids.add(entity.getCurrentTrackUuid());
 			});
 			return trailTagService.trailsDeleted(trailsUuids, owner)
+			.then(trailLinkService.trailsDeleted(trailsUuids, owner))
 			.then(trackService.deleteTracksWithQuota(tracksUuids, owner))
 			.then(shareService.trailsDeleted(trailsUuids, owner))
 			.then(photoService.trailsDeleted(trailsUuids, owner))
