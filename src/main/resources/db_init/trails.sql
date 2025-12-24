@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.trails
     source_type character varying(20),
     source character varying(2000),
     source_date bigint,
+    source_url character varying(500) COLLATE pg_catalog."default",
     followed_uuid character varying(250),
     followed_owner character varying(250),
     followed_url character varying(2000),

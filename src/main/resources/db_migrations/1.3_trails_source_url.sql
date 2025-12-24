@@ -1,0 +1,1 @@
+ALTER TABLE public.trails ADD COLUMN IF NOT EXISTS source_url character varying(500) COLLATE pg_catalog."default" DEFAULT NULL;

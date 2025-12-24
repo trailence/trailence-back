@@ -139,6 +139,7 @@ public class TrailService {
                 entity.setSourceType(dto.getSourceType());
                 entity.setSource(dto.getSource());
                 entity.setSourceDate(dto.getSourceDate());
+                entity.setSourceUrl(dto.getSourceUrl());
                	entity.setFollowedUuid(dto.getFollowedUuid());
                 entity.setFollowedOwner(dto.getFollowedOwner());
                 entity.setFollowedUrl(dto.getFollowedUrl());
@@ -238,6 +239,7 @@ public class TrailService {
     	ValidationUtils.field("activity", dto.getActivity()).nullable().maxLength(20);
     	ValidationUtils.field("currentTrackUuid", dto.getCurrentTrackUuid()).notNull().isUuid();
     	ValidationUtils.field("collectionUuid", dto.getCollectionUuid()).notNull().isUuid();
+    	ValidationUtils.field("sourceUrl", dto.getSourceUrl()).nullable().maxLength(500);
     	var pubData = dto.getPublicationData();
     	if (pubData != null) {
         	var validPubData = new HashMap<String, Object>();
@@ -401,6 +403,10 @@ public class TrailService {
         	entity.setActivity(dto.getActivity());
         	changed = true;
         }
+        if (!Objects.equals(entity.getSourceUrl(), dto.getSourceUrl())) {
+        	entity.setSourceUrl(dto.getSourceUrl());
+        	changed = true;
+        }
         if (dto.getPublicationData() == null && entity.getPublicationData() != null) {
         	entity.setPublicationData(null);
         	changed = true;
@@ -530,6 +536,7 @@ public class TrailService {
             entity.getSourceType(),
             entity.getSource(),
             entity.getSourceDate(),
+            entity.getSourceUrl(),
             entity.getFollowedUuid() != null ? entity.getFollowedUuid().toString() : null,
             entity.getFollowedOwner(),
             entity.getFollowedUrl(),
