@@ -1,10 +1,13 @@
 package org.trailence.trail.rest;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -112,6 +116,25 @@ public class ModerationV1Controller {
 	) {
 		return service.deletePhoto(photoUuid, photoOwner, auth);
 	}
+	
+	@PostMapping(path = "/photoFromReview/{photoUuid}/{photoOwner}/{trailUuid}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public Mono<Photo> storePhoto(
+		@PathVariable("photoUuid") String photoUuid,
+		@PathVariable("photoOwner") String photoOwner,
+		@PathVariable("trailUuid") String trailUuid,
+		@RequestHeader("X-Description") String description,
+		@RequestHeader(name = "X-DateTaken", required = false) Long dateTaken,
+		@RequestHeader(name = "X-Latitude", required = false) Long latitude,
+		@RequestHeader(name = "X-Longitude", required = false) Long longitude,
+		@RequestHeader(name = "X-Cover", defaultValue = "false") boolean isCover,
+		@RequestHeader(name = "X-Index", defaultValue = "1") int index,
+		@RequestHeader("Content-Length") long size,
+		ServerHttpRequest request,
+		Authentication auth
+	) {
+		return RetryRest.retry(service.createPhoto(photoUuid, photoOwner, trailUuid, description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
+	}
+
 	
 	@PutMapping("/trackFromReview/{trailUuid}/{trailOwner}")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)

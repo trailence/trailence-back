@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.notifications.NotificationsService;
 import org.trailence.storage.FileService;
 import org.trailence.trail.db.ModerationMessageEntity;
@@ -158,6 +159,28 @@ public class ModerationService {
 				})
 			)
 		);
+	}
+	
+	public Mono<Photo> createPhoto(
+		String photoUuid, String owner, String trailUuid,
+		String description, Long dateTaken, Long latitude, Long longitude, boolean isCover, int index,
+		Flux<DataBuffer> content, long size,
+		Authentication auth
+	) {
+		String email = owner.toLowerCase();
+		if (email.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		ValidationUtils.field("photoUuid", photoUuid).notNull().isUuid();
+		ValidationUtils.field("trailUuid", trailUuid).notNull().isUuid();
+		ValidationUtils.field("description", description).nullable().maxLength(5000);
+		return trailRepo.findByUuidAndOwner(UUID.fromString(trailUuid), email)
+			.flatMap(trail ->
+				collectionRepo.findByUuidAndOwner(trail.getCollectionUuid(), email)
+				.flatMap(collection -> {
+					if (!TrailCollectionType.PUB_SUBMIT.equals(collection.getType())) return Mono.empty();
+					return photoService.createPhotoWithQuota(photoUuid, owner, trailUuid, description, dateTaken, latitude, longitude, isCover, index, content, size);
+				})
+			)
+			.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, email)));
 	}
 	
 	public Mono<Trail> updateTrailTrack(String trailUuid, String trailOwner, Track track, Authentication auth) {

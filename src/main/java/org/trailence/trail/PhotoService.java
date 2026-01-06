@@ -84,35 +84,49 @@ public class PhotoService {
 		)
 		.flatMap(existing -> {
 			if (existing.getT1().isPresent()) {
-				return content.then(Mono.just(existing.getT1().get()));
+				return content.then(Mono.just(toDto(existing.getT1().get())));
 			}
 			if (existing.getT2().isEmpty()) {
 				return Mono.error(new TrailNotFound(trailUuid, owner));
 			}
-			return quotaService.addPhoto(owner, size)
-			.then(
-				fileService.storeFile(size, content)
-				.onErrorResume(error -> quotaService.photoDeleted(owner, size).then(Mono.error(error)))
-			).flatMap(fileId -> {
-				PhotoEntity entity = new PhotoEntity();
-				entity.setUuid(UUID.fromString(uuid));
-				entity.setOwner(owner);
-				entity.setCreatedAt(System.currentTimeMillis());
-				entity.setFileId(fileId);
-				entity.setTrailUuid(UUID.fromString(trailUuid));
-				entity.setDescription(description);
-				entity.setDateTaken(dateTaken);
-				entity.setLatitude(latitude);
-				entity.setLongitude(longitude);
-				entity.setCover(isCover);
-				entity.setIndex(index);
-				return r2dbc.insert(entity)
-				.onErrorResume(error ->
-					quotaService.photoDeleted(owner, size)
-					.then(fileService.deleteFile(fileId))
-					.then(Mono.error(error))
-				);
-			});			
+			return createPhotoWithQuota(
+				uuid, owner, trailUuid,
+				description, dateTaken, latitude, longitude, isCover, index,
+				content, size
+			);
+		});
+	}
+	
+	public Mono<Photo> createPhotoWithQuota(
+		String uuid, String owner,
+		String trailUuid,
+		String description, Long dateTaken, Long latitude, Long longitude,
+		boolean isCover, int index,
+		Flux<DataBuffer> content, long size
+	) {
+		return quotaService.addPhoto(owner, size)
+		.then(
+			fileService.storeFile(size, content)
+			.onErrorResume(error -> quotaService.photoDeleted(owner, size).then(Mono.error(error)))
+		).flatMap(fileId -> {
+			PhotoEntity entity = new PhotoEntity();
+			entity.setUuid(UUID.fromString(uuid));
+			entity.setOwner(owner);
+			entity.setCreatedAt(System.currentTimeMillis());
+			entity.setFileId(fileId);
+			entity.setTrailUuid(UUID.fromString(trailUuid));
+			entity.setDescription(description);
+			entity.setDateTaken(dateTaken);
+			entity.setLatitude(latitude);
+			entity.setLongitude(longitude);
+			entity.setCover(isCover);
+			entity.setIndex(index);
+			return r2dbc.insert(entity)
+			.onErrorResume(error ->
+				quotaService.photoDeleted(owner, size)
+				.then(fileService.deleteFile(fileId))
+				.then(Mono.error(error))
+			);
 		}).map(this::toDto);
 	}
 	
