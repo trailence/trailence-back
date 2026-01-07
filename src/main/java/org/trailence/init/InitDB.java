@@ -111,13 +111,14 @@ public class InitDB {
 				bb.get(data);
 				var v1 = TrackStorage.V1.uncompress(data);
 				var v2 = TrackStorage.V1V2Bridge.v1DtoToV2(v1);
-				var v1b = TrackStorage.V1V2Bridge.v2ToV1Dto(v2);
 				v1TotalBytes.add(data.length);
 				v2TotalBytes.add(v2.length);
 				if (v2.length < data.length) better.increment();
 				else if (v2.length == data.length) same.increment();
 				else worst.add("UUID " + uuid.toString() + " ower " + owner + " v1 = " + data.length + " v2 = " + v2.length + " data: " + v1.wp.length + "wp = " + List.of(v1.wp) + " // " + List.of(v1.s));
 				nb.increment();
+				// check
+				var v1b = TrackStorage.V1V2Bridge.v2ToV1Dto(v2);
 				if (v1.s.length != v1b.s.length) throw new RuntimeException("UUID " + uuid + " owner " + owner + ": Decoded " + v1b.s.length + " segments, but " + v1.s.length + " excepted");
 				for (int s = 0; s < v1.s.length; ++s) {
 					var s1 = v1.s[s];

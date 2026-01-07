@@ -115,66 +115,7 @@ public class TrackStorage {
 				}
 				return info;
 			}
-			
-			public PointOffsets getPointOffsets() {
-				PointOffsets o = new PointOffsets();
-				o.latitude = new int[4];
-				o.longitude = new int[4];
-				if (hasElevation) o.elevation = new int[3];
-				if (hasTime) o.time = new int[8];
-				if (hasPa) o.pa = new int[3];
-				if (hasEa) o.ea = new int[3];
-				
-				// latitude and longitude expect 2 first bytes to be 0
-				// elevation expect 2 first bytes to be 0
-				// posAccuracy expect first byte to be 0
-				// eleAccuracy expect first byte to be 0, second byte most of time
-				// time expect 6 first bytes to be 0
-				int pos = 0;
-				o.latitude[0] = pos++;
-				o.longitude[0] = pos++;
-				if (hasElevation) o.elevation[0] = pos++;
-				if (hasTime) o.time[0] = pos++;
-				if (hasPa) o.pa[0] = pos++;
-				if (hasEa) o.ea[0] = pos++;
-				o.latitude[1] = pos++;
-				o.longitude[1] = pos++;
-				if (hasTime) {
-					o.time[1] = pos++;
-					o.time[2] = pos++;
-					o.time[3] = pos++;
-					o.time[4] = pos++;
-				}
-				if (hasElevation) o.elevation[1] = pos++;
-				if (hasEa) o.ea[1] = pos++;
-				if (hasPa) o.pa[1] = pos++;
-				o.latitude[2] = pos++;
-				o.longitude[2] = pos++;
-				if (hasTime) o.time[5] = pos++;
-				if (hasEa) o.ea[2] = pos++;
-				if (hasPa) o.pa[2] = pos++;
-				if (hasElevation) o.elevation[2] = pos++;
-				o.latitude[3] = pos++;
-				o.longitude[3] = pos++;
-				if (hasTime) {
-					o.time[6] = pos++;
-					o.time[7] = pos++;
-				}
-				o.nbBytes = pos;
-				return o;
-			}
 		}
-		
-		private static class PointOffsets {
-			int nbBytes;
-			int[] latitude;
-			int[] longitude;
-			int[] elevation;
-			int[] time;
-			int[] pa;
-			int[] ea;
-		}
-		
 		
 		public static byte[] v1DtoToV2(V1.StoredData value) throws IOException {
 			try (AccessibleByteArrayOutputStream bos = new AccessibleByteArrayOutputStream(8192)) {
@@ -197,7 +138,6 @@ public class TrackStorage {
 					for (var segment : value.s) {
 						encodeInteger2to4(segment.getP().length, gos);
 					}
-					PointOffsets po = info.getPointOffsets();
 					for (var segment : value.s) {
 						var points = segment.getP();
 						int nb = points.length;
@@ -209,45 +149,78 @@ public class TrackStorage {
 						// posAccuracy, with factor 100: 10km would be 1000000 => 24 bits integer
 						// eleAccuracy, with factor 100: same 24 bits integer
 						// forget about heading and speed
-						byte[] bytes = new byte[nb * po.nbBytes];
-						for (int i = 0; i < nb; ++i) {
-							Long v = points[i].getL();
-							long l = v == null ? 0 : v.longValue();
-							if (l < -900000000 || l > 900000000) throw new IOException("Invalid latitude: " + l);
-							l = toUnsigned(l);
-							encodePoint32Bits(bytes, nb, i, l, po.latitude);
+
+						Long v = points[0].getL();
+						long l = v == null ? 0 : v.longValue();
+						if (l < -900000000 || l > 900000000) throw new IOException("Invalid latitude: " + l);
+						l = toUnsigned(l);
+						encodeNumber(gos, l, 4);
+
+						v = points[0].getN();
+						l = v == null ? 0 : v.longValue();
+						if (l < -1800000000 || l > 1800000000) throw new IOException("Invalid longitude: " + l);
+						l = toUnsigned(l);
+						encodeNumber(gos, l, 4);
+
+						if (info.hasElevation) {
+							v = points[0].getE();
+							l = toUnsigned(encode24bitsNullable(v));
+							encodeNumber(gos, l, 3);
+						}
+						if (info.hasTime) {
+							v = points[0].getT();
+							l = encode64bitsNullable(v);
+							encodeNumber(gos, l, 8);
+						}
+
+						if (info.hasPa) {
+							v = points[0].getPa();
+							l = toUnsigned(encode24bitsNullable(v));
+							encodeNumber(gos, l, 3);
+						}
 							
-							v = points[i].getN();
-							l = v == null ? 0 : v.longValue();
-							if (l < -1800000000 || l > 1800000000) throw new IOException("Invalid longitude: " + l);
-							l = toUnsigned(l);
-							encodePoint32Bits(bytes, nb, i, l, po.longitude);
+						if (info.hasEa) {
+							v = points[0].getEa();
+							l = toUnsigned(encode24bitsNullable(v));
+							encodeNumber(gos, l, 3);
+						}
+						
+						if (nb > 1) {
+							long[] values = new long[nb - 1];
+							for (int i = 0; i < nb - 1; ++i) {
+								v = points[i + 1].getL();
+								values[i] = v == null ? 0 : v.longValue();
+							}
+							encodeCoord(gos, values);
 							
+							for (int i = 0; i < nb - 1; ++i) {
+								v = points[i + 1].getN();
+								values[i] = v == null ? 0 : v.longValue();
+							}
+							encodeCoord(gos, values);
+							
+							Long[] nullableValues = new Long[nb - 1];
+
 							if (info.hasElevation) {
-								v = points[i].getE();
-								l = toUnsigned(encode24bitsNullable(v));
-								encodePoint24Bits(bytes, nb, i, l, po.elevation);
+								for (int i = 0; i < nb - 1; ++i) nullableValues[i] = points[i + 1].getE();
+								encodeElevation(gos, nullableValues);
 							}
 							
 							if (info.hasTime) {
-								v = points[i].getT();
-								l = encode64bitsNullable(v);
-								encodePoint64Bits(bytes, nb, i, l, po.time);
+								for (int i = 0; i < nb - 1; ++i) nullableValues[i] = points[i + 1].getT();
+								encodeTime(gos, nullableValues);
 							}
 							
 							if (info.hasPa) {
-								v = points[i].getPa();
-								l = toUnsigned(encode24bitsNullable(v));
-								encodePoint24Bits(bytes, nb, i, l, po.pa);
+								for (int i = 0; i < nb - 1; ++i) nullableValues[i] = points[i + 1].getPa();
+								encodeAccuracy(gos, nullableValues);
 							}
-							
+
 							if (info.hasEa) {
-								v = points[i].getEa();
-								l = toUnsigned(encode24bitsNullable(v));
-								encodePoint24Bits(bytes, nb, i, l, po.ea);
+								for (int i = 0; i < nb - 1; ++i) nullableValues[i] = points[i + 1].getEa();
+								encodeAccuracy(gos, nullableValues);
 							}
 						}
-						gos.write(bytes);
 					}
 					int nb = value.wp.length;
 					if (nb > 0) {
@@ -302,22 +275,51 @@ public class TrackStorage {
 					for (int i = 0; i < info.nbSegments; ++i) {
 						segments[i] = new Track.Point[decodeInteger2to4(gis)];
 					}
-					PointOffsets po = info.getPointOffsets();
 					for (int s = 0; s < info.nbSegments; ++s) {
 						int nb = segments[s].length;
-						byte[] bytes = new byte[nb * po.nbBytes];
-						IOUtils.readFully(gis, bytes);
+						if (nb == 0) continue;
+						// first point
+						long lat = toSigned(decodeNumber(gis, 4));
+						long lon = toSigned(decodeNumber(gis, 4));
+						Long ele = info.hasElevation ? decode24bitsNullable(toSigned(decodeNumber(gis, 3))) : null;
+						Long tim = info.hasTime ? decode64bitsNullable(decodeNumber(gis, 8)) : null;
+						Long pa = info.hasPa ? decode24bitsNullable(toSigned(decodeNumber(gis, 3))) : null;
+						Long ea = info.hasEa ? decode24bitsNullable(toSigned(decodeNumber(gis, 3))) : null;
+						segments[s][0] = new Track.Point(lat == 0 ? null : lat, lon == 0 ? null : lon, ele, tim, pa, ea, null, null);
 						
-						for (int i = 0; i < nb; ++i) {
-							long lat = toSigned(decodePoint32Bits(bytes, nb, i, po.latitude));
-							long lon = toSigned(decodePoint32Bits(bytes, nb, i, po.longitude));
-							Long ele = info.hasElevation ? decode24bitsNullable(toSigned(decodePoint24Bits(bytes, nb, i, po.elevation))) : null;
-							Long tim = info.hasTime ? decode64bitsNullable(decodePoint64Bits(bytes, nb, i, po.time)) : null;
-							Long pa = info.hasPa ? decode24bitsNullable(toSigned(decodePoint24Bits(bytes, nb, i, po.pa))) : null;
-							Long ea = info.hasEa ? decode24bitsNullable(toSigned(decodePoint24Bits(bytes, nb, i, po.ea))) : null;
-							segments[s][i] = new Track.Point(lat == 0 ? null : lat, lon == 0 ? null : lon, ele, tim, pa, ea, null, null);
+						if (nb > 1) {
+							long[] latitudes = new long[nb - 1];
+							decodeCoord(gis, latitudes);
+							long[] longitudes = new long[nb - 1];
+							decodeCoord(gis, longitudes);
+
+							Long[] elevations = new Long[nb - 1];
+							if (info.hasElevation) {
+								decodeElevation(gis, elevations);
+							}
+							Long[] times = new Long[nb - 1];
+							if (info.hasTime) {
+								decodeTime(gis, times);
+							}
+							Long[] pas = new Long[nb - 1];
+							if (info.hasPa) {
+								decodeAccuracy(gis, pas);
+							}
+							Long[] eas = new Long[nb - 1];
+							if (info.hasEa) {
+								decodeAccuracy(gis, eas);
+							}
+							for (int i = 0; i < nb - 1; ++i)
+								segments[s][i + 1] = new Track.Point(
+									latitudes[i] == 0 ? null : latitudes[i],
+									longitudes[i] == 0 ? null : longitudes[i],
+									elevations[i],
+									times[i],
+									pas[i],
+									eas[i],
+									null, null
+								);
 						}
-	
 					}
 					V1.StoredData v1 = new V1.StoredData();
 					v1.s = new Track.Segment[info.nbSegments];
@@ -467,6 +469,471 @@ public class TrackStorage {
 			b[6] = bytes[offset[6] * nbPoints + pointIndex];
 			b[7] = bytes[offset[7] * nbPoints + pointIndex];
 			return ByteBuffer.wrap(b).order(ByteOrder.BIG_ENDIAN).getLong();
+		}
+		
+		private static void encodeNumber(OutputStream out, long v, int bytes) throws IOException {
+			if (bytes == 8) {
+				byte[] b = new byte[8];
+				ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).putLong(v);
+				out.write(b);
+				return;
+			}
+			out.write((int)(v & 0xFF));
+			if (bytes > 1) out.write((int)((v & 0xFF00) >> 8));
+			if (bytes > 2) out.write((int)((v & 0xFF0000) >> 16));
+			if (bytes > 3) out.write((int)((v & 0xFF000000) >> 24));
+			if (bytes > 4) out.write((int)((v & 0xFF00000000L) >> 32));
+			if (bytes > 5) out.write((int)((v & 0xFF0000000000L) >> 40));
+			if (bytes > 6) out.write((int)((v >> 48) & 0xFF));
+		}
+		
+		private static long decodeNumber(InputStream in, int bytes) throws IOException {
+			if (bytes == 8) {
+				byte[] b = new byte[8];
+				IOUtils.readFully(in, b);
+				return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getLong();
+			}
+			long v = in.read();
+			if (bytes > 1) v |= in.read() << 8;
+			if (bytes > 2) v |= in.read() << 16;
+			if (bytes > 3) v |= ((long)in.read()) << 24;
+			if (bytes > 4) v |= ((long)in.read()) << 32;
+			if (bytes > 5) v |= ((long)in.read()) << 40;
+			if (bytes > 6) v |= ((long)in.read()) << 48;
+			return v;
+		}
+		
+		private static void encodeCoord(OutputStream out, long[] values) throws IOException {
+			// 1800000000 = 0x6B49D200 => +1 bit for sign = 32 bits
+			boolean hasLastDigit = false;
+			for (var v : values) if ((v % 10) != 0) { hasLastDigit = true; break; }
+			if (!hasLastDigit)
+				for (int i = 0; i < values.length; ++i)
+					values[i] = values[i] / 10;
+			long maxAbs = Math.abs(values[0]);
+			for (int i = 1; i < values.length; ++i) {
+				long v = Math.abs(values[i]);
+				if (v > maxAbs) maxAbs = v;
+			}
+			
+			int i1 = hasLastDigit ? 1 : 0;
+			int encodingLength;
+			if (maxAbs < 0x80) encodingLength = 0;
+			else if (maxAbs < 0x8000) encodingLength = 1;
+			else if (maxAbs < 0x800000) encodingLength = 2;
+			else encodingLength = 3;
+			i1 |= encodingLength << 1;
+			out.write(i1);
+			for (long v : values) {
+				boolean sign = v < 0;
+				long abs = Math.abs(v);
+				switch (encodingLength) {
+				case 0:
+					out.write((sign ? 0x80 : 0) | (int)(abs & 0x7F));
+					break;
+				case 1:
+					out.write((int)(abs & 0xFF));
+					out.write((sign ? 0x80 : 0) | (int)((abs & 0x7F00) >> 8));
+					break;
+				case 2:
+					out.write((int)(abs & 0xFF));
+					out.write((int)((abs & 0xFF00) >> 8));
+					out.write((sign ? 0x80 : 0) | (int)((abs & 0x7F0000) >> 16));
+					break;
+				default:
+					out.write((int)(abs & 0xFF));
+					out.write((int)((abs & 0xFF00) >> 8));
+					out.write((int)((abs & 0xFF0000) >> 16));
+					out.write((sign ? 0x80 : 0) | (int)((abs & 0x7F000000) >> 24));
+					break;
+				}
+			}
+		}
+		
+		private static void decodeCoord(InputStream in, long[] values) throws IOException {
+			int i1 = in.read();
+			boolean hasLastDigit = (i1 & 1) != 0;
+			int encodingLength = i1 >> 1;
+			for (int i = 0; i < values.length; ++i) {
+				boolean sign;
+				long abs;
+				switch (encodingLength) {
+				case 0:
+					i1 = in.read();
+					sign = (i1 & 0x80) != 0;
+					abs = i1 & 0x7F;
+					break;
+				case 1:
+					abs = in.read();
+					i1 = in.read();
+					sign = (i1 & 0x80) != 0;
+					abs |= (i1 & 0x7F) << 8;
+					break;
+				case 2:
+					abs = in.read();
+					abs |= in.read() << 8;
+					i1 = in.read();
+					sign = (i1 & 0x80) != 0;
+					abs |= (i1 & 0x7F) << 16;
+					break;
+				default:
+					abs = in.read();
+					abs |= in.read() << 8;
+					abs |= in.read() << 16;
+					i1 = in.read();
+					sign = (i1 & 0x80) != 0;
+					abs |= (i1 & 0x7F) << 24;
+					break;
+				}
+				if (!hasLastDigit) abs *= 10;
+				if (sign) abs = -abs;
+				values[i] = abs;
+			}
+		}
+		
+		private static void encodeElevation(OutputStream out, Long[] values) throws IOException {
+			// elevation goes from -10000 to 10000, with factor 10 => -100000 to 100000 => 24 bits integer
+			// 100000 = 0x186A0
+			// 0x7FFF = 32767 = 3276.7 meters
+			
+			BitEncoder bits = new BitEncoder(out);
+			
+			int nbNull = 0;
+			for (var v : values) if (v == null) nbNull++;
+			if (nbNull == 0) {
+				bits.encode(false);
+			} else {
+				bits.encode(true);
+				for (var v : values) bits.encode(v == null);
+				Long[] newValues = new Long[values.length - nbNull];
+				int pos = 0;
+				for (int i = 0; i < values.length; ++i) if (values[i] != null) newValues[pos++] = values[i];
+				values = newValues;
+			}
+			if (values.length == 0) {
+				bits.close();
+				return;
+			}
+			long maxAbs = Math.abs(values[0].longValue());
+			for (var v : values) {
+				long l = Math.abs(v.longValue());
+				if (l > maxAbs) maxAbs = l;
+			}
+			int encodingLength;
+			if (maxAbs < 0x80) encodingLength = 0;
+			else if (maxAbs < 0x8000) encodingLength = 1;
+			else encodingLength = 2;
+			bits.encode((encodingLength & 1) != 0);
+			bits.encode((encodingLength & 2) != 0);
+			bits.close();
+			
+			for (long v : values) {
+				boolean sign = v < 0;
+				long abs = Math.abs(v);
+				switch (encodingLength) {
+				case 0:
+					out.write((sign ? 0x80 : 0) | (int)(abs & 0x7F));
+					break;
+				case 1:
+					out.write((int)(abs & 0xFF));
+					out.write((sign ? 0x80 : 0) | (int)((abs & 0x7F00) >> 8));
+					break;
+				default:
+					out.write((int)(abs & 0xFF));
+					out.write((int)((abs & 0xFF00) >> 8));
+					out.write((sign ? 0x2 : 0) | (int)((abs & 0x10000) >> 16));
+					break;
+				}
+			}
+		}
+		
+		private static void decodeElevation(InputStream in, Long[] values) throws IOException {
+			BitDecoder bits = new BitDecoder(in);
+			
+			boolean hasNull = bits.decode();
+			boolean[] isNull = new boolean[values.length];
+			boolean allNull = hasNull;
+			if (hasNull) {
+				for (int i = 0; i < values.length; ++i) {
+					isNull[i] = bits.decode();
+					allNull = allNull && isNull[i];
+				}
+			}
+			if (allNull) return;
+			
+			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0);
+
+			for (int i = 0; i < values.length; ++i) {
+				if (isNull[i]) continue;
+				boolean sign;
+				long abs;
+				switch (encodingLength) {
+				case 0:
+					abs = in.read();
+					sign = (abs & 0x80) != 0;
+					abs = abs & 0x7F;
+					break;
+				case 1:
+					abs = in.read() | (in.read() << 8);
+					sign = (abs & 0x8000) != 0;
+					abs = abs & 0x7FFF;
+					break;
+				default:
+					abs = in.read() | (in.read() << 8) | (in.read() << 16);
+					sign = (abs & 0x20000) != 0;
+					abs = abs & 0x1FFFF;
+					break;
+				}
+				if (sign) abs = -abs;
+				values[i] = abs;
+			}
+		}
+
+		private static void encodeTime(OutputStream out, Long[] values) throws IOException {
+			BitEncoder bits = new BitEncoder(out);
+			
+			int nbNull = 0;
+			for (var v : values) if (v == null) nbNull++;
+			if (nbNull == 0) {
+				bits.encode(false);
+			} else {
+				bits.encode(true);
+				for (var v : values) bits.encode(v == null);
+				Long[] newValues = new Long[values.length - nbNull];
+				int pos = 0;
+				for (int i = 0; i < values.length; ++i) if (values[i] != null) newValues[pos++] = values[i];
+				values = newValues;
+			}
+			if (values.length == 0) {
+				bits.close();
+				return;
+			}
+			boolean hasNegative = false;
+			for (long l : values) if (l < 0) { hasNegative = true; break; }
+			bits.encode(hasNegative);
+			
+			for (int i = 0; i < 3; ++i) {
+				boolean hasLastDigit = false;
+				for (long l : values) if ((l % 10) != 0) { hasLastDigit = true; break; }
+				bits.encode(hasLastDigit);
+				if (hasLastDigit) break;
+				for (int j = 0; j < values.length; ++j) values[j] = values[j] / 10;
+			}
+			
+			long maxAbs = Math.abs(values[0].longValue());
+			for (var v : values) {
+				long l = Math.abs(v.longValue());
+				if (l > maxAbs) maxAbs = l;
+			}
+			int encodingLength;
+			if (maxAbs < (hasNegative ? 0x80 : 0x100)) encodingLength = 0;
+			else if (maxAbs < (hasNegative ? 0x8000 : 0x10000)) encodingLength = 1;
+			else if (maxAbs < (hasNegative ? 0x800000 : 0x1000000)) encodingLength = 2;
+			else if (maxAbs < (hasNegative ? 0x80000000L : 0x100000000L)) encodingLength = 3;
+			else if (maxAbs < (hasNegative ? 0x8000000000L : 0x10000000000L)) encodingLength = 4;
+			else if (maxAbs < (hasNegative ? 0x800000000000L : 0x1000000000000L)) encodingLength = 5;
+			else if (maxAbs < (hasNegative ? 0x80000000000000L : 0x100000000000000L)) encodingLength = 6;
+			else encodingLength = 7;
+			bits.encode((encodingLength & 1) != 0);
+			bits.encode((encodingLength & 2) != 0);
+			bits.encode((encodingLength & 4) != 0);
+			bits.close();
+			
+			for (long v : values) {
+				if (encodingLength == 7) {
+					encodeNumber(out, v, 8);
+				} else {
+					boolean sign = v < 0;
+					long abs = Math.abs(v);
+					if (!hasNegative) {
+						encodeNumber(out, abs, encodingLength + 1);
+					} else {
+						if (sign)
+							abs |= 1 << (encodingLength * 8 + 7);
+						encodeNumber(out, abs, encodingLength + 1);
+					}
+				}
+			}
+		}
+
+		private static void decodeTime(InputStream in, Long[] values) throws IOException {
+			BitDecoder bits = new BitDecoder(in);
+			
+			boolean hasNull = bits.decode();
+			boolean[] isNull = new boolean[values.length];
+			boolean allNull = hasNull;
+			if (hasNull) {
+				for (int i = 0; i < values.length; ++i) {
+					isNull[i] = bits.decode();
+					allNull = allNull && isNull[i];
+				}
+			}
+			if (allNull) return;
+			
+			boolean hasNegative = bits.decode();
+			int addLastDigit = 0;
+			for (int i = 0; i < 3; ++i) {
+				boolean b = bits.decode();
+				if (b) break;
+				addLastDigit++;
+			}
+
+			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0) | (bits.decode() ? 4 : 0);
+			
+			for (int i = 0; i < values.length; ++i) {
+				if (isNull[i]) continue;
+				long l = decodeNumber(in, encodingLength + 1);
+				if (hasNegative && encodingLength < 7) {
+					long signMask = 1L << (encodingLength * 8 + 7);
+					boolean sign = (l & signMask) != 0;
+					if (sign) l = -(l - signMask);
+				}
+				for (int j = 0; j < addLastDigit; ++j) l = l * 10;
+				values[i] = l;
+			}
+		}
+
+		private static void encodeAccuracy(OutputStream out, Long[] values) throws IOException {
+			// posAccuracy, with factor 100: 10km would be 1000000 (0xF4240) => 24 bits integer
+			// eleAccuracy, with factor 100: same 24 bits integer
+
+			BitEncoder bits = new BitEncoder(out);
+			
+			int nbNull = 0;
+			for (var v : values) if (v == null) nbNull++;
+			if (nbNull == 0) {
+				bits.encode(false);
+			} else {
+				bits.encode(true);
+				for (var v : values) bits.encode(v == null);
+				Long[] newValues = new Long[values.length - nbNull];
+				int pos = 0;
+				for (int i = 0; i < values.length; ++i) if (values[i] != null) newValues[pos++] = values[i];
+				values = newValues;
+			}
+			if (values.length == 0) {
+				bits.close();
+				return;
+			}
+			boolean hasNegative = false;
+			for (long l : values) if (l < 0) { hasNegative = true; break; }
+			bits.encode(hasNegative);
+			
+			for (int i = 0; i < 2; ++i) {
+				boolean hasLastDigit = false;
+				for (long l : values) if ((l % 10) != 0) { hasLastDigit = true; break; }
+				bits.encode(hasLastDigit);
+				if (hasLastDigit) break;
+				for (int j = 0; j < values.length; ++j) values[j] = values[j] / 10;
+			}
+			
+			long maxAbs = Math.abs(values[0].longValue());
+			for (var v : values) {
+				long l = Math.abs(v.longValue());
+				if (l > maxAbs) maxAbs = l;
+			}
+			int encodingLength;
+			if (maxAbs < (hasNegative ? 0x80 : 0x100)) encodingLength = 0;
+			else if (maxAbs < (hasNegative ? 0x8000 : 0x10000)) encodingLength = 1;
+			else encodingLength = 2;
+			bits.encode((encodingLength & 1) != 0);
+			bits.encode((encodingLength & 2) != 0);
+			bits.close();
+			
+			for (long v : values) {
+				boolean sign = v < 0;
+				long abs = Math.abs(v);
+				if (!hasNegative) {
+					encodeNumber(out, abs, encodingLength + 1);
+				} else {
+					if (sign)
+						abs |= 1 << (encodingLength * 8 + 7);
+					encodeNumber(out, abs, encodingLength + 1);
+				}
+			}
+		}
+
+		private static void decodeAccuracy(InputStream in, Long[] values) throws IOException {
+			BitDecoder bits = new BitDecoder(in);
+			
+			boolean hasNull = bits.decode();
+			boolean[] isNull = new boolean[values.length];
+			boolean allNull = hasNull;
+			if (hasNull) {
+				for (int i = 0; i < values.length; ++i) {
+					isNull[i] = bits.decode();
+					allNull = allNull && isNull[i];
+				}
+			}
+			if (allNull) return;
+
+			boolean hasNegative = bits.decode();
+			int addLastDigit = 0;
+			for (int i = 0; i < 2; ++i) {
+				boolean b = bits.decode();
+				if (b) break;
+				addLastDigit++;
+			}
+
+			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0);
+			
+			for (int i = 0; i < values.length; ++i) {
+				if (isNull[i]) continue;
+				long l = decodeNumber(in, encodingLength + 1);
+				if (hasNegative) {
+					long signMask = 1 << (encodingLength * 8 + 7);
+					boolean sign = (l & signMask) != 0;
+					if (sign) l = -(l - signMask);
+				}
+				for (int j = 0; j < addLastDigit; ++j) l = l * 10;
+				values[i] = l;
+			}
+		}
+		
+		private static class BitEncoder {
+			private OutputStream out;
+			private int currentByte = 0;
+			private int currentMask = 1;
+			
+			private BitEncoder(OutputStream out) {
+				this.out = out;
+			}
+			
+			private void encode(boolean bit) throws IOException {
+				if (bit) currentByte |= currentMask;
+				currentMask <<= 1;
+				if (currentMask == 0x100) {
+					out.write(currentByte);
+					currentByte = 0;
+					currentMask = 1;
+				}
+			}
+			
+			private void close() throws IOException {
+				if (currentMask > 1) {
+					out.write(currentByte);
+				}
+			}
+		}
+		
+		private static class BitDecoder {
+			private InputStream in;
+			private int currentMask = 0x100;
+			private int currentByte = 0;
+			
+			private BitDecoder(InputStream in) {
+				this.in = in;
+			}
+			
+			private boolean decode() throws IOException {
+				if (currentMask == 0x100) {
+					currentByte = in.read();
+					currentMask = 1;
+				}
+				boolean bit = (currentByte & currentMask) != 0;
+				currentMask <<= 1;
+				return bit;
+			}
 		}
 		
 		private static void encodeString(OutputStream out, String s) throws IOException {
