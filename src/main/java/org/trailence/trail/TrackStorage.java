@@ -875,27 +875,27 @@ public class TrackStorage {
 				bits.close();
 				return;
 			}
-			//predictValues(values);
-			long maxAbs = Math.abs(values[0].longValue());
-			for (var v : values) {
-				long l = Math.abs(v.longValue());
-				if (l > maxAbs) maxAbs = l;
+			long maxAbs = 0;
+			for (int i = 0; i < values.length; ++i) {
+				long v = values[i];
+				if (v < 0) {
+					bits.encode(true);
+					v = -v;
+					values[i] = v;
+				} else {
+					bits.encode(false);
+				}
+				if (v > maxAbs) maxAbs = v;
 			}
 			int encodingLength;
-			if (maxAbs < 0x80) encodingLength = 0;
-			else if (maxAbs < 0x8000) encodingLength = 1;
+			if (maxAbs < 0x100) encodingLength = 0;
+			else if (maxAbs < 0x10000) encodingLength = 1;
 			else encodingLength = 2;
-			long negativeBit = encodingLength < 2 ? (0x80L << (encodingLength * 8)) : 0x20000L;
 			bits.encode((encodingLength & 1) != 0);
 			bits.encode((encodingLength & 2) != 0);
-			//System.out.println("elevation: maxAbs = " + maxAbs + " encoding = " + encodingLength + " null = " + nbNull + " values = " + values.length);
 			
 			bits.close();
-			encodeSplitNumbers(out, values, encodingLength, true, negativeBit);
-			/*
-			encodeSplitBitsNumbers(bits, values, encodingLength, true, negativeBit);
-			bits.close();
-			*/
+			encodeSplitNumbers(out, values, encodingLength, false, 0);
 		}
 		
 		private static void decodeElevation(InputStream in, Long[] values) throws IOException {
@@ -911,12 +911,16 @@ public class TrackStorage {
 				}
 			}
 			if (allNull) return;
+			boolean[] sign = new boolean[values.length];
+			for (int i = 0; i < values.length; ++i) {
+				if (isNull[i]) sign[i] = false;
+				else sign[i] = bits.decode();
+			}
 			
 			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0);
-			long negativeBit = encodingLength < 2 ? (0x80L << (encodingLength * 8)) : 0x20000L;
-			decodeSplitNumbers(in, values, encodingLength, true, isNull, 0, negativeBit);
-			//unpredictValues(values);
-			//decodeSplitBitsNumbers(bits, values, encodingLength, true, isNull, 0, negativeBit);
+			decodeSplitNumbers(in, values, encodingLength, false, isNull, 0, 0);
+			for (int i = 0; i < values.length; ++i)
+				if (sign[i]) values[i] = -values[i];
 		}
 
 		private static void encodeTime(OutputStream out, Long[] values) throws IOException {
