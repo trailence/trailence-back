@@ -752,42 +752,104 @@ public class TrackStorage {
 			}
 		}
 		
+		private static void predictValues(Long[] values) {
+			long previous = values[0];
+			for (int i = 1; i < values.length; ++i) {
+				long v = values[i];
+				values[i] -= previous;
+				previous = v;
+			}
+		}
+		private static void unpredictValues(Long[] values) {
+			int i = 0;
+			while (values[i] == null) ++i;
+			long previous = values[i++];
+			for (; i < values.length; ++i) {
+				if (values[i] == null) continue;
+				values[i] += previous;
+				previous = values[i];
+			}
+		}
+		
 		
 		private static void encodeCoord(OutputStream out, long[] values) throws IOException {
 			// 1800000000 = 0x6B49D200 => +1 bit for sign = 32 bits
-			boolean hasLastDigit = false;
-			for (var v : values) if ((v % 10) != 0) { hasLastDigit = true; break; }
-			if (!hasLastDigit)
+
+			BitEncoder bits = new BitEncoder(out);
+			DigitEncoder digits = new DigitEncoder();
+			int nbLastDigit = 0;
+			for (var v : values) {
+				if ((v % 10) != 0) nbLastDigit++;
+				bits.encode(v < 0);
+			}
+			if (nbLastDigit == 0) {
+				bits.encode(false);
 				for (int i = 0; i < values.length; ++i)
-					values[i] = values[i] / 10;
-			long maxAbs = Math.abs(values[0]);
+					values[i] = Math.abs(values[i]) / 10;
+			} else if (nbLastDigit < values.length / 2) {
+				bits.encode(true);
+				bits.encode(true);
+				for (int i = 0; i < values.length; ++i) {
+					long v = Math.abs(values[i]);
+					int mod = (int)(v % 10);
+					values[i] = v / 10;
+					bits.encode(mod != 0);
+					if (mod != 0) {
+						digits.encode(mod);
+					}
+				}
+			} else {
+				bits.encode(true);
+				bits.encode(false);
+				for (int i = 0; i < values.length; ++i)
+					values[i] = Math.abs(values[i]);
+			}
+			
+			long maxAbs = values[0];
 			for (int i = 1; i < values.length; ++i) {
-				long v = Math.abs(values[i]);
+				long v = values[i];
 				if (v > maxAbs) maxAbs = v;
 			}
 			
-			int i1 = hasLastDigit ? 1 : 0;
 			int encodingLength;
-			if (maxAbs < 0x80) encodingLength = 0;
-			else if (maxAbs < 0x8000) encodingLength = 1;
-			else if (maxAbs < 0x800000) encodingLength = 2;
+			if (maxAbs < 0x100) encodingLength = 0;
+			else if (maxAbs < 0x10000) encodingLength = 1;
+			else if (maxAbs < 0x1000000) encodingLength = 2;
 			else encodingLength = 3;
-			i1 |= encodingLength << 1;
-			out.write(i1);
-			long negativeBit = 0x80L << (encodingLength * 8);
-			encodeSplitBitsNonNullNumbers(out, values, encodingLength, true, negativeBit);
-			//encodeSplitNonNullNumbers(out, values, encodingLength, true, negativeBit);
-			//encodeSplitNonNullNumbersNegative1(out, values, encodingLength, true);
+			bits.encodeNumber(encodingLength, 2);
+			bits.close();
+			encodeSplitBitsNonNullNumbers(out, values, encodingLength, false, 0);
+			digits.close(out);
 		}
 		
 		private static void decodeCoord(InputStream in, long[] values) throws IOException {
-			int i1 = in.read();
-			boolean hasLastDigit = (i1 & 1) != 0;
-			int encodingLength = i1 >> 1;
-			long negativeBit = 0x80L << (encodingLength * 8);
-			decodeSplitBitsNonNullNumbers(in, values, encodingLength, true, hasLastDigit ? 0 : 1, negativeBit);
-			//decodeSplitNonNullNumbers(in, values, encodingLength, true, hasLastDigit ? 0 : 1, negativeBit);
-			//decodeSplitNonNullNumbersNegative1(in, values, encodingLength, true, hasLastDigit ? 0 : 1);
+			BitDecoder bits = new BitDecoder(in);
+			boolean[] sign = new boolean[values.length];
+			for (int i = 0; i < values.length; ++i) sign[i] = bits.decode();
+			boolean hasLastDigit = bits.decode();
+			boolean isLastDigitEncoded = false;
+			boolean[] valuesLastDigit = new boolean[0];
+			if (hasLastDigit) {
+				isLastDigitEncoded = bits.decode();
+				if (isLastDigitEncoded) {
+					valuesLastDigit = new boolean[values.length];
+					for (int i = 0; i < values.length; ++i)
+						valuesLastDigit[i] = bits.decode();
+				}
+			}
+			int encodingLength = bits.decodeNumber(2);
+			decodeSplitBitsNonNullNumbers(in, values, encodingLength, false, hasLastDigit && !isLastDigitEncoded ? 0 : 1, 0);
+			if (isLastDigitEncoded) {
+				DigitDecoder digits = new DigitDecoder(in);
+				for (int i = 0; i < values.length; ++i)
+					if (valuesLastDigit[i]) {
+						int digit = digits.decode();
+						values[i] += digit;
+					}
+			}
+			for (int i = 0; i < values.length; ++i) {
+				if (sign[i]) values[i] = -values[i];
+			}
 		}
 		
 		private static void encodeElevation(OutputStream out, Long[] values) throws IOException {
@@ -813,6 +875,7 @@ public class TrackStorage {
 				bits.close();
 				return;
 			}
+			//predictValues(values);
 			long maxAbs = Math.abs(values[0].longValue());
 			for (var v : values) {
 				long l = Math.abs(v.longValue());
@@ -825,6 +888,7 @@ public class TrackStorage {
 			long negativeBit = encodingLength < 2 ? (0x80L << (encodingLength * 8)) : 0x20000L;
 			bits.encode((encodingLength & 1) != 0);
 			bits.encode((encodingLength & 2) != 0);
+			//System.out.println("elevation: maxAbs = " + maxAbs + " encoding = " + encodingLength + " null = " + nbNull + " values = " + values.length);
 			
 			bits.close();
 			encodeSplitNumbers(out, values, encodingLength, true, negativeBit);
@@ -851,6 +915,7 @@ public class TrackStorage {
 			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0);
 			long negativeBit = encodingLength < 2 ? (0x80L << (encodingLength * 8)) : 0x20000L;
 			decodeSplitNumbers(in, values, encodingLength, true, isNull, 0, negativeBit);
+			//unpredictValues(values);
 			//decodeSplitBitsNumbers(bits, values, encodingLength, true, isNull, 0, negativeBit);
 		}
 
@@ -1039,6 +1104,12 @@ public class TrackStorage {
 				}
 			}
 			
+			private void encodeNumber(int number, int nbBits) throws IOException {
+				for (int i = 0; i < nbBits; ++i) {
+					encode(((number >> i) & 1) != 0);
+				}
+			}
+			
 			private void close() throws IOException {
 				if (currentMask > 1) {
 					out.write(currentByte);
@@ -1063,6 +1134,78 @@ public class TrackStorage {
 				boolean bit = (currentByte & currentMask) != 0;
 				currentMask <<= 1;
 				return bit;
+			}
+			
+			private int decodeNumber(int nbBits) throws IOException {
+				int n = 0;
+				for (int i = 0; i < nbBits; ++i) {
+					if (decode())
+						n |= 1 << i;
+				}
+				return n;
+			}
+		}
+		
+		private static class DigitEncoder {
+			private AccessibleByteArrayOutputStream out = new AccessibleByteArrayOutputStream(1024);
+			private long currentValue = 0;
+			private long currentMask = 1;
+			
+			private void encode(int digit) {
+				currentValue += (digit - 1) * currentMask;
+				if (currentMask == 150094635296999121L) {
+					flush();
+				} else {
+					currentMask *= 9;
+				}
+			}
+			
+			private void flush() {
+				out.write((int)(currentValue & 0xFF));
+				out.write((int)((currentValue & 0xFF00L) >> 8));
+				out.write((int)((currentValue & 0xFF0000L) >> 16));
+				out.write((int)((currentValue & 0xFF000000L) >> 24));
+				out.write((int)((currentValue & 0xFF00000000L) >> 32));
+				out.write((int)((currentValue & 0xFF0000000000L) >> 40));
+				out.write((int)((currentValue & 0xFF000000000000L) >> 48));
+				out.write((int)((currentValue >> 56) & 0xFF));
+				currentValue = 0;
+				currentMask = 1;
+			}
+			
+			private void close(OutputStream o) throws IOException{
+				if (currentMask > 1) flush();
+				o.write(out.getData(), 0, out.getLength());
+			}
+		}
+		
+		private static class DigitDecoder {
+			private InputStream in;
+			private long currentValue = 0;
+			private long currentMask = 1;
+			private DigitDecoder(InputStream in) {
+				this.in = in;
+			}
+			private int decode() throws IOException {
+				if (currentMask == 1) {
+					currentValue = in.read() |
+						(((long)in.read()) << 8) |
+						(((long)in.read()) << 16) |
+						(((long)in.read()) << 24) |
+						(((long)in.read()) << 32) |
+						(((long)in.read()) << 40) |
+						(((long)in.read()) << 48) |
+						(((long)in.read()) << 56);
+					currentMask = 9;
+					return (int)(currentValue % 9) + 1;
+				}
+				int v = (int)((currentValue / currentMask) % 9) + 1;
+				if (currentMask == 150094635296999121L) {
+					currentMask = 1;
+				} else {
+					currentMask *= 9;
+				}
+				return v;
 			}
 		}
 		

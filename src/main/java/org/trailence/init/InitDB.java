@@ -93,9 +93,10 @@ public class InitDB {
 					.block();
 		
 		log.info("Test track v2:");
+		String singleUuid = null;
 		Stats stats = new Stats();
 		long start = System.currentTimeMillis();
-		db.getDatabaseClient().sql("SELECT uuid,owner,data FROM tracks ORDER BY uuid,owner")
+		db.getDatabaseClient().sql("SELECT uuid,owner,data FROM tracks" + (singleUuid != null ? " WHERE uuid = '" + singleUuid + "'" : "") + " ORDER BY uuid,owner")
 		.fetch()
 		.all()
 		.map(row -> {
@@ -113,23 +114,24 @@ public class InitDB {
 		})
 		.count()
 		.block();
-		db.getDatabaseClient().sql("SELECT trail_uuid, data FROM public_tracks ORDER BY trail_uuid")
-		.fetch()
-		.all()
-		.map(row -> {
-			try {
-				UUID uuid = (UUID) row.get("trail_uuid");
-				ByteBuffer bb = (ByteBuffer) row.get("data");
-				byte[] data = new byte[bb.remaining()];
-				bb.get(data);
-				check(data, stats, "Public track UUID " + uuid);
-				return row;
-			} catch (IOException e) {
-				throw new RuntimeException("IO error", e);
-			}
-		})
-		.count()
-		.block();
+		if (singleUuid == null)
+			db.getDatabaseClient().sql("SELECT trail_uuid, data FROM public_tracks ORDER BY trail_uuid")
+			.fetch()
+			.all()
+			.map(row -> {
+				try {
+					UUID uuid = (UUID) row.get("trail_uuid");
+					ByteBuffer bb = (ByteBuffer) row.get("data");
+					byte[] data = new byte[bb.remaining()];
+					bb.get(data);
+					check(data, stats, "Public track UUID " + uuid);
+					return row;
+				} catch (IOException e) {
+					throw new RuntimeException("IO error", e);
+				}
+			})
+			.count()
+			.block();
 		log.info("Total tracks: {} in {}", stats.nb.getValue(), System.currentTimeMillis() - start);
 		log.info("V2 was better {} times, same {} times, worst {} times", stats.better.getValue(), stats.same.getValue(), stats.worst.size());
 		for (String s : stats.worst) log.info("Worst: {}", s);
