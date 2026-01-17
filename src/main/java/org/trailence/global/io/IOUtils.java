@@ -1,4 +1,4 @@
-package org.trailence.global;
+package org.trailence.global.io;
 
 import java.io.EOFException;
 import java.io.IOException;

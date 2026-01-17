@@ -6,8 +6,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,8 +17,9 @@ import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
 import org.trailence.global.AccessibleByteArrayOutputStream;
-import org.trailence.global.IOUtils;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.io.IOEncoding;
+import org.trailence.global.io.IOUtils;
 import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
@@ -92,8 +91,8 @@ public class TrackStorage {
 				else if (nbWaypoints > 2)
 					i |= 0xC0;
 				out.write(i);
-				if (nbSegments > 3) encodeInteger2(nbSegments - 3, out);
-				if (nbWaypoints > 2) encodeInteger2(nbWaypoints - 2, out);
+				if (nbSegments > 3) IOEncoding.encodeInteger2(nbSegments - 3, out);
+				if (nbWaypoints > 2) IOEncoding.encodeInteger2(nbWaypoints - 2, out);
 			}
 			
 			public static Info decode(InputStream in) throws IOException {
@@ -107,13 +106,13 @@ public class TrackStorage {
 				case 0: info.nbSegments = 1; break;
 				case 1: info.nbSegments = 2; break;
 				case 2: info.nbSegments = 3; break;
-				default: info.nbSegments = decodeInteger2(in) + 3;
+				default: info.nbSegments = IOEncoding.decodeInteger2(in) + 3;
 				}
 				switch ((i & 0xC0) >> 6) {
 				case 0: info.nbWaypoints = 0; break;
 				case 1: info.nbWaypoints = 1; break;
 				case 2: info.nbWaypoints = 2; break;
-				default: info.nbWaypoints = decodeInteger2(in) + 2;
+				default: info.nbWaypoints = IOEncoding.decodeInteger2(in) + 2;
 				}
 				return info;
 			}
@@ -139,7 +138,7 @@ public class TrackStorage {
 					}
 					info.encode(out);
 					for (var segment : value.s) {
-						encodeInteger2to4(segment.getP().length, out);
+						IOEncoding.encodeInteger2to4(segment.getP().length, out);
 					}
 					for (var segment : value.s) {
 						var points = segment.getP();
@@ -157,35 +156,35 @@ public class TrackStorage {
 						long l = v == null ? 0 : v.longValue();
 						if (l < -900000000 || l > 900000000) throw new IOException("Invalid latitude: " + l);
 						l = toUnsigned(l);
-						encodeNumber(out, l, 4);
+						IOEncoding.encodeNumber(out, l, 4);
 
 						v = points[0].getN();
 						l = v == null ? 0 : v.longValue();
 						if (l < -1800000000 || l > 1800000000) throw new IOException("Invalid longitude: " + l);
 						l = toUnsigned(l);
-						encodeNumber(out, l, 4);
+						IOEncoding.encodeNumber(out, l, 4);
 
 						if (info.hasElevation) {
 							v = points[0].getE();
 							l = toUnsigned(encode24bitsNullable(v));
-							encodeNumber(out, l, 3);
+							IOEncoding.encodeNumber(out, l, 3);
 						}
 						if (info.hasTime) {
 							v = points[0].getT();
 							l = encode64bitsNullable(v);
-							encodeNumber(out, l, 8);
+							IOEncoding.encodeNumber(out, l, 8);
 						}
 
 						if (info.hasPa) {
 							v = points[0].getPa();
 							l = toUnsigned(encode24bitsNullable(v));
-							encodeNumber(out, l, 3);
+							IOEncoding.encodeNumber(out, l, 3);
 						}
 							
 						if (info.hasEa) {
 							v = points[0].getEa();
 							l = toUnsigned(encode24bitsNullable(v));
-							encodeNumber(out, l, 3);
+							IOEncoding.encodeNumber(out, l, 3);
 						}
 						
 						if (nb > 1) {
@@ -277,18 +276,18 @@ public class TrackStorage {
 					Info info = Info.decode(in);
 					Track.Point[][] segments = new Track.Point[info.nbSegments][];
 					for (int i = 0; i < info.nbSegments; ++i) {
-						segments[i] = new Track.Point[decodeInteger2to4(in)];
+						segments[i] = new Track.Point[IOEncoding.decodeInteger2to4(in)];
 					}
 					for (int s = 0; s < info.nbSegments; ++s) {
 						int nb = segments[s].length;
 						if (nb == 0) continue;
 						// first point
-						long lat = toSigned(decodeNumber(in, 4));
-						long lon = toSigned(decodeNumber(in, 4));
-						Long ele = info.hasElevation ? decode24bitsNullable(toSigned(decodeNumber(in, 3))) : null;
-						Long tim = info.hasTime ? decode64bitsNullable(decodeNumber(in, 8)) : null;
-						Long pa = info.hasPa ? decode24bitsNullable(toSigned(decodeNumber(in, 3))) : null;
-						Long ea = info.hasEa ? decode24bitsNullable(toSigned(decodeNumber(in, 3))) : null;
+						long lat = toSigned(IOEncoding.decodeNumber(in, 4));
+						long lon = toSigned(IOEncoding.decodeNumber(in, 4));
+						Long ele = info.hasElevation ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
+						Long tim = info.hasTime ? decode64bitsNullable(IOEncoding.decodeNumber(in, 8)) : null;
+						Long pa = info.hasPa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
+						Long ea = info.hasEa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
 						segments[s][0] = new Track.Point(lat == 0 ? null : lat, lon == 0 ? null : lon, ele, tim, pa, ea, null, null);
 						
 						if (nb > 1) {
@@ -358,71 +357,6 @@ public class TrackStorage {
 			}
 		}
 
-		
-		/**
-		 * Encode an integer between 0 and 0x7FFF:<ul>
-		 * <li>First byte contains a flag 0x80: if set the value is encoded on 2 bytes, else on 1 byte</li>
-		 * </ul>
-		 */
-		private static void encodeInteger2(int value, OutputStream out) throws IOException {
-			if (value < 0 || value > 0x7FFF) throw new IOException("Invalid integer value: " + value);
-			if (value <= 0x7F) {
-				out.write(value);
-				return;
-			}
-			out.write(((value & 0x7F00) >> 8) | 0x80);
-			out.write(value & 0xFF);
-		}
-		
-		private static int decodeInteger2(InputStream in) throws IOException {
-			int i1 = in.read();
-			if ((i1 & 0x80) == 0) return i1;
-			int i2 = in.read();
-			return ((i1 & 0x7F) << 8) | i2;
-		}
-		
-		/**
-		 * Encode an integer between 0 and 0x40407FFF:<ul>
-		 * <li>first bit 0x80: if 0, encoded on 2 bytes (0 to 0x7FFF)</li>
-		 * <li>if first bit is set, second bit:<ul>
-		 *   <li>0: encoded on 3 bytes: values 0x8000 to 0x407FFF (0x8000 + 0x3FFFFF)</li>
-		 *   <li>1: encoded on 4 bytes: values 0x408000 to 0x40407FFF (0x408000 + 0x3FFFFFFF)</li>
-		 * </ul></li>
-		 * </ul>
-		 */
-		private static void encodeInteger2to4(int value, OutputStream out) throws IOException {
-			if (value < 0 || value > 0x40407FFF) throw new IOException("Invalid integer value: " + value);
-			if (value < 0x8000) {
-				out.write((value & 0x7F00) >> 8);
-				out.write(value & 0xFF);
-				return;
-			}
-			if (value < 0x408000) {
-				value -= 0x8000;
-				out.write(((value & 0x3F0000) >> 16) | 0x80);
-				out.write((value & 0xFF00) >> 8);
-				out.write(value & 0xFF);
-				return;
-			}
-			value -= 0x408000;
-			out.write(((value & 0x3F000000) >> 24) | 0xC0);
-			out.write((value & 0xFF0000) >> 16);
-			out.write((value & 0xFF00) >> 8);
-			out.write(value & 0xFF);
-		}
-		
-		private static int decodeInteger2to4(InputStream in) throws IOException {
-			int i1 = in.read();
-			int i2 = in.read();
-			if ((i1 & 0x80) == 0) return (i1 << 8) | i2;
-			if ((i1 & 0xC0) == 0x80) {
-				return (((i1 & 0x3F) << 16) | (i2 << 8) | in.read()) + 0x8000;
-			}
-			int i3 = in.read();
-			int i4 = in.read();
-			return (((i1 & 0x3F) << 24) | (i2 << 16) | (i3 << 8) | i4) + 0x408000;
-		}
-		
 		private static void encodePoint24Bits(byte[] bytes, int nbPoints, int pointIndex, long v, int[] offset) {
 			bytes[offset[2] * nbPoints + pointIndex] = (byte)(v & 0xFF);
 			bytes[offset[1] * nbPoints + pointIndex] = (byte)((v & 0xFF00) >> 8);
@@ -450,160 +384,44 @@ public class TrackStorage {
 		}
 		
 		private static void encodePoint64Bits(byte[] bytes, int nbPoints, int pointIndex, long v, int[] offset) {
-			byte[] b = new byte[8];
-			ByteBuffer.wrap(b).order(ByteOrder.BIG_ENDIAN).putLong(v);
-			bytes[offset[0] * nbPoints + pointIndex] = b[0];
-			bytes[offset[1] * nbPoints + pointIndex] = b[1];
-			bytes[offset[2] * nbPoints + pointIndex] = b[2];
-			bytes[offset[3] * nbPoints + pointIndex] = b[3];
-			bytes[offset[4] * nbPoints + pointIndex] = b[4];
-			bytes[offset[5] * nbPoints + pointIndex] = b[5];
-			bytes[offset[6] * nbPoints + pointIndex] = b[6];
-			bytes[offset[7] * nbPoints + pointIndex] = b[7];
+			bytes[offset[0] * nbPoints + pointIndex] = (byte)((v >> 56) & 0xFF);
+			bytes[offset[1] * nbPoints + pointIndex] = (byte)((v >> 48) & 0xFF);
+			bytes[offset[2] * nbPoints + pointIndex] = (byte)((v >> 40) & 0xFF);
+			bytes[offset[3] * nbPoints + pointIndex] = (byte)((v >> 32) & 0xFF);
+			bytes[offset[4] * nbPoints + pointIndex] = (byte)((v >> 24) & 0xFF);
+			bytes[offset[5] * nbPoints + pointIndex] = (byte)((v >> 16) & 0xFF);
+			bytes[offset[6] * nbPoints + pointIndex] = (byte)((v >> 8) & 0xFF);
+			bytes[offset[7] * nbPoints + pointIndex] = (byte)(v & 0xFF);
 		}
 		
 		private static long decodePoint64Bits(byte[] bytes, int nbPoints, int pointIndex, int[] offset) {
-			byte[] b = new byte[8];
-			b[0] = bytes[offset[0] * nbPoints + pointIndex];
-			b[1] = bytes[offset[1] * nbPoints + pointIndex];
-			b[2] = bytes[offset[2] * nbPoints + pointIndex];
-			b[3] = bytes[offset[3] * nbPoints + pointIndex];
-			b[4] = bytes[offset[4] * nbPoints + pointIndex];
-			b[5] = bytes[offset[5] * nbPoints + pointIndex];
-			b[6] = bytes[offset[6] * nbPoints + pointIndex];
-			b[7] = bytes[offset[7] * nbPoints + pointIndex];
-			return ByteBuffer.wrap(b).order(ByteOrder.BIG_ENDIAN).getLong();
+			return ((long)(bytes[offset[0] * nbPoints + pointIndex] & 0xFF) << 56) |
+				((long)(bytes[offset[1] * nbPoints + pointIndex] & 0xFF) << 48) |
+				((long)(bytes[offset[2] * nbPoints + pointIndex] & 0xFF) << 40) |
+				((long)(bytes[offset[3] * nbPoints + pointIndex] & 0xFF) << 32) |
+				((long)(bytes[offset[4] * nbPoints + pointIndex] & 0xFF) << 24) |
+				((long)(bytes[offset[5] * nbPoints + pointIndex] & 0xFF) << 16) |
+				((long)(bytes[offset[6] * nbPoints + pointIndex] & 0xFF) << 8) |
+				((long)(bytes[offset[7] * nbPoints + pointIndex] & 0xFF));
 		}
 		
-		private static void encodeNumber(OutputStream out, long v, int bytes) throws IOException {
-			if (bytes == 8) {
-				byte[] b = new byte[8];
-				ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).putLong(v);
-				out.write(b);
-				return;
-			}
-			out.write((int)(v & 0xFF));
-			if (bytes > 1) out.write((int)((v & 0xFF00) >> 8));
-			if (bytes > 2) out.write((int)((v & 0xFF0000) >> 16));
-			if (bytes > 3) out.write((int)((v & 0xFF000000) >> 24));
-			if (bytes > 4) out.write((int)((v & 0xFF00000000L) >> 32));
-			if (bytes > 5) out.write((int)((v & 0xFF0000000000L) >> 40));
-			if (bytes > 6) out.write((int)((v >> 48) & 0xFF));
-		}
-		
-		private static long decodeNumber(InputStream in, int bytes) throws IOException {
-			if (bytes == 8) {
-				byte[] b = new byte[8];
-				IOUtils.readFully(in, b);
-				return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getLong();
-			}
-			long v = in.read();
-			if (bytes > 1) v |= in.read() << 8;
-			if (bytes > 2) v |= in.read() << 16;
-			if (bytes > 3) v |= ((long)in.read()) << 24;
-			if (bytes > 4) v |= ((long)in.read()) << 32;
-			if (bytes > 5) v |= ((long)in.read()) << 40;
-			if (bytes > 6) v |= ((long)in.read()) << 48;
-			return v;
-		}
-		
-		private static void encodeSplitNumber(long v, int vi, byte[] bytes, int nbValues, int nbBytes) {
-			encodeSplitByte((byte)(v & 0xFF), 0, vi, bytes, nbValues);
-			if (nbBytes == 1) return;
-			encodeSplitByte((byte)((v & 0xFF00) >> 8), 1, vi, bytes, nbValues);
-			if (nbBytes == 2) return;
-			encodeSplitByte((byte)((v & 0xFF0000) >> 16), 2, vi, bytes, nbValues);
-			if (nbBytes == 3) return;
-			encodeSplitByte((byte)((v & 0xFF000000L) >> 24), 3, vi, bytes, nbValues);
-			if (nbBytes == 4) return;
-			encodeSplitByte((byte)((v & 0xFF00000000L) >> 32), 4, vi, bytes, nbValues);
-			if (nbBytes == 5) return;
-			encodeSplitByte((byte)((v & 0xFF0000000000L) >> 40), 5, vi, bytes, nbValues);
-			if (nbBytes == 6) return;
-			encodeSplitByte((byte)((v & 0xFF000000000000L) >> 48), 6, vi, bytes, nbValues);
-			if (nbBytes == 7) return;
-			encodeSplitByte((byte)(v >> 56), 7, vi, bytes, nbValues);
-		}
-		
-		private static void encodeSplitByte(byte b, int bi, int vi, byte[] bytes, int nbValues) {
-			bytes[bi * nbValues + vi] = b;
-		}
-		
-		private static long decodeSplitNumber(byte[] bytes, int vi, int nbValues, int nbBytes) {
-			long v = decodeSplitByte(bytes, 0, vi, nbValues);
-			if (nbBytes == 1) return v;
-			v |= decodeSplitByte(bytes, 1, vi, nbValues) << 8;
-			if (nbBytes == 2) return v;
-			v |= decodeSplitByte(bytes, 2, vi, nbValues) << 16;
-			if (nbBytes == 3) return v;
-			v |= ((long)decodeSplitByte(bytes, 3, vi, nbValues)) << 24;
-			if (nbBytes == 4) return v;
-			v |= ((long)decodeSplitByte(bytes, 4, vi, nbValues)) << 32;
-			if (nbBytes == 5) return v;
-			v |= ((long)decodeSplitByte(bytes, 5, vi, nbValues)) << 40;
-			if (nbBytes == 6) return v;
-			v |= ((long)decodeSplitByte(bytes, 6, vi, nbValues)) << 48;
-			if (nbBytes == 7) return v;
-			v |= ((long)decodeSplitByte(bytes, 7, vi, nbValues)) << 56;
-			return v;
-		}
-		
-		private static int decodeSplitByte(byte[] bytes, int bi, int vi, int nbValues) {
-			return bytes[bi * nbValues + vi] & 0xFF;
-		}
 		
 		private static void encodeSplitNumbers(OutputStream out, Long[] values, int encodingLength, boolean hasNegative, long negativeBit) throws IOException {
 			int nbValues = values.length;
 			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			for (int vi = 0; vi < nbValues; ++vi) {
-				if (nbBytes == 8 || !hasNegative)
-					encodeSplitNumber(values[vi], vi, bytes, nbValues, nbBytes);
-				else {
+			var encoder = IOEncoding.getSplitNumberBytesEncoder(nbBytes, nbValues);
+			if (nbBytes == 8 || !hasNegative) {
+				for (int vi = 0; vi < nbValues; ++vi)
+					encoder.encode(values[vi], vi);
+			} else {
+				for (int vi = 0; vi < nbValues; ++vi) {
 					long v = values[vi];
 					boolean sign = v < 0;
-					long abs = Math.abs(v);
-					if (sign) abs |= negativeBit;
-					encodeSplitNumber(abs, vi, bytes, nbValues, nbBytes);
+					if (sign) v = (-v) | negativeBit;
+					encoder.encode(v, vi);
 				}
 			}
-			out.write(bytes);
-		}
-
-		private static void encodeSplitNonNullNumbers(OutputStream out, long[] values, int encodingLength, boolean hasNegative, long negativeBit) throws IOException {
-			int nbValues = values.length;
-			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			for (int vi = 0; vi < nbValues; ++vi) {
-				if (nbBytes == 8 || !hasNegative)
-					encodeSplitNumber(values[vi], vi, bytes, nbValues, nbBytes);
-				else {
-					long v = values[vi];
-					boolean sign = v < 0;
-					long abs = Math.abs(v);
-					if (sign) abs |= negativeBit;
-					encodeSplitNumber(abs, vi, bytes, nbValues, nbBytes);
-				}
-			}
-			out.write(bytes);
-		}
-
-		private static void encodeSplitNonNullNumbersNegative1(OutputStream out, long[] values, int encodingLength, boolean hasNegative) throws IOException {
-			int nbValues = values.length;
-			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			for (int vi = 0; vi < nbValues; ++vi) {
-				if (nbBytes == 8 || !hasNegative)
-					encodeSplitNumber(values[vi], vi, bytes, nbValues, nbBytes);
-				else {
-					long v = values[vi];
-					boolean sign = v < 0;
-					long abs = Math.abs(v) << 1;
-					if (sign) abs |= 1;
-					encodeSplitNumber(abs, vi, bytes, nbValues, nbBytes);
-				}
-			}
-			out.write(bytes);
+			encoder.write(out);
 		}
 
 		private static void decodeSplitNumbers(InputStream in, Long[] values, int encodingLength, boolean hasNegative, boolean[] isNull, int addLastDigit, long negativeBit) throws IOException {
@@ -611,69 +429,53 @@ public class TrackStorage {
 			int nbValues = totalValues;
 			for (int i = 0; i < totalValues; ++i) if (isNull[i]) nbValues--;
 			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			IOUtils.readFully(in, bytes);
+			var decoder = IOEncoding.getSplitNumberBytesDecoder(in, nbValues, nbBytes);
+			IOEncoding.TransformLong transformSigned =
+				hasNegative && encodingLength < 7 ?
+					v -> {
+						boolean sign = (v & negativeBit) != 0;
+						if (sign) return -(v - negativeBit);
+						return v;
+					} : null;
+			IOEncoding.TransformLong transformLastDigit; 
+			switch (addLastDigit) {
+			case 1: transformLastDigit = v -> v * 10; break;
+			case 2: transformLastDigit = v -> v * 100; break;
+			case 3: transformLastDigit = v -> v * 1000; break;
+			default: transformLastDigit = null; break;
+			}
+			IOEncoding.TransformLong transformer = IOEncoding.getTransformLong(transformSigned, transformLastDigit);
 			int vi = 0;
 			for (int i = 0; i < totalValues; ++i) {
 				if (isNull[i]) continue;
-				long l = decodeSplitNumber(bytes, vi++, nbValues, nbBytes);
-				if (hasNegative && encodingLength < 7) {
-					boolean sign = (l & negativeBit) != 0;
-					if (sign) l = -(l - negativeBit);
-				}
-				for (int j = 0; j < addLastDigit; ++j) l = l * 10;
-				values[i] = l;
+				values[i] = transformer.transform(decoder.decode(vi++));
 			}
 		}
 
-		private static void decodeSplitNonNullNumbers(InputStream in, long[] values, int encodingLength, boolean hasNegative, int addLastDigit, long negativeBit) throws IOException {
-			int nbValues = values.length;
-			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			IOUtils.readFully(in, bytes);
-			for (int vi = 0; vi < nbValues; ++vi) {
-				long l = decodeSplitNumber(bytes, vi, nbValues, nbBytes);
-				if (hasNegative && encodingLength < 7) {
-					boolean sign = (l & negativeBit) != 0;
-					if (sign) l = -(l - negativeBit);
-				}
-				for (int j = 0; j < addLastDigit; ++j) l = l * 10;
-				values[vi] = l;
-			}
-		}
-
-		private static void decodeSplitNonNullNumbersNegative1(InputStream in, long[] values, int encodingLength, boolean hasNegative, int addLastDigit) throws IOException {
-			int nbValues = values.length;
-			int nbBytes = encodingLength + 1;
-			byte[] bytes = new byte[nbValues * nbBytes];
-			IOUtils.readFully(in, bytes);
-			for (int vi = 0; vi < nbValues; ++vi) {
-				long l = decodeSplitNumber(bytes, vi, nbValues, nbBytes);
-				if (hasNegative && encodingLength < 7) {
-					boolean sign = (l & 1) != 0;
-					l = l >> 1;
-					if (sign) l = -l;
-				}
-				for (int j = 0; j < addLastDigit; ++j) l = l * 10;
-				values[vi] = l;
-			}
-		}
-		
 		private static void encodeSplitBitsNonNullNumbers(OutputStream out, long[] values, int encodingLength, boolean hasNegative, long negativeBit) throws IOException {
-			BitEncoder bits = new BitEncoder(out);
+			IOEncoding.BitEncoder bits = new IOEncoding.BitEncoder(out);
 			int nbValues = values.length;
 			int nbBytes = encodingLength + 1;
-			for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
-				for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
-					for (int vi = 0; vi < nbValues; ++vi) {
-						long v = values[vi];
-						if (nbBytes < 8 || hasNegative) {
+			if (nbBytes < 8 || hasNegative) {
+				for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
+					for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+						int b = byteIndex * 8 + bitIndex;
+						for (int vi = 0; vi < nbValues; ++vi) {
+							long v = values[vi];
 							boolean sign = v < 0;
-							v = Math.abs(v);
-							if (sign) v |= negativeBit;
+							if (sign) v = (-v) | negativeBit;
+							boolean bit = ((v >> b) & 1) != 0;
+							bits.encode(bit);
 						}
-						boolean bit = ((v >> (byteIndex * 8 + bitIndex)) & 1) != 0;
-						bits.encode(bit);
+					}
+				}
+			} else {
+				for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
+					for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+						int b = byteIndex * 8 + bitIndex;
+						for (int vi = 0; vi < nbValues; ++vi) {
+							bits.encode(((values[vi] >> b) & 1) != 0);
+						}
 					}
 				}
 			}
@@ -683,116 +485,121 @@ public class TrackStorage {
 		private static void decodeSplitBitsNonNullNumbers(InputStream in, long[] values, int encodingLength, boolean hasNegative, int addLastDigit, long negativeBit) throws IOException {
 			int nbValues = values.length;
 			int nbBytes = encodingLength + 1;
-			BitDecoder bits = new BitDecoder(in);
+			IOEncoding.BitDecoder bits = new IOEncoding.BitDecoder(in);
+			IOEncoding.TransformLong transformSigned = nbBytes < 8 && hasNegative ? v -> ((v & negativeBit) == 0 ? v : -(v - negativeBit)) : null;
+			IOEncoding.TransformLong transformLastDigit; 
+			switch (addLastDigit) {
+			case 1: transformLastDigit = v -> v * 10; break;
+			case 2: transformLastDigit = v -> v * 100; break;
+			case 3: transformLastDigit = v -> v * 1000; break;
+			default: transformLastDigit = null; break;
+			}
+			IOEncoding.TransformLong transformer = IOEncoding.getTransformLong(transformSigned, transformLastDigit);
 			for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
 				for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+					int b = byteIndex * 8 + bitIndex;
 					for (int vi = 0; vi < nbValues; ++vi) {
 						boolean bit = bits.decode();
-						if (bit) values[vi] |= 1L << (byteIndex * 8 + bitIndex);
+						if (bit) values[vi] |= 1L << b;
 					}
 				}
 			}
-			if (nbBytes < 8 || hasNegative) {
-				for (int vi = 0; vi < nbValues; ++vi) {
-					if ((values[vi] & negativeBit) != 0)
-						values[vi] = -(values[vi] - negativeBit);
-				}
-			}
-			if (addLastDigit > 0) {
-				for (int vi = 0; vi < nbValues; ++vi) {
-					for (int j = 0; j < addLastDigit; ++j) values[vi] = values[vi] * 10;
-				}
-			}
+			if (transformSigned != null || transformLastDigit != null)
+				for (int vi = 0; vi < nbValues; ++vi) values[vi] = transformer.transform(values[vi]);
 		}
 		
-		private static void encodeSplitBitsNumbers(BitEncoder bits, Long[] values, int encodingLength, boolean hasNegative, long negativeBit) throws IOException {
+		private static void encodeSplitBitsNumbers(IOEncoding.BitEncoder bits, Long[] values, int encodingLength, boolean hasNegative, long negativeBit) throws IOException {
 			int nbValues = values.length;
 			int nbBytes = encodingLength + 1;
-			for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
-				for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
-					for (int vi = 0; vi < nbValues; ++vi) {
-						long v = values[vi];
-						if (nbBytes < 8 && hasNegative) {
+			if (nbBytes < 8 && hasNegative) {
+				for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
+					for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+						int b = byteIndex * 8 + bitIndex;
+						for (int vi = 0; vi < nbValues; ++vi) {
+							long v = values[vi];
 							boolean sign = v < 0;
-							v = Math.abs(v);
-							if (sign) v |= negativeBit;
+							if (sign) v = (-v) | negativeBit;
+							boolean bit = ((v >> b) & 1) != 0;
+							bits.encode(bit);
 						}
-						boolean bit = ((v >> (byteIndex * 8 + bitIndex)) & 1) != 0;
-						bits.encode(bit);
+					}
+				}
+			} else {
+				for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
+					for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+						int b = byteIndex * 8 + bitIndex;
+						for (int vi = 0; vi < nbValues; ++vi) {
+							bits.encode(((values[vi] >> b) & 1) != 0);
+						}
 					}
 				}
 			}
 		}
 
-		private static void decodeSplitBitsNumbers(BitDecoder bits, Long[] values, int encodingLength, boolean hasNegative, boolean[] isNull, int addLastDigit, long negativeBit) throws IOException {
+		private static void decodeSplitBitsNumbers(IOEncoding.BitDecoder bits, Long[] values, int encodingLength, boolean hasNegative, boolean[] isNull, int addLastDigit, long negativeBit) throws IOException {
 			int totalValues = values.length;
 			int nbBytes = encodingLength + 1;
+			IOEncoding.TransformLong transformSigned = nbBytes < 8 && hasNegative ? v -> ((v & negativeBit) == 0 ? v : -(v - negativeBit)) : null;
+			IOEncoding.TransformLong transformLastDigit; 
+			switch (addLastDigit) {
+			case 1: transformLastDigit = v -> v * 10; break;
+			case 2: transformLastDigit = v -> v * 100; break;
+			case 3: transformLastDigit = v -> v * 1000; break;
+			default: transformLastDigit = null; break;
+			}
+			IOEncoding.TransformLong transformer = IOEncoding.getTransformLong(transformSigned, transformLastDigit);
 			for (int byteIndex = 0; byteIndex < nbBytes; byteIndex++) {
 				for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+					int b = byteIndex * 8 + bitIndex;
 					for (int vi = 0; vi < totalValues; ++vi) {
 						if (isNull[vi]) continue;
 						if (values[vi] == null) values[vi] = 0L;
 						boolean bit = bits.decode();
-						if (bit) values[vi] |= 1L << (byteIndex * 8 + bitIndex);
+						if (bit) values[vi] |= 1L << b;
 					}
 				}
 			}
-			if (nbBytes < 8 && hasNegative) {
-				for (int vi = 0; vi < totalValues; ++vi) {
-					if (isNull[vi]) continue;
-					if ((values[vi] & negativeBit) != 0)
-						values[vi] = -(values[vi] - negativeBit);
-				}
-			}
-			if (addLastDigit > 0) {
-				for (int vi = 0; vi < totalValues; ++vi) {
-					if (isNull[vi]) continue;
-					for (int j = 0; j < addLastDigit; ++j) values[vi] = values[vi] * 10;
-				}
-			}
+			if (transformSigned != null || transformLastDigit != null)
+				for (int vi = 0; vi < totalValues; ++vi) if (!isNull[vi]) values[vi] = transformer.transform(values[vi]);
 		}
-		
-		private static void predictValues(Long[] values) {
-			long previous = values[0];
-			for (int i = 1; i < values.length; ++i) {
-				long v = values[i];
-				values[i] -= previous;
-				previous = v;
-			}
-		}
-		private static void unpredictValues(Long[] values) {
-			int i = 0;
-			while (values[i] == null) ++i;
-			long previous = values[i++];
-			for (; i < values.length; ++i) {
-				if (values[i] == null) continue;
-				values[i] += previous;
-				previous = values[i];
-			}
-		}
-		
 		
 		private static void encodeCoord(OutputStream out, long[] values) throws IOException {
 			// 1800000000 = 0x6B49D200 => +1 bit for sign = 32 bits
 
-			BitEncoder bits = new BitEncoder(out);
-			DigitEncoder digits = new DigitEncoder();
+			IOEncoding.BitEncoder bits = new IOEncoding.BitEncoder(out);
+			IOEncoding.DigitEncoder digits = new IOEncoding.DigitEncoder();
 			int nbLastDigit = 0;
-			for (var v : values) {
+			long maxAbs = 0;
+			for (int i = 0; i < values.length; ++i) {
+				long v = values[i];
 				if ((v % 10) != 0) nbLastDigit++;
-				bits.encode(v < 0);
+				if (v < 0) {
+					bits.encode(true);
+					v = -v;
+					values[i] = v;
+				} else {
+					bits.encode(false);
+				}
+				if (v > maxAbs) maxAbs = v;
 			}
 			if (nbLastDigit == 0) {
 				bits.encode(false);
-				for (int i = 0; i < values.length; ++i)
-					values[i] = Math.abs(values[i]) / 10;
+				maxAbs = 0;
+				for (int i = 0; i < values.length; ++i) {
+					long v = values[i] / 10;
+					values[i] = v;
+					if (v > maxAbs) maxAbs = v;
+				}
 			} else if (nbLastDigit < values.length / 2) {
 				bits.encode(true);
 				bits.encode(true);
+				maxAbs = 0;
 				for (int i = 0; i < values.length; ++i) {
-					long v = Math.abs(values[i]);
+					long v = values[i];
 					int mod = (int)(v % 10);
-					values[i] = v / 10;
+					v /= 10;
+					values[i] = v;
+					if (v > maxAbs) maxAbs = v;
 					bits.encode(mod != 0);
 					if (mod != 0) {
 						digits.encode(mod);
@@ -801,14 +608,6 @@ public class TrackStorage {
 			} else {
 				bits.encode(true);
 				bits.encode(false);
-				for (int i = 0; i < values.length; ++i)
-					values[i] = Math.abs(values[i]);
-			}
-			
-			long maxAbs = values[0];
-			for (int i = 1; i < values.length; ++i) {
-				long v = values[i];
-				if (v > maxAbs) maxAbs = v;
 			}
 			
 			int encodingLength;
@@ -823,7 +622,7 @@ public class TrackStorage {
 		}
 		
 		private static void decodeCoord(InputStream in, long[] values) throws IOException {
-			BitDecoder bits = new BitDecoder(in);
+			IOEncoding.BitDecoder bits = new IOEncoding.BitDecoder(in);
 			boolean[] sign = new boolean[values.length];
 			for (int i = 0; i < values.length; ++i) sign[i] = bits.decode();
 			boolean hasLastDigit = bits.decode();
@@ -840,15 +639,18 @@ public class TrackStorage {
 			int encodingLength = bits.decodeNumber(2);
 			decodeSplitBitsNonNullNumbers(in, values, encodingLength, false, hasLastDigit && !isLastDigitEncoded ? 0 : 1, 0);
 			if (isLastDigitEncoded) {
-				DigitDecoder digits = new DigitDecoder(in);
-				for (int i = 0; i < values.length; ++i)
+				IOEncoding.DigitDecoder digits = new IOEncoding.DigitDecoder(in);
+				for (int i = 0; i < values.length; ++i) {
 					if (valuesLastDigit[i]) {
 						int digit = digits.decode();
 						values[i] += digit;
 					}
-			}
-			for (int i = 0; i < values.length; ++i) {
-				if (sign[i]) values[i] = -values[i];
+					if (sign[i]) values[i] = -values[i];
+				}
+			} else {
+				for (int i = 0; i < values.length; ++i) {
+					if (sign[i]) values[i] = -values[i];
+				}
 			}
 		}
 		
@@ -857,7 +659,7 @@ public class TrackStorage {
 			// 100000 = 0x186A0
 			// 0x7FFF = 32767 = 3276.7 meters
 			
-			BitEncoder bits = new BitEncoder(out);
+			IOEncoding.BitEncoder bits = new IOEncoding.BitEncoder(out);
 			
 			int nbNull = 0;
 			for (var v : values) if (v == null) nbNull++;
@@ -893,13 +695,12 @@ public class TrackStorage {
 			else encodingLength = 2;
 			bits.encode((encodingLength & 1) != 0);
 			bits.encode((encodingLength & 2) != 0);
-			
 			bits.close();
 			encodeSplitNumbers(out, values, encodingLength, false, 0);
 		}
 		
 		private static void decodeElevation(InputStream in, Long[] values) throws IOException {
-			BitDecoder bits = new BitDecoder(in);
+			IOEncoding.BitDecoder bits = new IOEncoding.BitDecoder(in);
 			
 			boolean hasNull = bits.decode();
 			boolean[] isNull = new boolean[values.length];
@@ -924,7 +725,7 @@ public class TrackStorage {
 		}
 
 		private static void encodeTime(OutputStream out, Long[] values) throws IOException {
-			BitEncoder bits = new BitEncoder(out);
+			IOEncoding.BitEncoder bits = new IOEncoding.BitEncoder(out);
 			
 			int nbNull = 0;
 			for (var v : values) if (v == null) nbNull++;
@@ -981,7 +782,7 @@ public class TrackStorage {
 		}
 
 		private static void decodeTime(InputStream in, Long[] values) throws IOException {
-			BitDecoder bits = new BitDecoder(in);
+			IOEncoding.BitDecoder bits = new IOEncoding.BitDecoder(in);
 			
 			boolean hasNull = bits.decode();
 			boolean[] isNull = new boolean[values.length];
@@ -1012,7 +813,7 @@ public class TrackStorage {
 			// posAccuracy, with factor 100: 10km would be 1000000 (0xF4240) => 24 bits integer
 			// eleAccuracy, with factor 100: same 24 bits integer
 
-			BitEncoder bits = new BitEncoder(out);
+			IOEncoding.BitEncoder bits = new IOEncoding.BitEncoder(out);
 			
 			int nbNull = 0;
 			for (var v : values) if (v == null) nbNull++;
@@ -1062,7 +863,7 @@ public class TrackStorage {
 		}
 
 		private static void decodeAccuracy(InputStream in, Long[] values) throws IOException {
-			BitDecoder bits = new BitDecoder(in);
+			IOEncoding.BitDecoder bits = new IOEncoding.BitDecoder(in);
 			
 			boolean hasNull = bits.decode();
 			boolean[] isNull = new boolean[values.length];
@@ -1089,142 +890,18 @@ public class TrackStorage {
 			decodeSplitBitsNumbers(bits, values, encodingLength, hasNegative, isNull, addLastDigit, 1L << (encodingLength * 8 + 7));
 		}
 		
-		private static class BitEncoder {
-			private OutputStream out;
-			private int currentByte = 0;
-			private int currentMask = 1;
-			
-			private BitEncoder(OutputStream out) {
-				this.out = out;
-			}
-			
-			private void encode(boolean bit) throws IOException {
-				if (bit) currentByte |= currentMask;
-				currentMask <<= 1;
-				if (currentMask == 0x100) {
-					out.write(currentByte);
-					currentByte = 0;
-					currentMask = 1;
-				}
-			}
-			
-			private void encodeNumber(int number, int nbBits) throws IOException {
-				for (int i = 0; i < nbBits; ++i) {
-					encode(((number >> i) & 1) != 0);
-				}
-			}
-			
-			private void close() throws IOException {
-				if (currentMask > 1) {
-					out.write(currentByte);
-				}
-			}
-		}
-		
-		private static class BitDecoder {
-			private InputStream in;
-			private int currentMask = 0x100;
-			private int currentByte = 0;
-			
-			private BitDecoder(InputStream in) {
-				this.in = in;
-			}
-			
-			private boolean decode() throws IOException {
-				if (currentMask == 0x100) {
-					currentByte = in.read();
-					currentMask = 1;
-				}
-				boolean bit = (currentByte & currentMask) != 0;
-				currentMask <<= 1;
-				return bit;
-			}
-			
-			private int decodeNumber(int nbBits) throws IOException {
-				int n = 0;
-				for (int i = 0; i < nbBits; ++i) {
-					if (decode())
-						n |= 1 << i;
-				}
-				return n;
-			}
-		}
-		
-		private static class DigitEncoder {
-			private AccessibleByteArrayOutputStream out = new AccessibleByteArrayOutputStream(1024);
-			private long currentValue = 0;
-			private long currentMask = 1;
-			
-			private void encode(int digit) {
-				currentValue += (digit - 1) * currentMask;
-				if (currentMask == 150094635296999121L) {
-					flush();
-				} else {
-					currentMask *= 9;
-				}
-			}
-			
-			private void flush() {
-				out.write((int)(currentValue & 0xFF));
-				out.write((int)((currentValue & 0xFF00L) >> 8));
-				out.write((int)((currentValue & 0xFF0000L) >> 16));
-				out.write((int)((currentValue & 0xFF000000L) >> 24));
-				out.write((int)((currentValue & 0xFF00000000L) >> 32));
-				out.write((int)((currentValue & 0xFF0000000000L) >> 40));
-				out.write((int)((currentValue & 0xFF000000000000L) >> 48));
-				out.write((int)((currentValue >> 56) & 0xFF));
-				currentValue = 0;
-				currentMask = 1;
-			}
-			
-			private void close(OutputStream o) throws IOException{
-				if (currentMask > 1) flush();
-				o.write(out.getData(), 0, out.getLength());
-			}
-		}
-		
-		private static class DigitDecoder {
-			private InputStream in;
-			private long currentValue = 0;
-			private long currentMask = 1;
-			private DigitDecoder(InputStream in) {
-				this.in = in;
-			}
-			private int decode() throws IOException {
-				if (currentMask == 1) {
-					currentValue = in.read() |
-						(((long)in.read()) << 8) |
-						(((long)in.read()) << 16) |
-						(((long)in.read()) << 24) |
-						(((long)in.read()) << 32) |
-						(((long)in.read()) << 40) |
-						(((long)in.read()) << 48) |
-						(((long)in.read()) << 56);
-					currentMask = 9;
-					return (int)(currentValue % 9) + 1;
-				}
-				int v = (int)((currentValue / currentMask) % 9) + 1;
-				if (currentMask == 150094635296999121L) {
-					currentMask = 1;
-				} else {
-					currentMask *= 9;
-				}
-				return v;
-			}
-		}
-		
 		private static void encodeString(OutputStream out, String s) throws IOException {
 			if (s == null || s.isEmpty()) {
-				encodeInteger2(0, out);
+				IOEncoding.encodeInteger2(0, out);
 				return;
 			}
 			var bytes = s.getBytes(StandardCharsets.UTF_8);
-			encodeInteger2(bytes.length, out);
+			IOEncoding.encodeInteger2(bytes.length, out);
 			out.write(bytes);
 		}
 		
 		private static String decodeString(InputStream in) throws IOException {
-			int l = decodeInteger2(in);
+			int l = IOEncoding.decodeInteger2(in);
 			if (l == 0) return "";
 			byte[] bytes = new byte[l];
 			IOUtils.readFully(in, bytes);
@@ -1233,10 +910,10 @@ public class TrackStorage {
 		
 		private static void encodeStringMap(OutputStream out, Map<String, String> map) throws IOException {
 			if (map == null || map.isEmpty()) {
-				encodeInteger2(0, out);
+				IOEncoding.encodeInteger2(0, out);
 				return;
 			}
-			encodeInteger2(map.size(), out);
+			IOEncoding.encodeInteger2(map.size(), out);
 			for (var entry : map.entrySet()) {
 				encodeString(out, entry.getKey());
 				encodeString(out, entry.getValue());
@@ -1244,7 +921,7 @@ public class TrackStorage {
 		}
 		
 		private static Map<String, String> decodeStringMap(InputStream in) throws IOException {
-			int size = decodeInteger2(in);
+			int size = IOEncoding.decodeInteger2(in);
 			if (size == 0) return null;
 			Map<String, String> map = new HashMap<>();
 			for (int i = 0; i < size; ++i) {
