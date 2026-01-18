@@ -19,5 +19,6 @@ CREATE TABLE IF NOT EXISTS public.user_preferences
     photo_cache_days integer,
     alias character varying(25) NOT NULL DEFAULT '',
     elevation_calibration jsonb DEFAULT NULL,
+    trail_filters jsonb DEFAULT NULL,
     CONSTRAINT user_preferences_pkey PRIMARY KEY (email)
 )

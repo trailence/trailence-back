@@ -35,4 +35,5 @@ public class UserPreferences {
 	private String alias;
 
 	private Map<String, Integer> elevationCalibrationByDevice;
+	private Map<String, Map<String, Object>> trailFilters;
 }

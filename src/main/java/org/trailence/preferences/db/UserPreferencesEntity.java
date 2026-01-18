@@ -41,5 +41,6 @@ public class UserPreferencesEntity {
 	private String alias;
 	
 	private Json elevationCalibration;
+	private Json trailFilters;
 
 }

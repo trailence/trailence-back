@@ -46,7 +46,8 @@ class TestPreferences extends AbstractTest {
 			1000L, 1001L, 1002L,
 			500, (short) 90, 250, 20,
 			"",
-			Map.of("hello", 123)
+			Map.of("hello", 123),
+			Map.of("test_filter", Map.of("search", "hello"))
 		);
 		
 		response = user.put("/api/preferences/v1", prefs);

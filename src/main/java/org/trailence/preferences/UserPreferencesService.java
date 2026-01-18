@@ -72,6 +72,7 @@ public class UserPreferencesService {
 		entity.setPhotoCacheDays(dto.getPhotoCacheDays());
 		entity.setAlias(dto.getAlias() != null ? dto.getAlias() : "");
 		entity.setElevationCalibration(toElevationCalibrationJson(dto.getElevationCalibrationByDevice()));
+		entity.setTrailFilters(toTrailFiltersJson(dto.getTrailFilters()));
 	}
 	
 	private UserPreferences toDto(UserPreferencesEntity entity) {
@@ -93,7 +94,8 @@ public class UserPreferencesService {
 			entity.getPhotoMaxSizeKB(),
 			entity.getPhotoCacheDays(),
 			entity.getAlias(),
-			toElevationCalibrationDto(entity.getElevationCalibration())
+			toElevationCalibrationDto(entity.getElevationCalibration()),
+			toTrailFiltersDto(entity.getTrailFilters())
 		);
 	}
 
@@ -173,7 +175,7 @@ public class UserPreferencesService {
 		try {
 			return Json.of(TrailenceUtils.mapper.writeValueAsString(valid));
 		} catch (JsonProcessingException e) {
-			log.error("Invalid elevatino calibration", e);
+			log.error("Invalid elevation calibration", e);
 			return null;
 		}
 	}
@@ -184,6 +186,52 @@ public class UserPreferencesService {
 			return TrailenceUtils.mapper.readValue(db.asString(), new TypeReference<Map<String, Integer>>() {});
 		} catch (Exception e) {
 			log.error("Error decoding elevation calibration", e);
+			return null;
+		}
+
+	}
+	
+	private Json toTrailFiltersJson(Map<String, Map<String, Object>> dto) {
+		if (dto == null) return null;
+		Map<String, Map<String, Object>> valid = new HashMap<>();
+		for (var entry : dto.entrySet()) {
+			String filterName = entry.getKey().trim();
+			if (filterName.isBlank() || filterName.length() > 100) continue;
+			Map<String, Object> filter = entry.getValue();
+			Map<String, Object> filterValid = new HashMap<>();
+			for (var filterEntry : filter.entrySet()) {
+				String key = filterEntry.getKey().trim();
+				if (key.isBlank() || key.length() > 100) continue;
+				Object filterValue = filterEntry.getValue();
+				if (filterValue == null) continue;
+				if (filterValue instanceof Boolean || filterValue instanceof CharSequence) {}
+				else if (filterValue instanceof Map) {
+				} else continue;
+				filterValid.put(key, filterValue);
+			}
+			if (filterValid.isEmpty()) continue;
+			valid.put(filterName, filterValid);
+		}
+		if (valid.isEmpty()) return null;
+		try {
+			String json = TrailenceUtils.mapper.writeValueAsString(valid);
+			if (json.length() > 8192) {
+				log.error("trail filters too large: {}", json.length());
+				return null;
+			}
+			return Json.of(json);
+		} catch (JsonProcessingException e) {
+			log.error("Invalid trail filters", e);
+			return null;
+		}
+	}
+	
+	private Map<String, Map<String, Object>> toTrailFiltersDto(Json db) {
+		if (db == null) return null;
+		try {
+			return TrailenceUtils.mapper.readValue(db.asString(), new TypeReference<Map<String, Map<String, Object>>>() {});
+		} catch (Exception e) {
+			log.error("Error decoding trail filters", e);
 			return null;
 		}
 
