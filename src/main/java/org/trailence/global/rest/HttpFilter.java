@@ -20,7 +20,7 @@ public class HttpFilter implements WebFilter {
 		long start = System.currentTimeMillis();
 		MutableObject<Disposable> schedule = new MutableObject<>(null);
 		exchange.getResponse().beforeCommit(() -> Mono.fromRunnable(() -> {
-			Disposable d = schedule.getValue();
+			Disposable d = schedule.get();
 			if (d != null && !d.isDisposed()) d.dispose();
 			long time = System.currentTimeMillis() - start;
 			if (time > 2000) log.info("Request took {} ms: {} {}", time, exchange.getRequest().getMethod(), exchange.getRequest().getPath());

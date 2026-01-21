@@ -13,11 +13,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.core.JacksonException;
 
 @Service
 public class TokenService {
@@ -44,7 +43,7 @@ public class TokenService {
 	
 	private static final String ALGO = "HmacSHA512";
 	
-	public String generate(TokenData data) throws GeneralSecurityException, JsonProcessingException {
+	public String generate(TokenData data) throws GeneralSecurityException, JacksonException {
 		SecretKeySpec secretKeySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), ALGO);
 		Mac mac = Mac.getInstance(ALGO);
 		mac.init(secretKeySpec);

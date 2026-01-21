@@ -25,7 +25,10 @@ spring:
             enable: ${SMTP_TLS_ENABLED:true}
 
   codec:
-    max-in-memory-size: 1MB
+    max-in-memory-size: 2MB
+  http:
+    codecs:
+      max-in-memory-size: 2MB
     
   application:
     admin:

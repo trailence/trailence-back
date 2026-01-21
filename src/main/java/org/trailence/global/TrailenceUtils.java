@@ -10,12 +10,11 @@ import java.util.UUID;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.security.core.Authentication;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import tools.jackson.databind.ObjectMapper;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TrailenceUtils {

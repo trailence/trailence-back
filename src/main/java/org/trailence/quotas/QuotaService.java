@@ -162,7 +162,7 @@ public class QuotaService {
 	@Transactional
 	public Mono<Plan> createPlan(Plan plan) {
 		return planRepo.findByName(plan.getName())
-		.flatMap(existing -> Mono.<PlanEntity>error(new ConflictException("already-exists", "Plan " + plan.getName() + " already exists")))
+		.flatMap(_ -> Mono.<PlanEntity>error(new ConflictException("already-exists", "Plan " + plan.getName() + " already exists")))
 		.switchIfEmpty(Mono.defer(() -> r2dbc.insert(toEntity(plan))))
 		.map(this::toDto);
 	}
@@ -178,7 +178,7 @@ public class QuotaService {
 				return planRepo.save(toEntity(plan)).flatMap(newEntity -> computeQuotas().thenReturn(newEntity));
 			// name changed => delete + insert + rename all in subscriptions
 			return planRepo.findByName(plan.getName())
-			.flatMap(existing -> Mono.<PlanEntity>error(new ConflictException("already-exists", "Plan " + plan.getName() + " already exists")))
+			.flatMap(_ -> Mono.<PlanEntity>error(new ConflictException("already-exists", "Plan " + plan.getName() + " already exists")))
 			.switchIfEmpty(Mono.defer(() ->
 				r2dbc.insert(toEntity(plan))
 				.flatMap(newEntity ->
@@ -536,7 +536,7 @@ public class QuotaService {
 			start.setValue(System.currentTimeMillis());
 			return r2dbc.getDatabaseClient().sql(QUERY_COMPUTE_QUOTAS.replace("{now}", "" + System.currentTimeMillis())).fetch().rowsUpdated();			
 		}).flatMap(nb  -> {
-			log.info("Users quotas usage updated: {} in {} ms.", nb, System.currentTimeMillis() - start.getValue());
+			log.info("Users quotas usage updated: {} in {} ms.", nb, System.currentTimeMillis() - start.longValue());
 			return Mono.empty();
 		});
 	}

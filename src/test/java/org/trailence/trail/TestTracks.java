@@ -288,7 +288,7 @@ class TestTracks extends AbstractTest {
 	}
 	
 	private Track createTooLargeTrack(String email) {
-		var segments = new Segment[30];
+		var segments = new Segment[25];
 		for (var i = 0; i < segments.length; ++i) {
 			segments[i] = new Segment(new Point[1000]);
 			for (var j = 0; j < segments[i].getP().length; ++j) {

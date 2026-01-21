@@ -77,7 +77,7 @@ public class TrailCollectionService {
     					classic.add(entity);
     			});
     			var createUniques = uniques.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) :
-    				Flux.fromIterable(uniques).flatMap(entity -> self.createUniqueCollectionWithoutQuota(entity), 1, 1).onErrorResume(IgnoreException.class, e -> Mono.empty()).collectList();
+    				Flux.fromIterable(uniques).flatMap(entity -> self.createUniqueCollectionWithoutQuota(entity), 1, 1).onErrorResume(IgnoreException.class, _ -> Mono.empty()).collectList();
     			var createClassic = classic.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) : self.createCollectionsWithQuota(classic, owner);
     			return createUniques.flatMap(uniquesCreated -> createClassic.map(classicCreated -> {
     				var all = new LinkedList<TrailCollectionEntity>();
@@ -133,7 +133,7 @@ public class TrailCollectionService {
     		collections,
     		auth.getPrincipal().toString(),
     		this::validate,
-    		(entity, dto, checksAndActions) -> {
+    		(entity, dto, _) -> {
     			if (TrailCollectionType.PUBLICATION_TYPES.contains(entity.getType()))
     				return false;
                 if (entity.getName().equals(dto.getName()))

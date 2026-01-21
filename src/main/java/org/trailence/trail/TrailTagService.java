@@ -105,7 +105,7 @@ public class TrailTagService {
 		return BulkUtils.handleOperationsResult(
 			BulkUtils.parallelSingleOperations(
 				entities,
-				entity -> self.createWithQuota(entity).onErrorResume(DuplicateKeyException.class, e -> Mono.just(entity))
+				entity -> self.createWithQuota(entity).onErrorResume(DuplicateKeyException.class, _ -> Mono.just(entity))
 			),
 			List.<TrailTagEntity>of(),
 			errors
@@ -117,7 +117,7 @@ public class TrailTagService {
 	@Transactional
 	public Mono<TrailTagEntity> createWithQuota(TrailTagEntity entity) {
 		return quotaService.addTrailTags(entity.getOwner(), 1)
-		.flatMap(nb -> r2dbc.insert(entity));
+		.flatMap(_ -> r2dbc.insert(entity));
 	}
 	
 	@Transactional

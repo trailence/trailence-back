@@ -54,8 +54,6 @@ import org.trailence.user.dto.User;
 import org.trailence.verificationcode.VerificationCodeService;
 import org.trailence.verificationcode.VerificationCodeService.Spec;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 import io.r2dbc.postgresql.codec.Json;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +63,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
+import tools.jackson.core.JacksonException;
 
 @Service
 @RequiredArgsConstructor
@@ -175,7 +174,7 @@ public class UserService {
 				checkCode = verificationCodeService.check(code, CHANGE_PASSWORD_VERIFICATION_CODE_TYPE, userMail, String.class);
 			}
 			return checkCode
-			.flatMap(check -> {
+			.flatMap(_ -> {
 				user.setPassword(TrailenceUtils.hashPassword(newPassword));
 				user.setInvalidAttempts(0);
 				return userRepo.save(user);
@@ -235,7 +234,7 @@ public class UserService {
 			if (userExists.isPresent())
 				return changePassword(email, request.getCode(), request.getPassword(), null, true);
 			return verificationCodeService.check(request.getCode(), REGISTER_VERIFICATION_CODE_TYPE, email, String.class)
-			.flatMap(check -> createUser(email, request.getPassword(), false, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty()))));
+			.flatMap(_ -> createUser(email, request.getPassword(), false, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty()))));
 		})
 		.then();
 	}
@@ -268,7 +267,7 @@ public class UserService {
 	@Transactional
 	public Mono<Void> deleteUser(String code, String email) {
 		return verificationCodeService.check(code, DELETION_VERIFICATION_CODE_TYPE, email, String.class)
-		.flatMap(check ->
+		.flatMap(_ ->
 			collectionService.deleteUser(email)
 			.then(shareService.deleteRecipient(email))
 			.then(userRepo.deleteByEmail(email))
@@ -418,7 +417,7 @@ public class UserService {
 			else
 				try {
 					entity.setRoles(Json.of(TrailenceUtils.mapper.writeValueAsString(roles)));
-				} catch (JsonProcessingException e) {
+				} catch (JacksonException e) {
 					// ignore
 				}
 			return userRepo.save(entity);

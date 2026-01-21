@@ -7,7 +7,7 @@ import java.util.HashMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.auth.dto.ForgotPasswordRequest;
 import org.trailence.auth.dto.LoginRequest;
 import org.trailence.test.AbstractTest;
@@ -24,7 +24,7 @@ class TestForgotPassword extends AbstractTest {
 	void testForgotPassword() {
 		var user = test.createUser();
 		
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
 		
 		var response = RestAssured.given()
@@ -62,7 +62,7 @@ class TestForgotPassword extends AbstractTest {
 	void testForgotPasswordWithInvalidCodeAttempts(int invalidAttempts) {
 		var user = test.createUser();
 		
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
 		
 		var response = RestAssured.given()
@@ -82,8 +82,8 @@ class TestForgotPassword extends AbstractTest {
 		var code = email.getT2().substring(i + 60, j);
 
 		for (int attempts = 0; attempts < invalidAttempts; ++attempts) {
-			var invalidCode = RandomStringUtils.randomNumeric(6);
-			while (invalidCode.equals(code)) invalidCode = RandomStringUtils.randomNumeric(6);
+			var invalidCode = RandomStringUtils.secure().nextNumeric(6);
+			while (invalidCode.equals(code)) invalidCode = RandomStringUtils.secure().nextNumeric(6);
 			response = RestAssured.given()
 				.contentType(ContentType.JSON)
 				.body(new ResetPasswordRequest(user.getEmail(), "new_password", invalidCode))
@@ -117,7 +117,7 @@ class TestForgotPassword extends AbstractTest {
 	void testForgotPasswordCodeCancelled() {
 		var user = test.createUser();
 		
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
 		
 		var response = RestAssured.given()
@@ -157,7 +157,7 @@ class TestForgotPassword extends AbstractTest {
 	void testForgotPasswordInvalidCaptcha() {
 		var user = test.createUser();
 		
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, false);
 		
 		var response = RestAssured.given()

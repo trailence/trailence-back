@@ -97,7 +97,7 @@ public class InitDB {
 	@SuppressWarnings("java:S112") // RuntimeException
 	private void doMigrations(ApplicationContext context) {
 		log.info("Retrieving migrations...");
-		List<String> done = db.getDatabaseClient().sql("SELECT id FROM migrations ORDER BY id").map((row,meta) -> row.get(0, String.class)).all().collectList().block();
+		List<String> done = db.getDatabaseClient().sql("SELECT id FROM migrations ORDER BY id").map((row,_) -> row.get(0, String.class)).all().collectList().block();
 		List<Migration> todo = new LinkedList<>(Arrays.asList(migrations).stream().filter(m -> !done.contains(m.id())).toList());
 		log.info("Migrations done: {}, to be executed: {}", done.size(), todo.size());
 		for (var migration : todo) {

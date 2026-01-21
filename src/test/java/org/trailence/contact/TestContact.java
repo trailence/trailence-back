@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.contact.dto.ContactMessage;
 import org.trailence.contact.dto.CreateMessageRequest;
 import org.trailence.global.dto.PageResult;
@@ -24,7 +24,7 @@ class TestContact extends AbstractTest {
 		assertThat(getUnreadCount()).isZero();
 		
 		// send without account
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
 		var response = RestAssured.given().contentType(ContentType.JSON)
 		.body(new CreateMessageRequest(

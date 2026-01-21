@@ -9,7 +9,7 @@ jobs:
       matrix:
         os: [ 'ubuntu-latest' ]
         distribution: [ 'temurin' ]
-        java: [ '21' ]
+        java: [ '25' ]
     name: Build with Java ${{ matrix.java }} (${{ matrix.distribution }})
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

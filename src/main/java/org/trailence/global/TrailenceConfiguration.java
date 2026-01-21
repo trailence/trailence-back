@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.ReactivePageableHandlerMethodArgumentResolver;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.codec.ServerCodecConfigurer;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -40,7 +41,7 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 
 	@Bean
 	WebSessionManager webSessionManager() {
-		return exchange -> Mono.empty();
+		return _ -> Mono.empty();
 	}
 	
 	@Bean
@@ -78,7 +79,7 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 		.securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
 		.exceptionHandling(handling ->
 			handling.authenticationEntryPoint(
-				(exchange, error) -> {
+				(exchange, _) -> {
 					var response = exchange.getResponse();
 				    response.setStatusCode(HttpStatus.UNAUTHORIZED);
 				    exchange.mutate().response(response);
@@ -110,6 +111,11 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 		firewall.setAllowUrlEncodedPeriod(true);
 		firewall.setAllowUrlEncodedSlash(true);
 		return firewall;
+	}
+	
+	@Override
+	public void configureHttpMessageCodecs(ServerCodecConfigurer configurer) {
+		configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024);
 	}
 	
 }

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.HashMap;
 
 import org.junit.jupiter.api.Test;
-import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestService.TestUser;
 import org.trailence.test.stubs.CaptchaStub;
@@ -21,7 +21,7 @@ class TestRegisterAndDelete extends AbstractTest {
 	void testRegisterThenDelete() {
 		var email = test.email();
 		
-		var captchaToken = RandomStringUtils.random(30);
+		var captchaToken = RandomStringUtils.secure().next(30);
 		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
 		
 		var response = RestAssured.given()

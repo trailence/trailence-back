@@ -41,8 +41,6 @@ import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +48,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor

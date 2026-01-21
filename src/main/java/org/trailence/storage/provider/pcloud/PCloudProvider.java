@@ -64,10 +64,10 @@ public class PCloudProvider implements FileStorageProvider {
 				.contentType(MediaType.APPLICATION_OCTET_STREAM)
 				.body(BodyInserters.fromResource(new FileSystemResource(fileAndDigests.getKey())))
 				.exchangeToMono(response -> response.bodyToMono(PCloudUploadResponse.class))
-				.doOnNext(response -> log.info("File uploaded: {} in folder {}", filename, folderid))
+				.doOnNext(_ -> log.info("File uploaded: {} in folder {}", filename, folderid))
 				.doOnError(error -> log.warn("Error uploading file {} in folder {}", filename, folderid, error))
 				.flatMap(response -> checkUploadResponse(response, fileAndDigests.getValue(), path, expectedSize))
-				.doFinally(s -> fileAndDigests.getKey().delete());
+				.doFinally(_ -> fileAndDigests.getKey().delete());
 			})
 		);
 	}
@@ -113,7 +113,7 @@ public class PCloudProvider implements FileStorageProvider {
 			Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FILEID, Long.toString(fileId))
 		)
 		.exchangeToMono(response -> response.bodyToMono(PCloudFileLinkResponse.class))
-		.doOnNext(response -> log.info("Download link created for file {}", fileId))
+		.doOnNext(_ -> log.info("Download link created for file {}", fileId))
 		.doOnError(error -> log.warn("Error creating download link for file {}", fileId, error))
 		.map(response -> PROTOCOL + response.getHosts().getFirst() + response.getPath());
 	}
@@ -126,8 +126,8 @@ public class PCloudProvider implements FileStorageProvider {
 			.uri("/deletefile" + QUERY_AUTH + QUERY_FILEID,
 				Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FILEID, fileId)
 			)
-			.exchangeToMono(response -> Mono.<Void>empty())
-			.doOnSuccess(v -> log.info("File deleted: {} in {}", fileId, path))
+			.exchangeToMono(_ -> Mono.<Void>empty())
+			.doOnSuccess(_ -> log.info("File deleted: {} in {}", fileId, path))
 			.doOnError(error -> log.warn("Error deleting file id {} in {}", fileId, path, error));
 		});
 	}

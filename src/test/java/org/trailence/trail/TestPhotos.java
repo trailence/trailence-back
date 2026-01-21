@@ -10,7 +10,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.init.FreePlanProperties;
 import org.trailence.quotas.dto.Plan;
@@ -150,7 +150,7 @@ class TestPhotos extends AbstractTest {
 		
 		var response = user.request()
 			.contentType(ContentType.BINARY)
-			.header("X-Description", RandomStringUtils.randomAlphanumeric(5001))
+			.header("X-Description", RandomStringUtils.secure().nextAlphanumeric(5001))
 			.header("X-DateTaken", "123456789")
 			.header("X-Latitude", "147")
 			.header("X-Longitude", "369852")
@@ -234,7 +234,7 @@ class TestPhotos extends AbstractTest {
 		var photoAndContent = user.createPhoto(trail);
 		
 		var photo = copy(photoAndContent.getT1());
-		photo.setDescription(RandomStringUtils.randomAlphanumeric(5001));
+		photo.setDescription(RandomStringUtils.secure().nextAlphanumeric(5001));
 		var response = user.put("/api/photo/v1/_bulkUpdate", List.of(photo));
 		TestUtils.expectError(response, 400, "invalid-description-too-long");
 		

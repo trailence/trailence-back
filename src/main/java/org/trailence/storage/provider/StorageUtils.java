@@ -69,7 +69,7 @@ public final class StorageUtils {
 	public static Mono<Void> writeAndClose(Flux<DataBuffer> buffers, OutputStream out) {
 		return DataBufferUtils.write(buffers, out)
 		.map(DataBufferUtils::release)
-		.doFinally(s -> {
+		.doFinally(_ -> {
 			try {
 				out.close();
 			} catch (Exception e) {

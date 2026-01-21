@@ -27,13 +27,12 @@ import org.trailence.trail.dto.MyTrailLink;
 import org.trailence.trail.dto.TrailLinkContent;
 import org.trailence.trail.exceptions.TrailNotFound;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -55,7 +54,7 @@ public class TrailLinkService {
 		UUID trailId = UUID.fromString(trailUuid);
 		String email = auth.getPrincipal().toString();
 		return linkRepo.findOneByAuthorAndAuthorUuid(email, trailId)
-			.flatMap(existing -> Mono.error(() -> new ConflictException("trail-link-exists", "This trail already has a link")))
+			.flatMap(_ -> Mono.error(() -> new ConflictException("trail-link-exists", "This trail already has a link")))
 			.then(trailRepo.findByUuidAndOwner(trailId, email))
 			.switchIfEmpty(Mono.error(() -> new TrailNotFound(trailUuid, email)))
 			.then(Mono.defer(() -> {
@@ -90,7 +89,7 @@ public class TrailLinkService {
 				trackRepo.findByUuidAndOwner(trail.getCurrentTrackUuid(), trail.getOwner())
 				.switchIfEmpty(Mono.error(() -> new NotFoundException("trail-link", link)))
 			)
-			.zipWhen(trailAndTrack ->
+			.zipWhen(_ ->
 				photoRepo.findAllByTrailUuidInAndOwner(List.of(entity.getAuthorUuid()), entity.getAuthor()).collectList()
 			)
 		)

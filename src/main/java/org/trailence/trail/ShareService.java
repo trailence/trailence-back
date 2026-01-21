@@ -116,7 +116,7 @@ public class ShareService {
 			return self.createShareWithQuota(share, shareElements, shareRecipients)
 			.then(Mono.defer(() -> sendInvitationEmails(share.getUuid().toString(), user, new ArrayList<>(recipients), request.getMailLanguage(), request.getName())))
 			.then(Mono.just(toDto(share, shareRecipients.stream().map(r -> r.getRecipient()).toList(), elements, null)))
-			.onErrorResume(DuplicateKeyException.class, e -> getShare(request.getId(), user));
+			.onErrorResume(DuplicateKeyException.class, _ -> getShare(request.getId(), user));
 		}));
 	}
 	
@@ -146,11 +146,11 @@ public class ShareService {
 		return r2dbc.insert(share)
 		.thenMany(
 			Flux.fromIterable(elements).flatMap(r2dbc::insert, 3, 6)
-			.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
+			.onErrorResume(DuplicateKeyException.class, _ -> Mono.empty())
 		)
 		.thenMany(
 			Flux.fromIterable(recipients).flatMap(r2dbc::insert, 3, 6)
-			.onErrorResume(DuplicateKeyException.class, e -> Mono.empty())
+			.onErrorResume(DuplicateKeyException.class, _ -> Mono.empty())
 		)
 		.then(quotaService.addShares(share.getOwner(), 1))
 		.then();
@@ -177,7 +177,7 @@ public class ShareService {
 			if (optSent.isPresent()) return Mono.empty();
 			ShareEmailEntity entity = new ShareEmailEntity(UUID.fromString(uuid), owner, recipient, System.currentTimeMillis());
 			return r2dbc.insert(entity);
-		}).flatMap(entity -> {
+		}).flatMap(_ -> {
 			if (optUser.isEmpty() || optUser.get().getPassword() == null) {
 				String token;
 				try {

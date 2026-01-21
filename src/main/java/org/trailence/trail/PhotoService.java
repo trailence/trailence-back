@@ -122,7 +122,7 @@ public class PhotoService {
     			ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
 	        	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
     		},
-    		(entity, dto, checksAndActions) -> updateEntity(entity, dto),
+    		(entity, dto, _) -> updateEntity(entity, dto),
     		repo, r2dbc
     	).map(this::toDto);
     }
@@ -184,7 +184,7 @@ public class PhotoService {
     	return repo.deleteByUuidAndOwner(entity.getUuid(), entity.getOwner())
 		.flatMap(nb -> nb == 0 ? Mono.empty() :
 			fileService.deleteFile(entity.getFileId()).map(FileEntity::getSize)
-			.onErrorResume(e -> Mono.just(0L))
+			.onErrorResume(_ -> Mono.just(0L))
 			.flatMap(size -> quotaService.photoDeleted(entity.getOwner(), size).thenReturn(size))
 		);
     }

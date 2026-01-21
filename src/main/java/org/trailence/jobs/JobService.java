@@ -43,7 +43,7 @@ public class JobService {
 	public void launch() {
 		if (!running.compareAndSet(false, true)) return;
 		execute(System.currentTimeMillis() - lastCleaning > 5L * 60000, System.currentTimeMillis())
-		.doFinally(s -> running.set(false))
+		.doFinally(_ -> running.set(false))
 		.checkpoint("Job processing")
 		.subscribe();
 	}

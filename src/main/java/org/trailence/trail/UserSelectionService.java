@@ -12,12 +12,11 @@ import org.trailence.trail.db.UserSelectionEntity;
 import org.trailence.trail.db.UserSelectionRepository;
 import org.trailence.trail.dto.UserSelection;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor

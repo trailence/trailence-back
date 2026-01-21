@@ -82,8 +82,6 @@ import org.trailence.trail.dto.PublicTrailSearch.SearchByTileRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileResponse;
 import org.trailence.trail.exceptions.TrailNotFound;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -95,6 +93,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -695,7 +694,7 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.error(new NotFoundException("feedback", feedbackUuid)))
 		.flatMap(feedback -> 
 			r2dbc.insert(new PublicTrailFeedbackReplyEntity(UUID.randomUUID(), uuid, email, date, c, false))
-			.doOnNext(r ->
+			.doOnNext(_ ->
 				feedbackReplyRepo.findAllByReplyTo(feedback.getUuid())
 				.map(re -> re.getEmail())
 				.distinct()
@@ -883,7 +882,7 @@ public class PublicTrailService {
 			if (request.getLoopType() != null) trail.setLoopType(request.getLoopType());
 			return publicTrailRepo.save(trail);
 		})
-		.flatMap(trail -> this.getById(uuid, auth))
+		.flatMap(_ -> this.getById(uuid, auth))
 		;
 	}
 	

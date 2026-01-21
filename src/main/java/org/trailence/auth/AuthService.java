@@ -55,9 +55,6 @@ import org.trailence.user.UserService;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +62,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -274,7 +273,7 @@ public class AuthService {
 	private void toDeviceInfo(Map<String, Object> map, UserKeyEntity entity) {
 		try {
 			entity.setDeviceInfo(Json.of(TrailenceUtils.mapper.writeValueAsString(map)));
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			log.error("Invalid device info", e);
 		}
 	}
@@ -346,7 +345,7 @@ public class AuthService {
 				return Mono.just(optUser.get());
 			})
 		)
-		.flatMap(user -> userService.sendChangePasswordCode(email, lang, true))
+		.flatMap(_ -> userService.sendChangePasswordCode(email, lang, true))
 		.then();
 	}
 	
@@ -410,7 +409,7 @@ public class AuthService {
 				null
 			);
 			return r2dbc.getDatabaseClient().sql(select)
-			.map((row, meta) -> Tuples.of(row.get(0, String.class), row.get(1, String.class), row.get(2, Long.class)))
+			.map((row, _) -> Tuples.of(row.get(0, String.class), row.get(1, String.class), row.get(2, Long.class)))
 			.all()
 			.concatMap(row -> {
 				var delete = Delete.builder()

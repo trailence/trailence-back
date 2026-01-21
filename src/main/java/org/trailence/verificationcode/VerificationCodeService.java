@@ -13,13 +13,12 @@ import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.verificationcode.db.VerificationCodeEntity;
 import org.trailence.verificationcode.db.VerificationCodeRepository;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +42,7 @@ public class VerificationCodeService {
 			entity.setExpiresAt(System.currentTimeMillis() + expiration);
 			try {
 				entity.setData(Json.of(TrailenceUtils.mapper.writeValueAsString(data)));
-			} catch (JsonProcessingException e) {
+			} catch (JacksonException e) {
 				return Mono.error(e);
 			}
 			return r2dbc.insert(entity)

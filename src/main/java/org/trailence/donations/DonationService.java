@@ -51,7 +51,7 @@ public class DonationService {
 			Mono<Long> realAmountInEuros = convertAmount(realAmount, request.getRealAmountCurrency());
 			return donationRepo.findByPlatformAndPlatformId(request.getPlatform(), request.getPlatformId())
 			.switchIfEmpty(
-				amountInEuros.zipWhen(a -> realAmountInEuros)
+				amountInEuros.zipWhen(_ -> realAmountInEuros)
 				.flatMap(tuple -> {
 					DonationEntity entity = new DonationEntity(UUID.randomUUID(), request.getPlatform(), request.getPlatformId(), timestamp, tuple.getT1(), tuple.getT2(), email, request.getDetails());
 					return r2dbc.insert(entity);

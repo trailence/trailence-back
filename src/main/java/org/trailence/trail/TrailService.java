@@ -56,8 +56,6 @@ import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailCollectionType;
 import org.trailence.user.db.UserEntity;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +63,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuples;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor

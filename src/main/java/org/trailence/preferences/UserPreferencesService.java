@@ -12,9 +12,6 @@ import org.trailence.preferences.db.UserPreferencesEntity;
 import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.preferences.dto.UserPreferences;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +19,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -174,7 +173,7 @@ public class UserPreferencesService {
 		if (valid.isEmpty()) return null;
 		try {
 			return Json.of(TrailenceUtils.mapper.writeValueAsString(valid));
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			log.error("Invalid elevation calibration", e);
 			return null;
 		}
@@ -220,7 +219,7 @@ public class UserPreferencesService {
 				return null;
 			}
 			return Json.of(json);
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			log.error("Invalid trail filters", e);
 			return null;
 		}
