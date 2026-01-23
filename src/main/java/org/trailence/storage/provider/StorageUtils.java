@@ -49,7 +49,7 @@ public final class StorageUtils {
 					DigestOutputStream dout = new DigestOutputStream(out, MessageDigest.getInstance(digest));
 					digestStreams.put(digest, dout);
 					out = dout;
-				} catch (Exception e) {
+				} catch (Exception _) {
 					// ignore
 				}
 			}
@@ -72,7 +72,7 @@ public final class StorageUtils {
 		.doFinally(_ -> {
 			try {
 				out.close();
-			} catch (Exception e) {
+			} catch (Exception _) {
 				// ignore
 			}
 		}).then();

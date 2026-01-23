@@ -1,6 +1,5 @@
 package org.trailence.global.rest;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
@@ -52,7 +51,7 @@ public class TokenService {
 		return Base64.getUrlEncoder().encodeToString(dataBytes) + "." + Base64.getUrlEncoder().encodeToString(signature);
 	}
 	
-	public TokenData check(String token) throws GeneralSecurityException, IOException {
+	public TokenData check(String token) throws GeneralSecurityException {
 		int i = token.indexOf('.');
 		if (i <= 0) throw new InvalidTokenException();
 		byte[] dataBytes = Base64.getUrlDecoder().decode(token.substring(0, i));

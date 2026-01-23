@@ -124,7 +124,7 @@ public class UserService {
 		if (roles == null) return List.of();
 		try {
 			return Arrays.asList(TrailenceUtils.mapper.readValue(roles.asString(), String[].class));
-		} catch (Exception e) {
+		} catch (Exception _) {
 			return List.of();
 		}
 	}
@@ -240,7 +240,7 @@ public class UserService {
 	}
 	
 	public Mono<Void> sendDeletionCode(String lang, Authentication auth) {
-		String email = auth.getPrincipal().toString();
+		String email = TrailenceUtils.email(auth);
 		return verificationCodeService.generate(email, DELETION_VERIFICATION_CODE_TYPE, System.currentTimeMillis() + DELETION_VERIFICATION_CODE_EXPIRATION, "", 6, Spec.DIGITS, 3)
 		.flatMap(code -> {
 			String stopToken;
@@ -417,7 +417,7 @@ public class UserService {
 			else
 				try {
 					entity.setRoles(Json.of(TrailenceUtils.mapper.writeValueAsString(roles)));
-				} catch (JacksonException e) {
+				} catch (JacksonException _) {
 					// ignore
 				}
 			return userRepo.save(entity);

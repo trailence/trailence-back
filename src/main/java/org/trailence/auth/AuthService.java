@@ -248,7 +248,7 @@ public class AuthService {
 			signer.initVerify(publicKey);
 			signer.update((email + random).getBytes(StandardCharsets.UTF_8));
 			return signer.verify(signature);
-		} catch (Exception e) {
+		} catch (Exception _) {
 			return false;
 		}
 	}
@@ -295,7 +295,7 @@ public class AuthService {
 	}
 	
 	public Flux<UserKey> getMyKeys(Authentication auth) {
-		return internalGetUserKeys(auth.getPrincipal().toString(), false);
+		return internalGetUserKeys(TrailenceUtils.email(auth), false);
 	}
 	
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
@@ -319,7 +319,7 @@ public class AuthService {
 	}
 	
 	public Mono<Void> deleteMyKey(String id, Authentication auth) {
-		return keyRepo.findByIdAndEmail(UUID.fromString(id), auth.getPrincipal().toString())
+		return keyRepo.findByIdAndEmail(UUID.fromString(id), TrailenceUtils.email(auth))
 		.flatMap(entity -> {
 			if (entity.getDeletedAt() != null) return Mono.empty();
 			entity.setDeletedAt(System.currentTimeMillis());

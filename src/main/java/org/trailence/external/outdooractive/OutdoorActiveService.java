@@ -198,7 +198,7 @@ public class OutdoorActiveService {
 		if (map.get("meta") instanceof Map meta && meta.get("timestamp") instanceof Map ts && ts.get("createdAt") instanceof String s) {
 			try {
 				rando.date = DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(s, Instant::from).toEpochMilli();
-			} catch (Exception e) {
+			} catch (Exception _) {
 				// ignore
 			}
 		}

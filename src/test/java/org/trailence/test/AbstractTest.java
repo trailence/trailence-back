@@ -165,7 +165,7 @@ public abstract class AbstractTest {
 			log.info("Still {} pending email(s)", pending);
 			try {
 				Thread.sleep(1000);
-			} catch (InterruptedException e) {
+			} catch (InterruptedException _) {
 				// ignore
 			}
 		}
@@ -194,14 +194,14 @@ public abstract class AbstractTest {
 			log.info("Still {} pending email(s)", pending);
 			try {
 				Thread.sleep(1000);
-			} catch (InterruptedException e) {
+			} catch (InterruptedException _) {
 				// ignore
 			}
 		}
 		assertThat(searchMail(from, to)).isEmpty();
 		try {
 			Thread.sleep(1000);
-		} catch (InterruptedException e) {
+		} catch (InterruptedException _) {
 			// ignore
 		}
 		for (var trial = 0; trial < 100; trial++) {
@@ -210,7 +210,7 @@ public abstract class AbstractTest {
 			log.info("Still {} pending email(s)", pending);
 			try {
 				Thread.sleep(1000);
-			} catch (InterruptedException e) {
+			} catch (InterruptedException _) {
 				// ignore
 			}
 		}

@@ -119,8 +119,8 @@ public class TrackService {
 	@Transactional
 	public Mono<Track> updateTrack(Track track, Authentication auth) {
 		validate(track);
-		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), auth.getPrincipal().toString())
-		.switchIfEmpty(Mono.error(new TrackNotFound(auth.getPrincipal().toString(), track.getUuid())))
+		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), TrailenceUtils.email(auth))
+		.switchIfEmpty(Mono.error(new TrackNotFound(TrailenceUtils.email(auth), track.getUuid())))
 		.flatMap(entity -> {
 			if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
 			int previousDataSize = entity.getData().length;
@@ -144,7 +144,7 @@ public class TrackService {
 	}
 	
 	public Mono<Void> bulkDelete(Collection<String> uuids, Authentication auth) {
-		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), auth.getPrincipal().toString());
+		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), TrailenceUtils.email(auth));
 	}
 	
 	public Mono<Void> deleteTracksWithQuota(Set<UUID> uuids, String owner) {
@@ -164,7 +164,7 @@ public class TrackService {
 	public Mono<UpdateResponse<UuidAndOwner>> getUpdates(List<Versioned> known, Authentication auth) {
 		List<UuidAndOwner> newItems = new LinkedList<>();
 		List<UuidAndOwner> updatedItems = new LinkedList<>();
-		List<Select> selectAccessible = buildSelectAccessibleTracks(auth.getPrincipal().toString());
+		List<Select> selectAccessible = buildSelectAccessibleTracks(TrailenceUtils.email(auth));
 		return Flux.concat(selectAccessible.stream().map(select -> r2dbc.query(DbUtils.select(select, null, r2dbc), row -> Tuples.of((UUID) row.get("uuid"), (String) row.get("owner"), (Long) row.get("version"))).all()).toList())
 		.distinct()
 		.doOnNext(version -> {
@@ -224,7 +224,7 @@ public class TrackService {
 		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email)
 			.map(this::toDTO)
 			.switchIfEmpty(Mono.error(new TrackNotFound(email, uuid)));
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 		if (email.equals(user)) return getFromDB;
 		
 		Select sharedWithMe = shareService.selectSharedElementsWithMe(

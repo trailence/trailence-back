@@ -56,7 +56,7 @@ public class VisorandoService {
 							try {
 								long idn = Long.parseLong(ids);
 								items.add(new Rando(idn, "https://www.visorando.com/randonnee-" + s + "/"));
-							} catch (Exception e) {
+							} catch (Exception _) {
 								// ignore
 							}
 						}

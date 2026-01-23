@@ -168,7 +168,7 @@ public class UserPreferencesService {
 		if (dto == null) return null;
 		Map<String, Integer> valid = new HashMap<>();
 		for (var entry : dto.entrySet()) {
-			if (entry.getKey().length() > 0 && entry.getKey().length() <= 100) valid.put(entry.getKey(), entry.getValue());
+			if (!entry.getKey().isEmpty() && entry.getKey().length() <= 100) valid.put(entry.getKey(), entry.getValue());
 		}
 		if (valid.isEmpty()) return null;
 		try {
@@ -179,6 +179,7 @@ public class UserPreferencesService {
 		}
 	}
 	
+	@SuppressWarnings("java:S1168")
 	private Map<String, Integer> toElevationCalibrationDto(Json db) {
 		if (db == null) return null;
 		try {
@@ -190,6 +191,7 @@ public class UserPreferencesService {
 
 	}
 	
+	@SuppressWarnings({"java:S135", "java:S3776"})
 	private Json toTrailFiltersJson(Map<String, Map<String, Object>> dto) {
 		if (dto == null) return null;
 		Map<String, Map<String, Object>> valid = new HashMap<>();
@@ -202,10 +204,7 @@ public class UserPreferencesService {
 				String key = filterEntry.getKey().trim();
 				if (key.isBlank() || key.length() > 100) continue;
 				Object filterValue = filterEntry.getValue();
-				if (filterValue == null) continue;
-				if (filterValue instanceof Boolean || filterValue instanceof CharSequence) {}
-				else if (filterValue instanceof Map) {
-				} else continue;
+				if (filterValue == null || !(filterValue instanceof Boolean || filterValue instanceof CharSequence || filterValue instanceof Map)) continue;
 				filterValid.put(key, filterValue);
 			}
 			if (filterValid.isEmpty()) continue;
@@ -225,6 +224,7 @@ public class UserPreferencesService {
 		}
 	}
 	
+	@SuppressWarnings("java:S1168")
 	private Map<String, Map<String, Object>> toTrailFiltersDto(Json db) {
 		if (db == null) return null;
 		try {

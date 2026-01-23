@@ -121,7 +121,7 @@ public class TrailService {
     }
 
     public Mono<List<Trail>> bulkCreate(List<Trail> dtos, Authentication auth) {
-    	String owner = auth.getPrincipal().toString();
+    	String owner = TrailenceUtils.email(auth);
     	return BulkUtils.bulkCreate(
     		dtos, owner,
     		this::validateCreate,
@@ -268,7 +268,7 @@ public class TrailService {
     }
 
     public Flux<Trail> bulkUpdate(List<Trail> dtos, Authentication auth) {
-    	String owner = auth.getPrincipal().toString();
+    	String owner = TrailenceUtils.email(auth);
     	return BulkUtils.bulkUpdate(
     		dtos, owner,
     		this::validate,
@@ -424,7 +424,7 @@ public class TrailService {
     }
 
     public Mono<Void> bulkDelete(List<String> uuids, Authentication auth) {
-        String owner = auth.getPrincipal().toString();
+        String owner = TrailenceUtils.email(auth);
         return delete(repo.findAllByUuidInAndOwner(uuids.stream().map(UUID::fromString).toList(), owner), owner);
     }
 
@@ -460,8 +460,9 @@ public class TrailService {
     	.then(Mono.fromRunnable(() -> log.info("Trails deleted ({} for {})", uuids.size(), owner)));
     }
 
+    @SuppressWarnings("java:S2692") // indexOf > 0
     public Mono<UpdateResponse<Trail>> getUpdates(List<Versioned> known, Authentication auth) {
-    	String user = auth.getPrincipal().toString();
+    	String user = TrailenceUtils.email(auth);
     	Flux<TrailEntity> ownedTrails =
     		r2dbc.query(DbUtils.select(
     			Select.builder()
@@ -536,7 +537,7 @@ public class TrailService {
             entity.getSource(),
             entity.getSourceDate(),
             entity.getSourceUrl(),
-            entity.getFollowedUuid() != null ? entity.getFollowedUuid().toString() : null,
+            entity.getFollowedUuid() != null ? entity.getFollowedUuid() : null,
             entity.getFollowedOwner(),
             entity.getFollowedUrl(),
             entity.getOriginalTrackUuid().toString(),
@@ -581,7 +582,7 @@ public class TrailService {
     private void handleNotificationsForNewTrails(List<TrailEntity> trails, String owner) {
     	if (trails.isEmpty()) return;
     	// notifications for new trails in a share => can only be a share of a collection
-    	Set<UUID> collections = trails.stream().map(trail -> trail.getCollectionUuid()).collect(Collectors.toSet());
+    	Set<UUID> collections = trails.stream().map(TrailEntity::getCollectionUuid).collect(Collectors.toSet());
     	String sql = new SqlBuilder()
     	.select(
     		ShareElementEntity.COL_ELEMENT_UUID,

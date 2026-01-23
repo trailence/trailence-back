@@ -90,7 +90,7 @@ public class ShareService {
 	public Mono<Share> createShare(CreateShareRequest request, Authentication auth) {
 		// check all elements belongs to the caller
 		List<UUID> elements = request.getElements().stream().map(UUID::fromString).toList();
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 
 		return checkCount(request, elements, user)
 		.then(Mono.defer(() -> {
@@ -182,7 +182,7 @@ public class ShareService {
 				String token;
 				try {
 					token = tokenService.generate(new TokenData("share", recipient, uuid + "/" + owner));
-				} catch (Exception e) {
+				} catch (Exception _) {
 					return Mono.empty();
 				}
 				return emailService.send(EmailService.SHARE_INVITE_PRIORITY, recipient, "invite_share", language, Map.of(
@@ -203,7 +203,7 @@ public class ShareService {
 	}
 	
 	public Flux<Share> getShares(Authentication auth) {
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 		Flux<Share> sharedByMe = shareRepo.findAllByOwner(user).flatMap(this::myShareWithElements, 1, 1);
 		Flux<Share> sharedWithMe = shareRecipientRepo.findAllByRecipient(user).collectList()
 			.flatMapMany(this::getSharesFromRecipients)
@@ -309,7 +309,7 @@ public class ShareService {
 	
 	@Transactional
 	public Mono<Void> deleteShare(String id, String from, Authentication auth) {
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 		String fromEmail = from.toLowerCase();
 		if (user.equals(fromEmail)) {
 			return deleteSharesWithQuota(List.of(UUID.fromString(id)), user, true, true);
@@ -484,7 +484,7 @@ public class ShareService {
 	}
 	
 	public Mono<Share> updateShare(String uuid, UpdateShareRequest request, Authentication auth) {
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 		return self.updateShareAndRecipients(uuid, user, request)
 		.flatMap(added -> sendInvitationEmails(uuid, user, added, request.getMailLanguage(), request.getName()))
 		.then(Mono.defer(() -> getShare(uuid, user)));

@@ -261,7 +261,7 @@ public class ModerationService {
 			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
 			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
 			return Flux.fromIterable(entities)
-			.flatMap(entity -> publicTrailService.deletePublicTrail(entity.getUuid().toString(), auth))
+			.flatMap(entity -> publicTrailService.deletePublicTrailAsModerator(entity.getUuid().toString()))
 			.then();
 		});
 	}

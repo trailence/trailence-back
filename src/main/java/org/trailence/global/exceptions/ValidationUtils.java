@@ -90,7 +90,7 @@ public final class ValidationUtils {
 		public FieldString isUuid() {
 			try {
 				UUID.fromString(value);
-			} catch (IllegalArgumentException e) {
+			} catch (IllegalArgumentException _) {
 				throw new BadRequestException(INVALID_PREFIX + name, "Invalid " + name + ": " + value + " is not a valid UUID");
 			}
 			return this;

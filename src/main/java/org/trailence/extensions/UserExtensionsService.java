@@ -43,7 +43,7 @@ public class UserExtensionsService {
 	}
 	
 	public Flux<UserExtension> syncMyExtensions(List<UserExtension> list, Authentication auth) {
-		String email = auth.getPrincipal().toString();
+		String email = TrailenceUtils.email(auth);
 		return repo.findByEmail(email).collectList()
 			.flatMapMany(existing -> {
 				List<Mono<?>> actions = new LinkedList<>();
@@ -69,7 +69,7 @@ public class UserExtensionsService {
 				entity.setExtension(dto.getExtension());
 				entity.setData(Json.of(TrailenceUtils.mapper.writeValueAsString(dto.getData())));
 				actions.add(repo.save(entity));
-			} catch (Exception e) {
+			} catch (Exception _) {
 				// ignore
 			}
 		}
@@ -93,7 +93,7 @@ public class UserExtensionsService {
 					entity.setData(Json.of(newData));
 					actions.add(repo.save(entity));
 				}
-			} catch (Exception e) {
+			} catch (Exception _) {
 				// ignore
 			}
 		}
@@ -105,7 +105,7 @@ public class UserExtensionsService {
 		Map<String, String> data;
 		try {
 			data = TrailenceUtils.mapper.readValue(entity.getData().asString(), Map.class);
-		} catch (Exception e) {
+		} catch (Exception _) {
 			data = new HashMap<>();
 		}
 		return new UserExtension(

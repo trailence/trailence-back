@@ -42,6 +42,11 @@ public class AdminEmailService {
 	private static final int MAX_CONTACTS = 10;
 	private static final int MAX_NEW_USERS = 25;
 	private static final int MAX_CONNECTED_USERS = 25;
+	
+	private static final String UL = "<ul>";
+	private static final String UL_END = "</ul>";
+	private static final String LI = "<li>";
+	private static final String LI_END = "</li>";
 
 	@Scheduled(initialDelayString = "15m", fixedDelayString = "24h")
 	public void newsEmail() {
@@ -81,9 +86,9 @@ public class AdminEmailService {
 			List<String> parts = emailParts.stream().filter(Optional::isPresent).map(Optional::get).toList();
 			if (parts.isEmpty()) return Mono.empty();
 			StringBuilder html = new StringBuilder(8192);
-			html.append("News since ").append(Instant.ofEpochMilli(previousEmail).toString()).append(": <ul>");
-			for (var part : parts) html.append("<li>").append(part).append("</li>");
-			html.append("</ul>");
+			html.append("News since ").append(Instant.ofEpochMilli(previousEmail).toString()).append(": ").append(UL);
+			for (var part : parts) html.append(LI).append(part).append(LI_END);
+			html.append(UL_END);
 			return emailJob.send(new Email(emailJob.getFromTrailenceEmail(), "Trailence Report - " + hostname, "News", html.toString()), 99);
 		}).subscribe();
 	}
@@ -93,17 +98,17 @@ public class AdminEmailService {
 		log.info("Unread messages: {}", messages.size());
 		String nb = messages.size() >= MAX_CONTACTS ? MAX_CONTACTS + "+" : "" + messages.size();
 		StringBuilder html = new StringBuilder(64 + messages.size() * 512);
-		html.append(nb).append(" new contact message(s):<ul>");
+		html.append(nb).append(" new contact message(s):").append(UL);
 		for (var m : messages) {
-			html.append("<li>")
+			html.append(LI)
 				.append(m.getEmail())
 				.append(": [")
 				.append(m.getMessageType())
 				.append("] <span style=\"font-style:italic; color: #606060\">")
 				.append(StringEscapeUtils.escapeHtml4(m.getMessageText().substring(0, Math.min(m.getMessageText().length(), 500))))
-				.append("</span></li>");
+				.append("</span>").append(LI_END);
 		}
-		html.append("</ul>");
+		html.append(UL_END);
 		return html.toString();
 	}
 	
@@ -111,13 +116,13 @@ public class AdminEmailService {
 		log.info("New users: {}", users.size());
 		String nb = users.size() >= MAX_NEW_USERS ? MAX_NEW_USERS + "+" : "" + users.size();
 		StringBuilder html = new StringBuilder(64 + users.size() * 80);
-		html.append(nb).append(" new user(s):<ul>");
+		html.append(nb).append(" new user(s):").append(UL);
 		for (var u : users) {
-			html.append("<li>")
+			html.append(LI)
 				.append(u.getEmail())
-				.append("</li>");
+				.append(LI_END);
 		}
-		html.append("</ul>");
+		html.append(UL_END);
 		return html.toString();
 	}
 	
@@ -125,13 +130,13 @@ public class AdminEmailService {
 		log.info("Connected users: {}", users.size());
 		String nb = users.size() >= MAX_CONNECTED_USERS ? MAX_CONNECTED_USERS + "+" : "" + users.size();
 		StringBuilder html = new StringBuilder(64 + users.size() * 80);
-		html.append(nb).append(" user connection(s):<ul>");
+		html.append(nb).append(" user connection(s):").append(UL);
 		for (var u : users) {
-			html.append("<li>")
+			html.append(LI)
 				.append(u)
-				.append("</li>");
+				.append(LI_END);
 		}
-		html.append("</ul>");
+		html.append(UL_END);
 		return html.toString();
 	}
 	
@@ -139,16 +144,16 @@ public class AdminEmailService {
 		log.info("Moderation: {} trails, {} comments, {} replies, {} removal requests", counts.getT1(), counts.getT2(), counts.getT3(), counts.getT4());
 		if (counts.getT1().longValue() == 0L && counts.getT2().longValue() == 0L && counts.getT3().longValue() == 0L && counts.getT4().longValue() == 0L) return Optional.empty();
 		StringBuilder html = new StringBuilder(512);
-		html.append("Moderation pending:<ul>");
+		html.append("Moderation pending:").append(UL);
 		if (counts.getT1().longValue() > 0L)
-			html.append("<li>").append(counts.getT1()).append(" trail(s) to review</li>");
+			html.append(LI).append(counts.getT1()).append(" trail(s) to review").append(LI_END);
 		if (counts.getT2().longValue() > 0L)
-			html.append("<li>").append(counts.getT2()).append(" comment(s) to review</li>");
+			html.append(LI).append(counts.getT2()).append(" comment(s) to review").append(LI_END);
 		if (counts.getT3().longValue() > 0L)
-			html.append("<li>").append(counts.getT3()).append(" replies to review</li>");
+			html.append(LI).append(counts.getT3()).append(" replies to review").append(LI_END);
 		if (counts.getT4().longValue() > 0L)
-			html.append("<li>").append(counts.getT4()).append(" removal request(s) to review</li>");
-		html.append("</ul>");
+			html.append(LI).append(counts.getT4()).append(" removal request(s) to review").append(LI_END);
+		html.append(UL_END);
 		return Optional.of(html.toString());
 	}
 	

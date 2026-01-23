@@ -151,6 +151,7 @@ public class PublicTrailV1Controller {
 	private static final byte[] SITEMAP_FOOTER = "</urlset>".getBytes(StandardCharsets.UTF_8);
 	
 	@GetMapping("/sitemap.xml")
+	@SuppressWarnings("java:S1192")
 	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemap(ServerHttpRequest request) {
 		String baseUrl = "https://trailence.org/";
 		return Mono.just(ResponseEntity.ok()

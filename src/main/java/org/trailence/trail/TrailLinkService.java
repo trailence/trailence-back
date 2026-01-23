@@ -11,6 +11,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ConflictException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.storage.FileService;
@@ -25,6 +26,7 @@ import org.trailence.trail.db.TrailLinkRepository;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.MyTrailLink;
 import org.trailence.trail.dto.TrailLinkContent;
+import org.trailence.trail.exceptions.TrailLinkNotFound;
 import org.trailence.trail.exceptions.TrailNotFound;
 
 import lombok.RequiredArgsConstructor;
@@ -46,13 +48,13 @@ public class TrailLinkService {
 	private final FileService fileService;
 
 	public Mono<List<MyTrailLink>> getMyLinks(Authentication auth) {
-		String email = auth.getPrincipal().toString();
+		String email = TrailenceUtils.email(auth);
 		return linkRepo.findAllByAuthor(email).map(this::toMyTrailLink).collectList();
 	}
 	
 	public Mono<MyTrailLink> createLink(String trailUuid, Authentication auth) {
 		UUID trailId = UUID.fromString(trailUuid);
-		String email = auth.getPrincipal().toString();
+		String email = TrailenceUtils.email(auth);
 		return linkRepo.findOneByAuthorAndAuthorUuid(email, trailId)
 			.flatMap(_ -> Mono.error(() -> new ConflictException("trail-link-exists", "This trail already has a link")))
 			.then(trailRepo.findByUuidAndOwner(trailId, email))
@@ -73,7 +75,7 @@ public class TrailLinkService {
 	
 	public Mono<Void> deleteLink(String trailUuid, Authentication auth) {
 		UUID trailId = UUID.fromString(trailUuid);
-		String email = auth.getPrincipal().toString();
+		String email = TrailenceUtils.email(auth);
 		return linkRepo.deleteAllByAuthorUuidInAndAuthor(List.of(trailId), email);
 	}
 	
@@ -81,13 +83,13 @@ public class TrailLinkService {
 		var ids = decodeLink(link);
 		return linkRepo.findById(ids.getT1())
 		.filter(entity -> entity.getLinkKey1().equals(ids.getT2()) && entity.getLinkKey2().equals(ids.getT3()))
-		.switchIfEmpty(Mono.error(() -> new NotFoundException("trail-link", link)))
+		.switchIfEmpty(Mono.error(() -> new TrailLinkNotFound(link)))
 		.flatMap(entity ->
 			trailRepo.findByUuidAndOwner(entity.getAuthorUuid(), entity.getAuthor())
-			.switchIfEmpty(Mono.error(() -> new NotFoundException("trail-link", link)))
+			.switchIfEmpty(Mono.error(() -> new TrailLinkNotFound(link)))
 			.zipWhen(trail ->
 				trackRepo.findByUuidAndOwner(trail.getCurrentTrackUuid(), trail.getOwner())
-				.switchIfEmpty(Mono.error(() -> new NotFoundException("trail-link", link)))
+				.switchIfEmpty(Mono.error(() -> new TrailLinkNotFound(link)))
 			)
 			.zipWhen(_ ->
 				photoRepo.findAllByTrailUuidInAndOwner(List.of(entity.getAuthorUuid()), entity.getAuthor()).collectList()
@@ -100,7 +102,7 @@ public class TrailLinkService {
 		var ids = decodeLink(link);
 		return linkRepo.findById(ids.getT1())
 		.filter(entity -> entity.getLinkKey1().equals(ids.getT2()) && entity.getLinkKey2().equals(ids.getT3()))
-		.switchIfEmpty(Mono.error(() -> new NotFoundException("trail-link", link)))
+		.switchIfEmpty(Mono.error(() -> new TrailLinkNotFound(link)))
 		.flatMap(linkEntity -> 
 			photoRepo.findByUuidAndOwner(UUID.fromString(photoUuid), linkEntity.getAuthor())
 			.filter(photoEntity -> photoEntity.getTrailUuid().equals(linkEntity.getAuthorUuid()))
@@ -136,8 +138,8 @@ public class TrailLinkService {
 	private Tuple3<UUID, UUID, UUID> decodeLink(String link) {
 		byte[] bytes;
 		try { bytes = Base64.getUrlDecoder().decode(link); }
-		catch (IllegalArgumentException e) { throw new NotFoundException("trail-link", link); }
-		if (bytes.length != 3 * 16) throw new NotFoundException("trail-link", link);
+		catch (IllegalArgumentException _) { throw new TrailLinkNotFound(link); }
+		if (bytes.length != 3 * 16) throw new TrailLinkNotFound(link);
 		ByteBuffer b = ByteBuffer.wrap(bytes);
 		UUID uuid1 = new UUID(b.getLong(), b.getLong());
 		UUID uuid2 = new UUID(b.getLong(), b.getLong());
@@ -149,7 +151,7 @@ public class TrailLinkService {
 		StoredData trackData;
 		try {
 			trackData = TrackService.uncompress(track.getData(), new TypeReference<StoredData>() {});
-		} catch (IOException e) {
+		} catch (IOException _) {
 			throw new  NotFoundException("trail-link", link);
 		}
 		return new TrailLinkContent(

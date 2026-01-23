@@ -27,7 +27,6 @@ import io.restassured.http.ContentType;
 
 import org.trailence.trail.rest.ShareV1Controller.CreateShareRequestV1;
 
-@SuppressWarnings("deprecation")
 class TestSharesV1 extends AbstractTest {
 
 	@Test

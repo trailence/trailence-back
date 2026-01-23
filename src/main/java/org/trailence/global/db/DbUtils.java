@@ -34,7 +34,6 @@ import lombok.NoArgsConstructor;
 import reactor.core.publisher.Mono;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-@SuppressWarnings("deprecation")
 public final class DbUtils {
 
 	public static PreparedOperation<Select> select(Select select, Bindings bindings, R2dbcEntityTemplate r2dbc) {

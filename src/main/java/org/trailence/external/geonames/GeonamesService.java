@@ -109,7 +109,7 @@ public class GeonamesService {
 		try {
 			lat = Double.parseDouble(elementMap.get("lat").toString());
 			lng = Double.parseDouble(elementMap.get("lng").toString());
-		} catch (Exception e) {
+		} catch (Exception _) {
 			lat = null;
 			lng = null;
 		}
@@ -119,7 +119,7 @@ public class GeonamesService {
 				south = Double.parseDouble(bbox.get("south").toString());
 				east = Double.parseDouble(bbox.get("east").toString());
 				west = Double.parseDouble(bbox.get("west").toString());
-			} catch (Exception e) {
+			} catch (Exception _) {
 				north = null;
 				south = null;
 				east = null;

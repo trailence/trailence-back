@@ -53,13 +53,13 @@ public class AddLanguageAndTranslationsToPublicTrails implements Migration {
 						try {
 							var b = bindings.bind(Json.of(TrailenceUtils.mapper.writeValueAsBytes(Map.of(target, translations.getT1().get()))));
 							sql.append(", name_translations = " + b.getPlaceholder());
-						} catch (Exception e) { /* ignore */ }
+						} catch (Exception _) { /* ignore */ }
 					}
 					if (translations.getT2().isPresent()) {
 						try {
 							var b = bindings.bind(Json.of(TrailenceUtils.mapper.writeValueAsBytes(Map.of(target, translations.getT2().get()))));
 							sql.append(", description_translations = " + b.getPlaceholder());
-						} catch (Exception e) { /* ignore */ }
+						} catch (Exception _) { /* ignore */ }
 					}
 					var uuidBinding = bindings.bind(trail.getT1());
 					sql.append(" WHERE uuid = " + uuidBinding.getPlaceholder());
