@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.rest.RetryRest;
+import org.trailence.preferences.AvatarService;
 import org.trailence.trail.ModerationService;
 import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
@@ -40,6 +42,7 @@ public class ModerationV1Controller {
 	private final ModerationService service;
 	private final PublicTrailService publicTrailService;
 	private final TranslationService translation;
+	private final AvatarService avatarService;
 
 	@GetMapping("/trailsToReview")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
@@ -206,5 +209,27 @@ public class ModerationV1Controller {
 		return publicTrailService.deletePublicTrailAsModerator(trailUuid);
 	}
 
+	@GetMapping("/avatars")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<List<String>> getAvatarsToReview(Authentication auth) {
+		return avatarService.getAvatarsToReview(auth);
+	}
 	
+	@GetMapping("/avatars/{email}")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<ResponseEntity<Flux<DataBuffer>>> getAvatarFile(@PathVariable("email") String email, Authentication auth) {
+		return RetryRest.retry(avatarService.getAvatarFileToReview(email, auth).map(flux -> ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux)));
+	}
+	
+	@PostMapping("/avatars/{email}/accept")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> acceptAvatar(@PathVariable("email") String email, Authentication auth) {
+		return avatarService.avatarModeration(email, true, auth);
+	}
+	
+	@PostMapping("/avatars/{email}/decline")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<Void> declineAvatar(@PathVariable("email") String email, Authentication auth) {
+		return avatarService.avatarModeration(email, false, auth);
+	}
 }

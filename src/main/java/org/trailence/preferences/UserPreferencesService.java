@@ -30,11 +30,19 @@ public class UserPreferencesService {
 	
 	private final UserPreferencesRepository repo;
 	private final R2dbcEntityTemplate r2dbc;
+	private final AvatarService avatarService;
 	
 	public Mono<UserPreferences> getPreferences(String email) {
 		return repo.findById(email)
 			.map(this::toDto)
 			.switchIfEmpty(Mono.just(new UserPreferences()));
+	}
+	
+	public Mono<Tuple2<Optional<String>, Optional<String>>> getPublicAliasAndAvatar(String email) {
+		return Mono.zip(
+			this.getPreferences(email).map(pref -> Optional.ofNullable(pref.getAlias())),
+			avatarService.getUserPublicAvatarUuid(email)
+		);
 	}
 	
 	public Mono<UserPreferences> setPreferences(UserPreferences dto, String email) {

@@ -19,6 +19,7 @@ import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.BulkGetUpdates;
 import org.trailence.global.db.BulkUtils;
 import org.trailence.global.db.DbUtils;
@@ -71,7 +72,7 @@ public class PhotoService {
 		ValidationUtils.field("uuid", uuid).notNull().isUuid();
 		ValidationUtils.field("trailUuid", trailUuid).notNull().isUuid();
 		ValidationUtils.field("description", description).nullable().maxLength(5000);
-		String owner = auth.getPrincipal().toString();
+		String owner = TrailenceUtils.email(auth);
 		return Mono.zip(
 			repo.findByUuidAndOwner(UUID.fromString(uuid), owner)
 				.map(Optional::of)
@@ -117,7 +118,7 @@ public class PhotoService {
 	
     public Flux<Photo> bulkUpdate(List<Photo> dtos, Authentication auth) {
     	return BulkUtils.bulkUpdate(
-    		dtos, auth.getPrincipal().toString(),
+    		dtos, TrailenceUtils.email(auth),
     		dto -> {
     			ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
 	        	ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
@@ -165,7 +166,7 @@ public class PhotoService {
     }
     
     public Mono<Long> bulkDelete(List<String> uuids, Authentication auth) {
-        String owner = auth.getPrincipal().toString();
+        String owner = TrailenceUtils.email(auth);
         return delete(repo.findAllByUuidInAndOwner(new HashSet<>(uuids.stream().map(UUID::fromString).toList()), owner));
     }
     
@@ -230,7 +231,7 @@ public class PhotoService {
 	}
 	
     public Mono<UpdateResponse<Photo>> getUpdates(List<Versioned> known, Authentication auth) {
-    	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessiblePhotos(auth.getPrincipal().toString()), PhotoEntity.class, photo -> photo.getOwner() + " " + photo.getUuid().toString(), known, this::toDto);
+    	return BulkGetUpdates.bulkGetUpdates(r2dbc, buildSelectAccessiblePhotos(TrailenceUtils.email(auth)), PhotoEntity.class, photo -> photo.getOwner() + " " + photo.getUuid().toString(), known, this::toDto);
     }
 
     private List<Select> buildSelectAccessiblePhotos(String email) {
@@ -259,7 +260,7 @@ public class PhotoService {
     private Mono<PhotoEntity> getPhoto(String owner, String uuid, Authentication auth) {
     	String email = owner.toLowerCase();
     	Mono<PhotoEntity> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email);
-		String user = auth.getPrincipal().toString();
+		String user = TrailenceUtils.email(auth);
 		if (email.equals(user)) return getFromDB;
 		
 		Select sharedWithMe = shareService.selectSharedElementsWithMe(

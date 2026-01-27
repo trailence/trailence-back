@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.trailence.trail.PublicTrailService;
+import org.trailence.trail.FeedbackService;
 import org.trailence.trail.dto.CreateFeedbackRequest;
 import org.trailence.trail.dto.MyFeedback;
 import org.trailence.trail.dto.PublicTrailFeedback;
@@ -24,7 +24,7 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class PublicTrailFeedbackV1Controller {
 	
-	private final PublicTrailService service;
+	private final FeedbackService service;
 
 	@PostMapping()
 	public Mono<Void> createFeedback(@RequestBody CreateFeedbackRequest request, Authentication auth) {

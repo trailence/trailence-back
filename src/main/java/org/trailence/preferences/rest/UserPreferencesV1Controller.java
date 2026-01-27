@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.preferences.UserPreferencesService;
 import org.trailence.preferences.dto.UserPreferences;
 
@@ -21,12 +22,12 @@ public class UserPreferencesV1Controller {
 	
 	@GetMapping
 	public Mono<UserPreferences> getPreferences(Authentication auth) {
-		return service.getPreferences(auth.getPrincipal().toString());
+		return service.getPreferences(TrailenceUtils.email(auth));
 	}
 	
 	@PutMapping
 	public Mono<UserPreferences> setPreferences(@RequestBody UserPreferences dto, Authentication auth) {
-		return service.setPreferences(dto, auth.getPrincipal().toString());
+		return service.setPreferences(dto, TrailenceUtils.email(auth));
 	}
 	
 }

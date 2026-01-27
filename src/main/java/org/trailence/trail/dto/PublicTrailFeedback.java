@@ -13,6 +13,7 @@ public class PublicTrailFeedback {
 
 	private String uuid;
 	private String alias;
+	private String avatarUuid;
 	private boolean you;
 	private long date;
 	private Integer rate;
@@ -26,6 +27,7 @@ public class PublicTrailFeedback {
 	public static class Reply {
 		private String uuid;
 		private String alias;
+		private String avatarUuid;
 		private boolean you;
 		private long date;
 		private String comment;

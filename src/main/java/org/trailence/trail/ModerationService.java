@@ -56,7 +56,8 @@ public class ModerationService {
 	private final FileService fileService;
 	private final NotificationsService notifService;
 	private final PublicTrailService publicTrailService;
-
+	private final FeedbackService feedbackService;
+	
 	public Flux<TrailAndPhotos> getTrailsToReview(int size, Authentication auth) {
 		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : auth.getPrincipal().toString(), size)
 		.flatMap(trail ->
@@ -184,7 +185,7 @@ public class ModerationService {
 			return publicTrailRepo.getTrailsNameAndDescription(trailsUuids)
 			.flatMap(trail -> {
 				FeedbackToReview result = new FeedbackToReview(trail.getUuid().toString(), trail.getName(), trail.getDescription(), new LinkedList<>());
-				return publicTrailService.fetchFeedbacks(trail.getUuid().toString(), sql -> 
+				return feedbackService.fetchFeedbacks(trail.getUuid().toString(), (sql, _) -> 
 					sql.append(" AND public_trail_feedback.uuid IN (")
 					.append(String.join(",",feedbackUuids.stream().filter(f -> f.getPublicTrailUuid().equals(trail.getUuid())).map(u -> "'" + u.getUuid() + "'").toList()))
 					.append(')')

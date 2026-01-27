@@ -47,7 +47,9 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
+import org.trailence.preferences.AvatarService;
 import org.trailence.preferences.UserPreferencesService;
+import org.trailence.preferences.dto.AvatarDto;
 import org.trailence.preferences.dto.UserPreferences;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.dto.UserQuotas;
@@ -81,6 +83,7 @@ public class AuthService {
 	private final CaptchaService captchaService;
 	private final QuotaService quotaService;
 	private final UserExtensionsService extensionsService;
+	private final AvatarService avatarService;
 	
 	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
 	private static final String ERROR_CODE_LOCKED = "locked";
@@ -104,7 +107,7 @@ public class AuthService {
 				
 				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 				
-				var response = response(token, user, key, null, null, roles);
+				var response = response(token, user, key, null, null, roles, null);
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
@@ -177,7 +180,7 @@ public class AuthService {
 				var token = auth.generateToken(user.getEmail(), false, false, List.of());
 				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
 
-				var response = response(token, user, key, null, null, List.of());
+				var response = response(token, user, key, null, null, List.of(), null);
 				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 			})
 		);
@@ -223,14 +226,14 @@ public class AuthService {
 				if (request.getNewPublicKey() == null) {
 					var roles = getRoles(user);
 					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-					var response = response(token, user, key, null, null, roles);
+					var response = response(token, user, key, null, null, roles, null);
 					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
 				}
 				// new key
 				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
 				var roles = getRoles(user);
 				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-				var response = response(token, user, newKey, null, null, roles);
+				var response = response(token, user, newKey, null, null, roles, null);
 				key.setDeletedAt(System.currentTimeMillis());
 				return keyRepo.save(key)
 					.then(r2dbc.insert(newKey))
@@ -253,7 +256,7 @@ public class AuthService {
 		}
 	}
 	
-	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas, List<String> roles) {
+	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas, List<String> roles, AvatarDto avatar) {
 		return new AuthResponse(
 			token.getT1(),
 			token.getT2().toEpochMilli(),
@@ -266,7 +269,8 @@ public class AuthService {
 			user.isAdmin(),
 			quotas,
 			extensionsService.getAllowedExtensions(user.isAdmin(), roles),
-			roles
+			roles,
+			avatar
 		);
 	}
 	
@@ -279,9 +283,10 @@ public class AuthService {
 	}
 	
 	private Mono<AuthResponse> withPreferences(AuthResponse response) {
-		return userPreferencesService.getPreferences(response.getEmail())
-		.map(pref -> {
-			response.setPreferences(pref);
+		return Mono.zip(userPreferencesService.getPreferences(response.getEmail()), avatarService.getAvatarInfo(response.getEmail()))
+		.map(tuple -> {
+			response.setPreferences(tuple.getT1());
+			response.setAvatar(tuple.getT2());
 			return response;
 		});
 	}

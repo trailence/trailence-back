@@ -2,6 +2,7 @@ package org.trailence.auth.dto;
 
 import java.util.List;
 
+import org.trailence.preferences.dto.AvatarDto;
 import org.trailence.preferences.dto.UserPreferences;
 import org.trailence.quotas.dto.UserQuotas;
 
@@ -26,5 +27,6 @@ public class AuthResponse {
 	private UserQuotas quotas;
 	private List<String> allowedExtensions;
 	private List<String> roles;
+	private AvatarDto avatar;
 	
 }

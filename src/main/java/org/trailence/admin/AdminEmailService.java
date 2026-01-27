@@ -13,6 +13,7 @@ import org.trailence.contact.ContactService;
 import org.trailence.contact.db.ContactMessageEntity;
 import org.trailence.email.EmailJob;
 import org.trailence.email.EmailJob.Email;
+import org.trailence.preferences.AvatarService;
 import org.trailence.trail.ModerationService;
 import org.trailence.user.UserService;
 import org.trailence.user.db.UserEntity;
@@ -21,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.util.function.Tuple4;
+import reactor.util.function.Tuple5;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +33,7 @@ public class AdminEmailService {
 	private final UserService userService;
 	private final AuthService authService;
 	private final ModerationService moderationService;
+	private final AvatarService avatarService;
 	private final EmailJob emailJob;
 
 	@Value("${trailence.hostname:trailence.org}")
@@ -76,7 +78,8 @@ public class AdminEmailService {
 				moderationService.getNumberOfTrailsToReview(),
 				moderationService.getNumberOfCommentsToReview(),
 				moderationService.getNumberOfCommentRepliesToReview(),
-				moderationService.getNumberOfRemovalRequestsToReview()
+				moderationService.getNumberOfRemovalRequestsToReview(),
+				avatarService.getNumberOfAvatarToReview()
 			)
 			.map(this::getEmailPartFromModerationCounts);
 		
@@ -140,9 +143,9 @@ public class AdminEmailService {
 		return html.toString();
 	}
 	
-	private Optional<String> getEmailPartFromModerationCounts(Tuple4<Long, Long, Long, Long> counts) {
-		log.info("Moderation: {} trails, {} comments, {} replies, {} removal requests", counts.getT1(), counts.getT2(), counts.getT3(), counts.getT4());
-		if (counts.getT1().longValue() == 0L && counts.getT2().longValue() == 0L && counts.getT3().longValue() == 0L && counts.getT4().longValue() == 0L) return Optional.empty();
+	private Optional<String> getEmailPartFromModerationCounts(Tuple5<Long, Long, Long, Long, Long> counts) {
+		log.info("Moderation: {} trails, {} comments, {} replies, {} removal requests, {} avatars", counts.getT1(), counts.getT2(), counts.getT3(), counts.getT4(), counts.getT5());
+		if (counts.getT1().longValue() == 0L && counts.getT2().longValue() == 0L && counts.getT3().longValue() == 0L && counts.getT4().longValue() == 0L && counts.getT5().longValue() == 0L) return Optional.empty();
 		StringBuilder html = new StringBuilder(512);
 		html.append("Moderation pending:").append(UL);
 		if (counts.getT1().longValue() > 0L)
@@ -153,6 +156,8 @@ public class AdminEmailService {
 			html.append(LI).append(counts.getT3()).append(" replies to review").append(LI_END);
 		if (counts.getT4().longValue() > 0L)
 			html.append(LI).append(counts.getT4()).append(" removal request(s) to review").append(LI_END);
+		if (counts.getT5().longValue() > 0L)
+			html.append(LI).append(counts.getT5()).append(" avatar(s) to review").append(LI_END);
 		html.append(UL_END);
 		return Optional.of(html.toString());
 	}

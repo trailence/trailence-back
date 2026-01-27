@@ -5,17 +5,13 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -58,22 +54,14 @@ import org.trailence.trail.db.PublicPhotoRepository;
 import org.trailence.trail.db.PublicTrackEntity;
 import org.trailence.trail.db.PublicTrackRepository;
 import org.trailence.trail.db.PublicTrailEntity;
-import org.trailence.trail.db.PublicTrailFeedbackEntity;
-import org.trailence.trail.db.PublicTrailFeedbackReplyEntity;
-import org.trailence.trail.db.PublicTrailFeedbackReplyRepository;
-import org.trailence.trail.db.PublicTrailFeedbackRepository;
 import org.trailence.trail.db.PublicTrailRepository;
 import org.trailence.trail.db.PublicTrailRepository.SlugAndDate;
 import org.trailence.trail.db.TrailRepository;
-import org.trailence.trail.dto.CreateFeedbackRequest;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
-import org.trailence.trail.dto.MyFeedback;
 import org.trailence.trail.dto.MyPublicTrail;
 import org.trailence.trail.dto.PatchPublicTrailRequest;
 import org.trailence.trail.dto.PublicTrack;
 import org.trailence.trail.dto.PublicTrail;
-import org.trailence.trail.dto.PublicTrailFeedback;
-import org.trailence.trail.dto.PublicTrailFeedback.Reply;
 import org.trailence.trail.dto.PublicTrailSearch;
 import org.trailence.trail.dto.PublicTrailSearch.Filters;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
@@ -84,9 +72,6 @@ import org.trailence.trail.exceptions.PublicTrailNotFound;
 import org.trailence.trail.exceptions.TrailNotFound;
 
 import io.r2dbc.postgresql.codec.Json;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -105,8 +90,6 @@ public class PublicTrailService {
 	private final PublicPhotoRepository publicPhotoRepo;
 	private final PublicTrackRepository publicTrackRepo;
 	private final TrailRepository trailRepo;
-	private final PublicTrailFeedbackRepository feedbackRepo;
-	private final PublicTrailFeedbackReplyRepository feedbackReplyRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final PhotoService photoService;
 	private final TrailService trailService;
@@ -114,6 +97,7 @@ public class PublicTrailService {
 	private final NotificationsService notificationsService;
 	private final UserPreferencesService prefService;
 	private final ModerationMessageRepository messageRepo;
+	private final FeedbackService feedbackService;
 	
 	private static final Map<String, String> TEXT_SEARCH_LANGS = Map.of("fr", "french", "en", "english");
 	
@@ -613,247 +597,6 @@ public class PublicTrailService {
 		.map(data -> new PublicTrack(data.s, data.wp));
 	}
 	
-	@Transactional
-	public Mono<Void> createFeedback(CreateFeedbackRequest request, Authentication auth) {
-		long date = System.currentTimeMillis();
-		String email = TrailenceUtils.email(auth);
-		UUID trailUuid = UUID.fromString(request.getTrailUuid());
-		
-		String comment = request.getComment();
-		if (comment != null) {
-			comment = comment.trim();
-			if (comment.isEmpty()) comment = null;
-		}
-		Integer rate = request.getRate();
-		if (rate != null && (rate.intValue() < 0 || rate.intValue() > 5)) rate = null;
-		
-		if (comment == null && rate == null) return Mono.empty();
-		
-		String c = comment;
-		Integer r = rate;
-		
-		return publicTrailRepo.getAuthorAndName(trailUuid)
-		.flatMap(authorAndName -> {
-			if (authorAndName.getAuthor().equals(email)) return Mono.empty();
-			Mono<Optional<PublicTrailFeedbackEntity>> existingRate = r == null ? Mono.just(Optional.empty()) :
-				feedbackRepo.findOneByPublicTrailUuidAndEmailAndRateIsNotNull(trailUuid, email).map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()));
-			return existingRate.flatMap(existingRateOpt -> {
-				if (existingRateOpt.isPresent()) {
-					PublicTrailFeedbackEntity entity = existingRateOpt.get();
-					Mono<Void> update = entity.getRate().intValue() != r.intValue() ? this.updateRate(entity, r) : Mono.empty();
-					return update
-					.then(Mono.defer(() -> {
-						if (c == null) return Mono.empty();
-						return this.createFeedback(trailUuid, email, date, null, c, authorAndName.getAuthor(), authorAndName.getName());
-					}));
-				}
-				return this.createFeedback(trailUuid, email, date, r, c, authorAndName.getAuthor(), authorAndName.getName());
-				
-			});
-		});
-	}
-	
-	@SuppressWarnings("java:S3358")
-	private Mono<Void> createFeedback(UUID trailUuid, String email, long date, Integer rate, String comment, String trailAuthor, String trailName) {
-		PublicTrailFeedbackEntity entity = new PublicTrailFeedbackEntity(
-			UUID.randomUUID(),
-			trailUuid,
-			email,
-			date,
-			rate,
-			comment,
-			comment == null // reviewed if no comment
-		);
-		return r2dbc.insert(entity)
-		.flatMap(feedback -> {
-			if (feedback.getRate() == null) return Mono.empty();
-			return addRateToTrail(trailUuid, feedback.getRate());
-		})
-		.then(Mono.defer(() -> 
-			notificationsService.create(trailAuthor, "comments.someone_leave_" + (rate != null ? (comment != null ? "a_rate_with_comment" : "a_rate") : "a_comment"), List.of(trailUuid.toString(), trailName))
-		));
-	}
-	
-	private Mono<Void> addRateToTrail(UUID trailUuid, int rate) {
-		String col = PublicTrailEntity.COL_NB_RATE_PREFIX + rate;
-		String sql = "UPDATE public_trails SET " + col + " = " + col + " + 1 WHERE uuid = '" + trailUuid.toString() + "'";
-		return r2dbc.getDatabaseClient().sql(sql).fetch().rowsUpdated().then();
-	}
-	
-	private Mono<Void> updateRate(PublicTrailFeedbackEntity entity, int newRate) {
-		String col1 = PublicTrailEntity.COL_NB_RATE_PREFIX + entity.getRate().intValue();
-		String col2 = PublicTrailEntity.COL_NB_RATE_PREFIX + newRate;
-		return r2dbc.getDatabaseClient().sql("UPDATE public_trail_feedback SET rate = " + newRate + " WHERE uuid = '" + entity.getUuid().toString() + "'").fetch().rowsUpdated()
-		.then(r2dbc.getDatabaseClient().sql("UPDATE public_trails SET " + col1 + " = " + col1 + " - 1, " + col2 + " = " + col2 + " + 1 WHERE uuid = '" + entity.getPublicTrailUuid().toString() + "'").fetch().rowsUpdated().then());
-	}
-	
-	public Mono<PublicTrailFeedback.Reply> replyToFeedback(String feedbackUuid, String reply, Authentication auth) {
-		long date = System.currentTimeMillis();
-		String email = TrailenceUtils.email(auth);
-		UUID uuid = UUID.fromString(feedbackUuid);
-		if (reply == null) return Mono.empty();
-		String comment = reply.trim();
-		if (comment.isEmpty()) return Mono.empty();
-		String c = comment;
-		return feedbackRepo.findById(uuid)
-		.switchIfEmpty(Mono.error(new NotFoundException("feedback", feedbackUuid)))
-		.flatMap(feedback -> 
-			r2dbc.insert(new PublicTrailFeedbackReplyEntity(UUID.randomUUID(), uuid, email, date, c, false))
-			.doOnNext(_ -> notifyUsersForCommentReply(feedback, email))
-		)
-		.flatMap(entity ->
-			prefService.getPreferences(email)
-			.map(pref -> new PublicTrailFeedback.Reply(entity.getUuid().toString(), pref.getAlias(), true, entity.getDate(), c, entity.isReviewed()))
-		);
-	}
-	
-	private void notifyUsersForCommentReply(PublicTrailFeedbackEntity feedback, String email) {
-		feedbackReplyRepo.findAllByReplyTo(feedback.getUuid())
-		.map(re -> re.getEmail())
-		.distinct()
-		.collectList()
-		.flatMap(users -> {
-			Set<String> recipients = new HashSet<>();
-			if (!email.equals(feedback.getEmail())) recipients.add(feedback.getEmail());
-			for (var u : users) if (!u.equals(email)) recipients.add(u);
-			if (recipients.isEmpty()) return Mono.empty();
-			return publicTrailRepo.findById(feedback.getPublicTrailUuid())
-			.flatMap(trail ->
-				Flux.fromIterable(recipients)
-				.flatMap(recipient -> notificationsService.create(recipient, "comments.reply", List.of(feedback.getPublicTrailUuid().toString(), trail.getName())))
-				.then()
-			);
-		})
-		.subscribe();		
-	}
-	
-	public Mono<MyFeedback> getMyFeedback(String trailUuid, Authentication auth) {
-		String email = TrailenceUtils.email(auth);
-		Optional<UUID> isUuid = TrailenceUtils.ifUuid(trailUuid);
-		return (isUuid.isPresent() ? Mono.just(isUuid.get()) : publicTrailRepo.findOneBySlug(trailUuid).map(e -> e.getUuid()))
-		.flatMap(uuid -> 
-			feedbackRepo.findOneByPublicTrailUuidAndEmailAndRateIsNotNull(uuid, email)
-			.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
-			.flatMap(myRateOpt ->
-				feedbackRepo.findFirst1ByPublicTrailUuidAndEmailAndCommentIsNotNullOrderByDateDesc(uuid, email)
-				.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
-				.map(myLatestCommentOpt -> new MyFeedback(
-					myRateOpt.isPresent() ? myRateOpt.get().getRate() : null,
-					myRateOpt.isPresent() ? myRateOpt.get().getDate() : null,
-					myLatestCommentOpt.isPresent() ? myLatestCommentOpt.get().getDate() : null
-				))
-			)
-		);
-	}
-	
-	public Mono<List<PublicTrailFeedback>> getFeedbacks(String trailUuid, long pageFromDate, int size, String excludeFromStartingDate, Integer filterRate, Authentication auth) {
-		return this.fetchFeedbacks(trailUuid, sql -> {
-			if (pageFromDate > 0)
-				sql.append(" AND public_trail_feedback.date <= ").append(pageFromDate);
-			if (filterRate != null) {
-				sql.append(" AND public_trail_feedback.rate = ").append(filterRate);
-			}
-			if (excludeFromStartingDate != null) {
-				String notIn = String.join(",", Stream.of(excludeFromStartingDate.split(",")).map(TrailenceUtils::ifUuid).filter(o -> o.isPresent()).map(Optional::get).map(uuid -> "'" + uuid.toString() + "'").toList());
-				if (!notIn.isEmpty())
-					sql.append(" AND public_trail_feedback.uuid NOT IN (").append(notIn).append(')');
-			}
-			sql.append(" ORDER BY public_trail_feedback.date DESC");
-			sql.append(" LIMIT ").append(size > 100 || size < 1 ? 100 : size);
-		}, auth);
-	}
-	
-	public Mono<List<PublicTrailFeedback>> fetchFeedbacks(String trailUuid, Consumer<StringBuilder> addWhereAndPaging, Authentication auth) {
-		String youEmail = auth == null ? "" : TrailenceUtils.email(auth);
-		var sql = new StringBuilder(2048)
-		.append("SELECT ")
-		.append("public_trail_feedback.uuid")
-		.append(",public_trail_feedback.date")
-		.append(",public_trail_feedback.rate")
-		.append(",public_trail_feedback.comment")
-		.append(",public_trail_feedback.reviewed")
-		.append(",user_preferences.alias")
-		.append(",public_trail_feedback.email")
-		.append(" FROM public_trail_feedback")
-		.append(" LEFT JOIN user_preferences ON user_preferences.email = public_trail_feedback.email")
-		.append(" WHERE public_trail_feedback.public_trail_uuid = '").append(trailUuid).append('\'');
-		addWhereAndPaging.accept(sql);
-		return r2dbc.query(DbUtils.operation(sql.toString(), null), row -> new PublicTrailFeedback(
-			row.get("uuid", UUID.class).toString(),
-			row.get("alias", String.class),
-			youEmail.equals(row.get("email", String.class)),
-			row.get("date", Long.class),
-			row.get("rate", Integer.class),
-			row.get("comment", String.class),
-			row.get("reviewed", Boolean.class),
-			new LinkedList<>()
-		)).all().collectList()
-		.flatMap(feedbacks -> {
-			if (feedbacks.isEmpty()) return Mono.just(feedbacks);
-			String sqlReplies = "SELECT public_trail_feedback_reply.reply_to, public_trail_feedback_reply.uuid, user_preferences.alias, public_trail_feedback_reply.date, public_trail_feedback_reply.comment, public_trail_feedback_reply.email, public_trail_feedback_reply.reviewed FROM public_trail_feedback_reply LEFT JOIN user_preferences ON user_preferences.email = public_trail_feedback_reply.email WHERE public_trail_feedback_reply.reply_to IN ("
-						+ String.join(",", feedbacks.stream().map(f -> "'" + f.getUuid() + "'").collect(Collectors.toSet())) + ") ORDER BY public_trail_feedback_reply.date DESC";
-			return r2dbc.query(DbUtils.operation(sqlReplies, null), row -> new TmpReply(
-				row.get("reply_to", UUID.class).toString(),
-				row.get("uuid", UUID.class).toString(),
-				row.get("alias", String.class),
-				youEmail.equals(row.get("email", String.class)),
-				row.get("date", Long.class),
-				row.get("comment", String.class),
-				row.get("reviewed", Boolean.class)
-			)).all().collectList()
-			.map(replies -> {
-				for (var reply : replies) {
-					var feedbackOpt = feedbacks.stream().filter(f -> f.getUuid().equals(reply.getCommentUuid())).findAny();
-					if (feedbackOpt.isPresent()) feedbackOpt.get().getReplies().add(new Reply(reply.getUuid(), reply.getAlias(), reply.isYou(), reply.getDate(), reply.getComment(), reply.isReviewed()));
-				}
-				return feedbacks;
-			});
-		});
-	}
-	
-	@Data
-	@NoArgsConstructor
-	@AllArgsConstructor
-	public static class TmpReply {
-		private String commentUuid;
-		private String uuid;
-		private String alias;
-		private boolean you;
-		private long date;
-		private String comment;
-		private boolean reviewed;
-	}
-	
-	@Transactional
-	public Mono<Void> deleteComment(String feedbackUuid, Authentication auth) {
-		String user = auth == null ? "" : TrailenceUtils.email(auth);
-		boolean moderator = TrailenceUtils.hasRole(auth, TrailenceUtils.ROLE_MODERATOR);
-		return feedbackRepo.findById(UUID.fromString(feedbackUuid))
-		.switchIfEmpty(Mono.error(new NotFoundException("feedback", feedbackUuid)))
-		.flatMap(entity -> {
-			if (!moderator && !entity.getEmail().equals(user)) return Mono.error(new ForbiddenException());
-			if (entity.getComment() == null) return Mono.empty();
-			if (entity.getRate() != null) {
-				entity.setComment(null);
-				return feedbackRepo.save(entity);
-			} else {
-				return feedbackRepo.delete(entity).thenReturn(entity);
-			}
-		})
-		.flatMap(entity -> feedbackReplyRepo.deleteAllByReplyTo(entity.getUuid()));
-	}
-	
-	public Mono<Void> deleteReply(String uuid, Authentication auth) {
-		String user = auth == null ? "" : TrailenceUtils.email(auth);
-		boolean moderator = TrailenceUtils.hasRole(auth, TrailenceUtils.ROLE_MODERATOR);
-		return feedbackReplyRepo.findById(UUID.fromString(uuid))
-		.switchIfEmpty(Mono.error(new NotFoundException("feedback-reply", uuid)))
-		.flatMap(entity -> {
-			if (!moderator && !entity.getEmail().equals(user)) return Mono.error(new ForbiddenException());
-			return feedbackReplyRepo.deleteById(entity.getUuid());
-		});
-	}
-	
 	public Mono<Void> deletePublicTrailAsModerator(String uuid) {
 		UUID trailUuid = UUID.fromString(uuid);
 		return publicTrailRepo.findById(trailUuid)
@@ -868,13 +611,7 @@ public class PublicTrailService {
 					.then(publicPhotoRepo.delete(photo))
 				).then()
 			)
-			.then(
-				feedbackRepo.findAllByPublicTrailUuid(trailUuid)
-				.flatMap(comment ->
-					feedbackReplyRepo.deleteAllByReplyTo(comment.getUuid())
-					.then(feedbackRepo.delete(comment))
-				).then()
-			)
+			.then(feedbackService.publicTrailDeleted(trailUuid))
 			.then(
 				messageRepo.deleteAllByUuidInAndMessageType(List.of(trailUuid), ModerationMessageEntity.TYPE_REMOVE)
 			)
