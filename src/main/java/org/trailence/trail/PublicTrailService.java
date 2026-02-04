@@ -634,8 +634,12 @@ public class PublicTrailService {
 		return publicTrailRepo.random();
 	}
 	
-	public Flux<SlugAndDate> allSlugs() {
-		return publicTrailRepo.allSlugs();
+	public Flux<SlugAndDate> slugsWithDate(long offset, int nb) {
+		return publicTrailRepo.slugsWithDate(nb, offset);
+	}
+	
+	public Mono<Long> count() {
+		return publicTrailRepo.count();
 	}
 	
 	public Mono<String> getCurrentPublicUuid(String trailUuid, String trailOwner) {

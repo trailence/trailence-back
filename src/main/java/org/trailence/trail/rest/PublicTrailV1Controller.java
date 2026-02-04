@@ -1,17 +1,14 @@
 package org.trailence.trail.rest;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
 import org.apache.commons.lang3.StringEscapeUtils;
-import org.apache.commons.lang3.time.DateFormatUtils;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.UnauthorizedException;
 import org.trailence.trail.PublicTrailService;
+import org.trailence.trail.SiteMapService;
 import org.trailence.trail.dto.MyPublicTrail;
 import org.trailence.trail.dto.PatchPublicTrailRequest;
 import org.trailence.trail.dto.PublicTrack;
@@ -44,6 +42,7 @@ import reactor.core.publisher.Mono;
 public class PublicTrailV1Controller {
 	
 	private final PublicTrailService service;
+	private final SiteMapService sitemap;
 
 	@PostMapping("/countByTile")
 	public Mono<SearchByTileResponse> searchByTiles(@RequestBody SearchByTileRequest request) {
@@ -147,50 +146,19 @@ public class PublicTrailV1Controller {
 		});
 	}
 	
-	private static final byte[] SITEMAP_HEADER = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\" xsi:schemaLocation=\"http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd\">\n".getBytes(StandardCharsets.UTF_8);
-	private static final byte[] SITEMAP_FOOTER = "</urlset>".getBytes(StandardCharsets.UTF_8);
-	
 	@GetMapping("/sitemap.xml")
-	@SuppressWarnings("java:S1192")
-	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemap(ServerHttpRequest request) {
-		String baseUrl = "https://trailence.org/";
+	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemapIndex() {
 		return Mono.just(ResponseEntity.ok()
 			.contentType(MediaType.APPLICATION_XML)
-			.body(Flux.concat(
-				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_HEADER)),
-				service.allSlugs().map(slug -> {
-					StringBuilder s = new StringBuilder(2048);
-					long ts = slug.getUpdatedAt();
-					if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
-					if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
-					String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
-					s.append("<url>\n");
-						s.append("<loc>").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("</loc>\n");
-						s.append("<lastmod>").append(date).append("</lastmod>\n");
-						s.append("<xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("\" />\n");
-						s.append("<xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("\" />\n");
-					s.append("</url>\n");
-					s.append("<url>\n");
-						s.append("<loc>").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("</loc>\n");
-						s.append("<lastmod>").append(date).append("</lastmod>\n");
-						s.append("<xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"").append(baseUrl).append("en/trail/").append(slug.getSlug()).append("\" />\n");
-						s.append("<xhtml:link rel=\"alternate\" hreflang=\"fr\" href=\"").append(baseUrl).append("fr/trail/").append(slug.getSlug()).append("\" />\n");
-					s.append("</url>\n");
-					s.append("<url>\n");
-						s.append("<loc>").append(baseUrl).append("trail/trailence/").append(slug.getSlug()).append("</loc>\n");
-						s.append("<lastmod>").append(date).append("</lastmod>\n");
-					s.append("</url>\n");
-					return s;
-				})
-				.buffer(20)
-				.map(list -> {
-					if (list.isEmpty()) return DefaultDataBufferFactory.sharedInstance.wrap(new byte[0]);
-					StringBuilder s = list.getFirst();
-					for (var i = 1; i < list.size(); ++i) s.append(list.get(i));
-					return DefaultDataBufferFactory.sharedInstance.wrap(s.toString().getBytes(StandardCharsets.UTF_8));
-				}),
-				Mono.just(DefaultDataBufferFactory.sharedInstance.wrap(SITEMAP_FOOTER))
-			))
+			.body(sitemap.generateSiteMapIndex().map(DefaultDataBufferFactory.sharedInstance::wrap))
+		);
+	}
+	
+	@GetMapping("/sitemaps/{page}/sitemap.xml")
+	public Mono<ResponseEntity<Flux<DefaultDataBuffer>>> sitemapPage(@PathVariable("page") int page) {
+		return Mono.just(ResponseEntity.ok()
+			.contentType(MediaType.APPLICATION_XML)
+			.body(sitemap.generateSiteMapPage(page).map(DefaultDataBufferFactory.sharedInstance::wrap))
 		);
 	}
 	
