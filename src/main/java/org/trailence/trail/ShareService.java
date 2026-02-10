@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.trailence.email.EmailService;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
+import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
@@ -145,11 +146,11 @@ public class ShareService {
 	public Mono<Void> createShareWithQuota(ShareEntity share, List<ShareElementEntity> elements, List<ShareRecipientEntity> recipients) {
 		return r2dbc.insert(share)
 		.thenMany(
-			Flux.fromIterable(elements).flatMap(r2dbc::insert, 3, 6)
+			Flux.fromIterable(elements).flatMap(r2dbc::insert, 2, 4)
 			.onErrorResume(DuplicateKeyException.class, _ -> Mono.empty())
 		)
 		.thenMany(
-			Flux.fromIterable(recipients).flatMap(r2dbc::insert, 3, 6)
+			Flux.fromIterable(recipients).flatMap(r2dbc::insert, 2, 4)
 			.onErrorResume(DuplicateKeyException.class, _ -> Mono.empty())
 		)
 		.then(quotaService.addShares(share.getOwner(), 1))
@@ -336,7 +337,7 @@ public class ShareService {
 			.flatMap(recipient ->
 				shareRecipientRepo.countByUuidAndOwner(recipient.getUuid(), recipient.getOwner())
 				.flatMap(remaining -> remaining.longValue() == 0L ? deleteSharesWithQuota(List.of(recipient.getUuid()), recipient.getOwner(), true, false) : Mono.empty())
-			).then();
+			, 1, 1).then();
 		});
 	}
 	
@@ -481,6 +482,96 @@ public class ShareService {
 		return select
 			.where(condition)
 			.build();
+	}
+	
+	public Mono<Boolean> hasAccessThroughShare(String email, String owner, String uuid) {
+		SqlBuilder sql = new SqlBuilder()
+			.select(ShareEntity.COL_UUID, ShareEntity.COL_ELEMENT_TYPE)
+			.from(ShareRecipientEntity.TABLE)
+			.leftJoinTable(ShareEntity.TABLE, Conditions.isEqual(ShareEntity.COL_UUID, ShareRecipientEntity.COL_UUID), null)
+			.where(
+				Conditions.isEqual(ShareRecipientEntity.COL_OWNER, SQL.literalOf(owner))
+				.and(Conditions.isEqual(ShareRecipientEntity.COL_RECIPIENT, SQL.literalOf(email)))
+			);
+		return r2dbc.query(
+	    	DbUtils.operation(sql.build(), null),
+	    	row -> Tuples.of(
+	    		row.get(ShareEntity.COL_UUID.getName().toString(), UUID.class),
+    			row.get(ShareEntity.COL_ELEMENT_TYPE.getName().toString(), String.class)
+    		)
+	    ).all().collectList()
+		.flatMap(tuples -> {
+			if (tuples.isEmpty()) return Mono.just(false);
+			var byTrail = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TRAIL.name())).map(t -> t.getT1()).toList();
+			Mono<Boolean> throughTrail = byTrail.isEmpty() ? Mono.just(false) : isSharingByTrail(byTrail, UUID.fromString(uuid));
+			return throughTrail.flatMap(shareByTrail -> {
+				if (shareByTrail.booleanValue()) return Mono.just(true);
+				var byCollection = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.COLLECTION.name())).map(t -> t.getT1()).toList();
+				Mono<Boolean> throughCollection = byCollection.isEmpty() ? Mono.just(false) : isSharingByCollection(byCollection, UUID.fromString(uuid));
+				return throughCollection.flatMap(shareByCollection -> {
+					if (shareByCollection.booleanValue()) return Mono.just(true);
+					var byTag = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TAG.name())).map(t -> t.getT1()).toList();
+					return byTag.isEmpty() ? Mono.just(false) : isSharingByTag(byTag, UUID.fromString(uuid));
+				});
+			});
+		});
+	}
+	
+	private Mono<Boolean> isSharingByTrail(List<UUID> shareUuids, UUID trailUuid) {
+		SqlBuilder sql = new SqlBuilder()
+		.select(ShareElementEntity.COL_SHARE_UUID)
+		.from(ShareElementEntity.TABLE)
+		.where(
+			Conditions.in(ShareElementEntity.COL_SHARE_UUID, shareUuids.stream().map(u -> SQL.literalOf(u.toString())).toList())
+			.and(Conditions.isEqual(ShareElementEntity.COL_ELEMENT_UUID, SQL.literalOf(trailUuid.toString())))
+		).limit(1);
+		return r2dbc.query(
+	    	DbUtils.operation(sql.build(), null),
+	    	_ -> true
+	    ).all().collectList()
+		.map(l -> !l.isEmpty());
+	}
+	
+	private Mono<Boolean> isSharingByCollection(List<UUID> shareUuids, UUID trailUuid) {
+		SqlBuilder sql = new SqlBuilder()
+		.select(TrailEntity.COL_UUID)
+		.from(ShareElementEntity.TABLE)
+		.leftJoinTable(
+			TrailEntity.TABLE,
+			Conditions.isEqual(TrailEntity.COL_COLLECTION_UUID, ShareElementEntity.COL_ELEMENT_UUID)
+			.and(Conditions.isEqual(TrailEntity.COL_UUID, SQL.literalOf(trailUuid.toString()))),
+			null
+		)
+		.where(
+			Conditions.in(ShareElementEntity.COL_SHARE_UUID, shareUuids.stream().map(u -> SQL.literalOf(u.toString())).toList())
+			.and(Conditions.not(Conditions.isNull(TrailEntity.COL_UUID)))
+		).limit(1);
+		return r2dbc.query(
+	    	DbUtils.operation(sql.build(), null),
+	    	_ -> true
+	    ).all().collectList()
+		.map(l -> !l.isEmpty());
+	}
+	
+	private Mono<Boolean> isSharingByTag(List<UUID> shareUuids, UUID trailUuid) {
+		SqlBuilder sql = new SqlBuilder()
+		.select(TrailTagEntity.COL_TRAIL_UUID)
+		.from(ShareElementEntity.TABLE)
+		.leftJoinTable(
+			TrailTagEntity.TABLE,
+			Conditions.isEqual(TrailTagEntity.COL_TAG_UUID, ShareElementEntity.COL_ELEMENT_UUID)
+			.and(Conditions.isEqual(TrailTagEntity.COL_TRAIL_UUID, SQL.literalOf(trailUuid.toString()))),
+			null
+		)
+		.where(
+			Conditions.in(ShareElementEntity.COL_SHARE_UUID, shareUuids.stream().map(u -> SQL.literalOf(u.toString())).toList())
+			.and(Conditions.not(Conditions.isNull(TrailTagEntity.COL_TRAIL_UUID)))
+		).limit(1);
+		return r2dbc.query(
+	    	DbUtils.operation(sql.build(), null),
+	    	_ -> true
+	    ).all().collectList()
+		.map(l -> !l.isEmpty());
 	}
 	
 	public Mono<Share> updateShare(String uuid, UpdateShareRequest request, Authentication auth) {

@@ -66,7 +66,7 @@ public class ModerationService {
 			.collectList()
 			.map(photos -> new TrailAndPhotos(trailService.toDTO(trail), photos))
 		, 2, 1)
-		.flatMap(this::addMessages);
+		.flatMap(this::addMessages, 1, 1);
 	}
 	
 	public Mono<TrailAndPhotos> getTrailToReview(String trailUuid, String owner, Authentication auth) {
@@ -194,7 +194,7 @@ public class ModerationService {
 					result.getFeedbacks().addAll(feedbacks);
 					return result;
 				});
-			})
+			}, 1, 1)
 			.collectList();
 		});
 	}
@@ -262,7 +262,7 @@ public class ModerationService {
 			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
 			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
 			return Flux.fromIterable(entities)
-			.flatMap(entity -> publicTrailService.deletePublicTrailAsModerator(entity.getUuid().toString()))
+			.flatMap(entity -> publicTrailService.deletePublicTrailAsModerator(entity.getUuid().toString()), 1, 1)
 			.then();
 		});
 	}

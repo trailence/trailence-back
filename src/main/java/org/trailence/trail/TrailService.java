@@ -209,7 +209,7 @@ public class TrailService {
     				toCreate.add(entity);
     		}
     		if (toCreate.isEmpty()) return Mono.error(errors.getFirst());
-    		return (actions.isEmpty() ? Mono.empty() : Flux.fromIterable(actions).flatMap(a -> a).then())
+    		return (actions.isEmpty() ? Mono.empty() : Flux.fromIterable(actions).flatMap(a -> a, 1, 1).then())
     		.then(quotaService.addTrails(owner, toCreate.size()))
 	    	.flatMap(nb -> {
 	    		var toCreate2 = nb == toCreate.size() ? toCreate : toCreate.subList(0, nb);
@@ -576,7 +576,7 @@ public class TrailService {
     			feedback.setReviewed(true);
     			return r2dbc.insert(feedback);
     		});
-    	}).subscribe();
+    	}, 1, 1).subscribe();
     }
     
     private void handleNotificationsForNewTrails(List<TrailEntity> trails, String owner) {
@@ -626,7 +626,7 @@ public class TrailService {
     		Long.toString(trails.stream().filter(trail -> trail.getCollectionUuid().equals(share.getT1())).count()),
     		share.getT4().toString(),
     		share.getT3()
-    	))).subscribe();
+    	)), 1, 1).subscribe();
     }
 
 }

@@ -609,7 +609,7 @@ public class PublicTrailService {
 				.flatMap(photo ->
 					fileService.deleteFile(photo.getFileId())
 					.then(publicPhotoRepo.delete(photo))
-				).then()
+				, 1, 1).then()
 			)
 			.then(feedbackService.publicTrailDeleted(trailUuid))
 			.then(

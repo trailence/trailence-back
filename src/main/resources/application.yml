@@ -99,3 +99,5 @@ trailence:
         content:
           apikey:
             pattern: "[0-9a-f]{32}" 
+  live-group:
+    expiration: ${LIVE_GROUP_EXPIRATION:7d}

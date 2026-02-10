@@ -116,7 +116,7 @@ public class UserService {
 		var subscriptionsEntities = subscriptions.stream().map(s -> new UserSubscriptionEntity(UUID.randomUUID(), email, s.getT1(), now, s.getT2().orElse(null)));
 		return r2dbc.insert(entity)
 		.then(r2dbc.insert(myTrails))
-		.thenMany(Flux.fromStream(subscriptionsEntities).flatMap(r2dbc::insert))
+		.thenMany(Flux.fromStream(subscriptionsEntities).flatMap(r2dbc::insert, 1, 2))
 		.then(quotaService.initUserQuotas(email, now));
 	}
 	

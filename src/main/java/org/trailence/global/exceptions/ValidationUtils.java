@@ -87,6 +87,11 @@ public final class ValidationUtils {
 			return this;
 		}
 		
+		public FieldString notBlank() {
+			if (value.isBlank()) throw new BadRequestException(INVALID_PREFIX + name + "-blank", name + " must not be blank");
+			return this;
+		}
+		
 		public FieldString isUuid() {
 			try {
 				UUID.fromString(value);
@@ -118,6 +123,9 @@ public final class ValidationUtils {
 			
 			@Override
 			public FieldString maxLength(int max) { return this; }
+			
+			@Override
+			public FieldString notBlank() { return this; }
 			
 			@Override
 			public FieldString isUuid() { return this; }

@@ -154,7 +154,7 @@ public class DonationService {
 	
 	@Transactional
 	public Mono<List<DonationGoal>> updateGoals(List<DonationGoal> goals) {
-		return goalRepo.deleteAll().thenMany(Flux.fromIterable(goals)).flatMap(g -> r2dbc.insert(toEntity(g))).map(this::toDto).collectList();
+		return goalRepo.deleteAll().thenMany(Flux.fromIterable(goals)).flatMap(g -> r2dbc.insert(toEntity(g)), 1, 1).map(this::toDto).collectList();
 	}
 	
 	private DonationGoalEntity toEntity(DonationGoal dto) {

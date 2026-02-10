@@ -87,7 +87,7 @@ public class AvatarService {
 			.onErrorResume(error -> fileService.deleteFile(newFileId).then(Mono.error(error)))
 		)
 		.map(tuple -> {
-			Flux.fromIterable(tuple.getT2()).flatMap(fileService::deleteFile).subscribe();
+			Flux.fromIterable(tuple.getT2()).flatMap(fileService::deleteFile, 1, 1).subscribe();
 			return toDto(tuple.getT1());
 		});
 	}

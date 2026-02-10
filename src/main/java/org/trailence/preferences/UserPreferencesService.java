@@ -252,7 +252,7 @@ public class UserPreferencesService {
 	
 	public Flux<Tuple2<String, String>> getAliases(List<String> emails) {
 		return repo.findAllById(emails)
-		.flatMap(entity -> entity.getAlias() == null ? Mono.empty() : Mono.just(Tuples.of(entity.getEmail(), entity.getAlias())));
+		.flatMap(entity -> entity.getAlias() == null ? Mono.empty() : Mono.just(Tuples.of(entity.getEmail(), entity.getAlias())), 1, 1);
 	}
 	
 }

@@ -175,7 +175,7 @@ public class PhotoService {
     }
     
     private Mono<Long> delete(Flux<PhotoEntity> toDelete) {
-    	return toDelete.flatMap(self::deletePhotoWithFileAndQuota, 3, 6)
+    	return toDelete.flatMap(self::deletePhotoWithFileAndQuota, 2, 4)
     	.reduce(0L, (size, previous) -> size + previous);
     }
     

@@ -182,4 +182,9 @@ public class TrailLinkService {
 		);
 	}
 	
+	public Mono<String> getTrailLink(String owner, String uuid) {
+		return linkRepo.findOneByAuthorAndAuthorUuid(owner, UUID.fromString(uuid))
+		.map(this::toLink);
+	}
+	
 }

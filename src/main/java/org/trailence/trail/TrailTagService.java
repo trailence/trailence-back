@@ -125,7 +125,7 @@ public class TrailTagService {
 		String owner = auth.getPrincipal().toString();
 		log.info("Deleting {} trail tags for {}", dtos.size(), owner);
 		return Flux.fromIterable(new HashSet<>(dtos.stream().map(dto -> Tuples.of(UUID.fromString(dto.getTagUuid()), UUID.fromString(dto.getTrailUuid()))).toList()))
-		.flatMap(tuple -> repo.deleteByTagUuidAndTrailUuidAndOwner(tuple.getT1(), tuple.getT2(), owner), 3, 6)
+		.flatMap(tuple -> repo.deleteByTagUuidAndTrailUuidAndOwner(tuple.getT1(), tuple.getT2(), owner), 2, 4)
 		.reduce(0L, (p, n) -> p + n)
 		.flatMap(removed -> quotaService.trailTagsDeleted(owner, removed))
 		.then(Mono.fromRunnable(() -> log.info("Trail tags deleted ({} for {})", dtos.size(), owner)));
@@ -202,7 +202,7 @@ public class TrailTagService {
     		Long.toString(trailTags.stream().filter(t -> t.getTagUuid().equals(share.getT1())).count()),
     		share.getT4().toString(),
     		share.getT3()
-    	))).subscribe();
+    	)), 1, 1).subscribe();
     }
 
 }

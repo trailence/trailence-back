@@ -158,7 +158,7 @@ public class FeedbackService {
 			return publicTrailRepo.findById(feedback.getPublicTrailUuid())
 			.flatMap(trail ->
 				Flux.fromIterable(recipients)
-				.flatMap(recipient -> notificationsService.create(recipient, "comments.reply", List.of(feedback.getPublicTrailUuid().toString(), trail.getName())))
+				.flatMap(recipient -> notificationsService.create(recipient, "comments.reply", List.of(feedback.getPublicTrailUuid().toString(), trail.getName())), 1, 1)
 				.then()
 			);
 		})
@@ -348,7 +348,7 @@ public class FeedbackService {
 		.flatMap(comment ->
 			feedbackReplyRepo.deleteAllByReplyTo(comment.getUuid())
 			.then(feedbackRepo.delete(comment))
-		).then();
+		, 1, 1).then();
 	}
 	
 }

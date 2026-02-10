@@ -77,7 +77,7 @@ public class ContactService {
 		.flatMap(entity -> {
 			entity.setRead(read);
 			return repo.save(entity);
-		})
+		}, 1, 1)
 		.then();
 	}
 	

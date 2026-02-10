@@ -25,11 +25,18 @@ public class HttpFilter implements WebFilter {
 			long time = System.currentTimeMillis() - start;
 			if (time > 2000) log.info("Request took {} ms: {} {}", time, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
 		}));
-		schedule.setValue(Schedulers.boundedElastic().schedule(() -> {
-			schedule.setValue(null);
-			log.warn("Request not comitted after 10 seconds: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath());
-		}, 10, TimeUnit.SECONDS));
+		checkExchange(exchange, 10, schedule);
 		return chain.filter(exchange);
+	}
+	
+	private void checkExchange(ServerWebExchange exchange, int seconds, MutableObject<Disposable> schedule) {
+		schedule.setValue(Schedulers.boundedElastic().schedule(() -> {
+			if (seconds < 10 * 60)
+				checkExchange(exchange, seconds * 2, schedule);
+			else
+				schedule.setValue(null);
+			log.warn("Request not comitted after {} seconds: {} {}", seconds, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
+		}, 10, TimeUnit.SECONDS));
 	}
 	
 }

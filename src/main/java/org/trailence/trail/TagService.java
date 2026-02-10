@@ -227,7 +227,7 @@ public class TagService {
 			return Flux.error(errors.getFirst());
 		}
 		return repo.findAllByUuidInAndOwner(uuids, owner)
-		.flatMap(entity -> associateEntityWithDto(entity, valid))
+		.flatMap(entity -> associateEntityWithDto(entity, valid), 2, 4)
 		.collectList()
 		.flatMapMany(tuples -> {
 			Set<UUID> newParents = new HashSet<>();
@@ -240,7 +240,7 @@ public class TagService {
 				newParents.isEmpty() ? Mono.just(Collections.<TagEntity>emptyList()) : repo.findAllByUuidInAndOwner(newParents, owner).collectList();
 			return getExistingParents.flatMapMany(existingParents ->
 				Flux.fromIterable(tuples)
-				.flatMap(tuple -> doUpdate(tuple.getT2(), tuple.getT1(), existingParents), 3, 6)
+				.flatMap(tuple -> doUpdate(tuple.getT2(), tuple.getT1(), existingParents), 2, 4)
 			)
 			.collectList()
 			.flatMapMany(results -> {
