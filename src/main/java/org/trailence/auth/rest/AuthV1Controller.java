@@ -1,5 +1,8 @@
 package org.trailence.auth.rest;
 
+import java.time.Duration;
+
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ServerWebExchange;
 import org.trailence.auth.AuthService;
 import org.trailence.auth.dto.AuthResponse;
 import org.trailence.auth.dto.ForgotPasswordRequest;
@@ -24,6 +28,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
 
 @RestController
 @RequestMapping("/api/auth/v1")
@@ -32,9 +37,25 @@ public class AuthV1Controller {
 
 	private final AuthService service;
 	
+	private static final String COOKIE_NAME = "trailence_token";
+	
 	@PostMapping("login")
-	public Mono<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-		return RetryRest.retry(service.login(request));
+	public Mono<AuthResponse> login(@Valid @RequestBody LoginRequest request, ServerWebExchange exchange) {
+		return RetryRest.retry(service.login(request))
+		.map(tuple -> this.setCookie(tuple, exchange));
+	}
+	
+	private AuthResponse setCookie(Tuple2<AuthResponse, String> response, ServerWebExchange exchange) {
+		exchange.getResponse().addCookie(
+			ResponseCookie.from(COOKIE_NAME, response.getT2())
+			.httpOnly(true)
+			.maxAge(Duration.ofDays(365))
+			.secure(true)
+			.sameSite("Strict")
+			.path("/api/auth/v1")
+			.build()
+		);
+		return response.getT1();
 	}
 	
 	@PostMapping("init_renew")
@@ -43,8 +64,11 @@ public class AuthV1Controller {
 	}
 	
 	@PostMapping("renew")
-	public Mono<AuthResponse> renew(@Valid @RequestBody RenewTokenRequest request) {
-		return RetryRest.retry(service.renew(request));
+	public Mono<AuthResponse> renew(@Valid @RequestBody RenewTokenRequest request, ServerWebExchange exchange) {
+		var cookie = exchange.getRequest().getCookies().getFirst(COOKIE_NAME);
+		var trustToken = cookie == null ? null : cookie.getValue();
+		return RetryRest.retry(service.renew(request, trustToken))
+		.map(tuple -> this.setCookie(tuple, exchange));
 	}
 	
 	@GetMapping("mykeys")
@@ -58,8 +82,9 @@ public class AuthV1Controller {
 	}
 	
 	@PostMapping("share")
-	public Mono<AuthResponse> loginShare(@Valid @RequestBody LoginShareRequest request) {
-		return RetryRest.retry(service.loginShare(request));
+	public Mono<AuthResponse> loginShare(@Valid @RequestBody LoginShareRequest request, ServerWebExchange exchange) {
+		return RetryRest.retry(service.loginShare(request))
+		.map(tuple -> this.setCookie(tuple, exchange));
 	}
 	
 	@GetMapping("captcha")

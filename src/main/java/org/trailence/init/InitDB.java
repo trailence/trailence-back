@@ -70,6 +70,7 @@ public class InitDB {
 		new DatabaseMigration("1.2_preferences_add_elevation_calibration"),
 		new DatabaseMigration("1.3_trails_source_url"),
 		new DatabaseMigration("1.3_preferences_add_trail_filters"),
+		new DatabaseMigration("1.5_trust_token"),
 	};
 	
 	public void init(ApplicationContext context) {

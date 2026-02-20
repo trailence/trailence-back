@@ -61,6 +61,7 @@ class TestAuth extends AbstractTest {
 				.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
+		var trustToken = response.getCookie("trailence_token");
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
@@ -77,6 +78,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -86,6 +88,7 @@ class TestAuth extends AbstractTest {
 		assertThat(authRenew.getPreferences()).isNotNull();
 		assertThat(authRenew.getQuotas()).isNotNull();
 		assertThat(authRenew.getKeyId()).isEqualTo(auth.getKeyId());
+		trustToken = response.getCookie("trailence_token");
 		
 		response = RestAssured.given()
 			.header("Authorization", "Bearer " + authRenew.getAccessToken())
@@ -104,6 +107,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new InitRenewRequest(auth.getEmail(), auth.getKeyId()))
 			.post("/api/auth/v1/init_renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -126,6 +130,8 @@ class TestAuth extends AbstractTest {
 		var auth = response.getBody().as(AuthResponse.class);
 		assertThat(auth.getKeyCreatedAt()).isGreaterThanOrEqualTo(time1);
 		assertThat(auth.getKeyExpiresAt()).isEqualTo(auth.getKeyCreatedAt() + 60000);
+		var trustToken = response.cookie("trailence_token");
+		assertThat(trustToken).isNotBlank();
 
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
@@ -145,6 +151,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), keyPair2.getPublic().getEncoded(), 30000L))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -155,6 +162,8 @@ class TestAuth extends AbstractTest {
 		assertThat(authRenew.getKeyId()).isNotEqualTo(auth.getKeyId());
 		assertThat(authRenew.getKeyCreatedAt()).isGreaterThanOrEqualTo(time2);
 		assertThat(authRenew.getKeyExpiresAt()).isEqualTo(authRenew.getKeyCreatedAt() + 30000);
+		trustToken = response.cookie("trailence_token");
+		assertThat(trustToken).isNotBlank();
 			
 		response = RestAssured.given()
 			.header("Authorization", "Bearer " + authRenew.getAccessToken())
@@ -167,6 +176,7 @@ class TestAuth extends AbstractTest {
 		// cannot renew with first key
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new InitRenewRequest(auth.getEmail(), auth.getKeyId()))
 			.post("/api/auth/v1/init_renew");
 		TestUtils.expectError(response, 403, "forbidden");
@@ -294,6 +304,7 @@ class TestAuth extends AbstractTest {
 				.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
+		var trustToken = response.getCookie("trailence_token");
 		
 		// init
 		response = RestAssured.given()
@@ -312,6 +323,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -324,6 +336,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -336,9 +349,11 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);
+		trustToken = response.getCookie("trailence_token");
 		
 		// init again
 		response = RestAssured.given()
@@ -359,6 +374,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), incorrectRandom, auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -371,6 +387,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), incorrectRandom, auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -378,6 +395,7 @@ class TestAuth extends AbstractTest {
 		// invalid again (trial 3)
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), incorrectRandom, auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -385,6 +403,7 @@ class TestAuth extends AbstractTest {
 		// invalid again (trial 4)
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), incorrectRandom, auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -397,6 +416,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -435,7 +455,7 @@ class TestAuth extends AbstractTest {
 	}
 	
 	@Test
-	void testRenewInvalidSingature() throws Exception {
+	void testRenewInvalidSignature() throws Exception {
 		var user = test.createUser();
 		var keyPair = test.generateKeyPair();
 		var response = RestAssured.given()
@@ -444,6 +464,7 @@ class TestAuth extends AbstractTest {
 				.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
+		var trustToken = response.getCookie("trailence_token");
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
@@ -461,6 +482,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(403);
@@ -469,6 +491,7 @@ class TestAuth extends AbstractTest {
 		
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", trustToken)
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);

@@ -11,5 +11,6 @@ CREATE TABLE IF NOT EXISTS public.user_keys
     invalid_attempts smallint NOT NULL DEFAULT 0,
     deleted_at bigint,
     expires_after bigint DEFAULT 16070400000,
+    trust_token character varying(64) COLLATE pg_catalog."default" DEFAULT NULL,
     CONSTRAINT user_keys_pkey PRIMARY KEY (id)
 )

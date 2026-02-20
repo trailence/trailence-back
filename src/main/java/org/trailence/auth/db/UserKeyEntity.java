@@ -29,6 +29,8 @@ public class UserKeyEntity {
 	private String random;
 	private Long randomExpires;
 	
+	private String trustToken;
+	
 	private Json deviceInfo;
 	
 	private int invalidAttempts;

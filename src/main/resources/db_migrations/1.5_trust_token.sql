@@ -1,0 +1,1 @@
+ALTER TABLE public.user_keys ADD COLUMN IF NOT EXISTS trust_token character varying(64) COLLATE pg_catalog."default" DEFAULT NULL;

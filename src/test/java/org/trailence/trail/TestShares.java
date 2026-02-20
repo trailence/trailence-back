@@ -83,7 +83,7 @@ class TestShares extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
 		assertThat(auth.isComplete()).isFalse();
-		var friend = new TestUserLoggedIn(to, null, keyPair, auth);
+		var friend = new TestUserLoggedIn(to, null, keyPair, auth, response.getCookie("trailence_token"));
 		
 		assertThat(friend.getCollections()).singleElement().extracting(c -> c.getType()).isEqualTo(TrailCollectionType.MY_TRAILS);
 		friend.expectTracksIds(sharedTracks);
@@ -114,6 +114,7 @@ class TestShares extends AbstractTest {
 		var signature = signer.sign();
 		response = RestAssured.given()
 			.contentType(ContentType.JSON)
+			.cookie("trailence_token", friend.getTrustToken())
 			.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 			.post("/api/auth/v1/renew");
 		assertThat(response.statusCode()).isEqualTo(200);

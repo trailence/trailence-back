@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.Assignments;
 import org.springframework.data.relational.core.sql.Conditions;
@@ -94,7 +95,7 @@ public class AuthService {
 	private static final int MAX_ATTEMPTS_BEFORE_REMOVING_KEY = 3;
 	private static final long DEFAULT_KEY_EXPIRES_AFTER = 16070400000L; // 6 * 31 days
 	
-	public Mono<AuthResponse> login(LoginRequest request) {
+	public Mono<Tuple2<AuthResponse, String>> login(LoginRequest request) {
 		ValidationUtils.field("publicKey", request.getPublicKey()).valid(key -> KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(key)));
 		return userRepo.findByEmail(request.getEmail().toLowerCase())
 			.switchIfEmpty(Mono.error(new ForbiddenException(ERROR_CODE_INVALID_CREDENTIALS)))
@@ -104,8 +105,9 @@ public class AuthService {
 			.flatMap(user -> {
 				var roles = getRoles(user);
 				var token = auth.generateToken(user.getEmail(), true, user.isAdmin(), roles);
+				var trustToken = RandomStringUtils.secureStrong().next(64, true, true);
 				
-				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
+				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo(), trustToken);
 				
 				var response = response(token, user, key, null, null, roles, null);
 				user.setInvalidAttempts(0);
@@ -113,7 +115,8 @@ public class AuthService {
 				return userRepo.save(user)
 				.then(r2dbc.insert(key))
 				.thenReturn(response)
-				.flatMap(this::withPreferences).flatMap(this::withQuotas);
+				.flatMap(this::withPreferences).flatMap(this::withQuotas)
+				.map(r -> Tuples.of(r, trustToken));
 			});
 	}
 	
@@ -121,7 +124,7 @@ public class AuthService {
 		return userService.toRolesList(user.getRoles());
 	}
 	
-	private UserKeyEntity createKey(String email, byte[] publicKey, Long expiresAfter, Map<String, Object> deviceInfo) {
+	private UserKeyEntity createKey(String email, byte[] publicKey, Long expiresAfter, Map<String, Object> deviceInfo, String trustToken) {
 		UserKeyEntity key = new UserKeyEntity();
 		key.setId(UUID.randomUUID());
 		key.setEmail(email);
@@ -130,6 +133,7 @@ public class AuthService {
 		key.setLastUsage(key.getCreatedAt());
 		key.setExpiresAfter(getExpiresAfter(expiresAfter));
 		key.setInvalidAttempts(0);
+		key.setTrustToken(trustToken);
 		toDeviceInfo(deviceInfo, key);
 		return key;
 	}
@@ -165,7 +169,7 @@ public class AuthService {
 		return Mono.just(user);
 	}
 	
-	public Mono<AuthResponse> loginShare(LoginShareRequest request) {
+	public Mono<Tuple2<AuthResponse, String>> loginShare(LoginShareRequest request) {
 		return Mono.fromCallable(() -> tokenService.check(request.getToken()))
 		.flatMap(tokenData ->
 			userRepo.findById(tokenData.getEmail())
@@ -178,10 +182,12 @@ public class AuthService {
 				if (user.getPassword() != null) return Mono.error(new ForbiddenException());
 				
 				var token = auth.generateToken(user.getEmail(), false, false, List.of());
-				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo());
+				var trustToken = RandomStringUtils.secureStrong().next(64, true, true);
+				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo(), trustToken);
 
 				var response = response(token, user, key, null, null, List.of(), null);
-				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
+				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas)
+				.map(r -> Tuples.of(r, trustToken));
 			})
 		);
 	}
@@ -201,13 +207,14 @@ public class AuthService {
 		});
 	}
 	
-	public Mono<AuthResponse> renew(RenewTokenRequest request) {
+	public Mono<Tuple2<AuthResponse, String>> renew(RenewTokenRequest request, String trustToken) {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
 		.switchIfEmpty(Mono.error(new ForbiddenException()))
 		.flatMap(key -> {
 			if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
 			boolean isValid = key.getRandom().equals(request.getRandom());
 			if (isValid && !isValidSignature(key.getPublicKey(), request.getEmail(), key.getRandom(), request.getSignature())) isValid = false;
+			if (isValid && key.getTrustToken() != null) isValid = key.getTrustToken().equals(trustToken);
 			if (!isValid) {
 				key.setInvalidAttempts(key.getInvalidAttempts() + 1);
 				if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
@@ -223,14 +230,16 @@ public class AuthService {
 				key.setRandom(null);
 				key.setRandomExpires(0L);
 				key.setInvalidAttempts(0);
+				var newTrustToken = RandomStringUtils.secureStrong().next(64, true, true);
 				if (request.getNewPublicKey() == null) {
+					key.setTrustToken(newTrustToken);
 					var roles = getRoles(user);
 					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
 					var response = response(token, user, key, null, null, roles, null);
-					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas);
+					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas).map(r -> Tuples.of(r,  newTrustToken));
 				}
 				// new key
-				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo());
+				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo(), newTrustToken);
 				var roles = getRoles(user);
 				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
 				var response = response(token, user, newKey, null, null, roles, null);
@@ -239,7 +248,8 @@ public class AuthService {
 					.then(r2dbc.insert(newKey))
 					.thenReturn(response)
 					.flatMap(this::withPreferences)
-					.flatMap(this::withQuotas);
+					.flatMap(this::withQuotas)
+					.map(r -> Tuples.of(r,  newTrustToken));
 			});
 		});
 	}

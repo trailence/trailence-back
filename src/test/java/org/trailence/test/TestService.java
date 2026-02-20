@@ -132,7 +132,7 @@ public class TestService {
 			.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
-		return new TestUserLoggedIn(user.getEmail(), user.getPassword(), keyPair, auth);
+		return new TestUserLoggedIn(user.getEmail(), user.getPassword(), keyPair, auth, response.getCookie("trailence_token"));
 	}
 	
 	@AllArgsConstructor
@@ -142,6 +142,7 @@ public class TestService {
 		private String password;
 		private KeyPair keyPair;
 		private AuthResponse auth;
+		private String trustToken;
 		
 		public RequestSpecification request() {
 			return RestAssured.given().header("Authorization", "Bearer " + auth.getAccessToken());
@@ -581,6 +582,7 @@ public class TestService {
 			
 			response = RestAssured.given()
 				.contentType(ContentType.JSON)
+				.cookie("trailence_token", trustToken)
 				.body(new RenewTokenRequest(auth.getEmail(), initRenew.getRandom(), auth.getKeyId(), signature, new HashMap<String, Object>(), null, null))
 				.post("/api/auth/v1/renew");
 			assertThat(response.statusCode()).isEqualTo(200);
@@ -590,6 +592,8 @@ public class TestService {
 			assertThat(authRenew.getPreferences()).isNotNull();
 			assertThat(authRenew.getQuotas()).isNotNull();
 			assertThat(authRenew.getKeyId()).isEqualTo(auth.getKeyId());
+			this.trustToken = response.getCookie("trailence_token");
+			assertThat(this.trustToken).isNotBlank();
 			this.auth = authRenew;
 			return authRenew;
 		}
@@ -598,7 +602,7 @@ public class TestService {
 	
 	public static class TestAdminLoggedIn extends TestUserLoggedIn {
 		private TestAdminLoggedIn(TestUserLoggedIn admin) {
-			super(admin.getEmail(), admin.getPassword(), admin.getKeyPair(), admin.getAuth());
+			super(admin.getEmail(), admin.getPassword(), admin.getKeyPair(), admin.getAuth(), admin.getTrustToken());
 		}
 		
 		public Plan createPlan(Plan plan) {
