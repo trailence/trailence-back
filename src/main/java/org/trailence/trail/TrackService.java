@@ -1,7 +1,5 @@
 package org.trailence.trail;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -10,8 +8,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -23,7 +19,6 @@ import org.springframework.data.relational.core.sql.Select;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.trailence.global.AccessibleByteArrayOutputStream;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.dto.UpdateResponse;
@@ -33,22 +28,18 @@ import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.quotas.QuotaService;
+import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.ShareRecipientEntity;
 import org.trailence.trail.db.TrackEntity;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailEntity;
 import org.trailence.trail.dto.Track;
-import org.trailence.trail.dto.Track.Segment;
-import org.trailence.trail.dto.Track.WayPoint;
 
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
-import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -73,10 +64,7 @@ public class TrackService {
 			entity.setOwner(auth.getPrincipal().toString());
 			entity.setCreatedAt(System.currentTimeMillis());
 			entity.setUpdatedAt(entity.getCreatedAt());
-			StoredData data = new StoredData();
-			data.s = track.getS();
-			data.wp = track.getWp();
-			entity.setData(compress(data));
+			entity.setData(TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp())));
 			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
 			return entity;
 		})
@@ -92,10 +80,7 @@ public class TrackService {
 			entity.setOwner(track.getOwner());
 			entity.setCreatedAt(System.currentTimeMillis());
 			entity.setUpdatedAt(entity.getCreatedAt());
-			StoredData data = new StoredData();
-			data.s = track.getS();
-			data.wp = track.getWp();
-			entity.setData(compress(data));
+			entity.setData(TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp())));
 			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
 			return entity;
 		})
@@ -125,10 +110,7 @@ public class TrackService {
 			if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
 			int previousDataSize = entity.getData().length;
 			try {
-				StoredData data = new StoredData();
-				data.s = track.getS();
-				data.wp = track.getWp();
-				var newData = compress(data);
+				var newData = TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp()));
 				if (newData.length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + newData.length + " > " + MAX_DATA_SIZE + ")");
 				if (Arrays.equals(newData, entity.getData())) return Mono.just(entity);
 				entity.setData(newData);
@@ -255,7 +237,7 @@ public class TrackService {
 		dto.setCreatedAt(entity.getCreatedAt());
 		dto.setUpdatedAt(entity.getUpdatedAt());
 		try {
-			StoredData data = uncompress(entity.getData(), new TypeReference<StoredData>() {});
+			var data = TrackStorage.V1V2Bridge.v2ToV1Dto(entity.getData());
 			dto.setS(data.s);
 			dto.setWp(data.wp);
 			dto.setSizeUsed(entity.getData().length);
@@ -263,34 +245,6 @@ public class TrackService {
 			throw new RuntimeException(e);
 		}
 		return dto;
-	}
-	
-	public static byte[] compress(Object value) throws IOException {
-		try (AccessibleByteArrayOutputStream bos = new AccessibleByteArrayOutputStream(8192);
-			GZIPOutputStream gos = new GZIPOutputStream(bos)) {
-			TrailenceUtils.mapper.writeValue(gos, value);
-			byte[] result = bos.getData();
-			int len = bos.getLength();
-			if (result.length == len) return result;
-			byte[] compressed = new byte[len];
-			System.arraycopy(result, 0, compressed, 0, len);
-			return compressed;
-		}
-	}
-	
-	public static <T> T uncompress(byte[] compressed, TypeReference<T> type) throws IOException {
-		try (ByteArrayInputStream bis = new ByteArrayInputStream(compressed);
-			GZIPInputStream gis = new GZIPInputStream(bis)) {
-			return TrailenceUtils.mapper.readValue(gis, type);
-		}
-	}
-	
-	@SuppressWarnings("java:S1104") // only used for serialization
-	@NoArgsConstructor
-	@AllArgsConstructor
-	static class StoredData {
-		public Segment[] s;
-		public WayPoint[] wp;
 	}
 	
 	@SuppressWarnings("java:S110") // more than 5 parents

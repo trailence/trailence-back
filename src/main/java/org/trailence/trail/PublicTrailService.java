@@ -46,7 +46,7 @@ import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.notifications.NotificationsService;
 import org.trailence.preferences.UserPreferencesService;
 import org.trailence.storage.FileService;
-import org.trailence.trail.TrackService.StoredData;
+import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.ModerationMessageEntity;
 import org.trailence.trail.db.ModerationMessageRepository;
 import org.trailence.trail.db.PublicPhotoEntity;
@@ -271,7 +271,7 @@ public class PublicTrailService {
 		try {
 			return new PublicTrackEntity(
 				uuid,
-				TrackService.compress(new TrackService.StoredData(request.getFullTrack(), request.getWayPoints()))
+				TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(request.getFullTrack(), request.getWayPoints()))
 			);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -589,7 +589,7 @@ public class PublicTrailService {
 		.switchIfEmpty(Mono.error(new NotFoundException("track", trailUuid)))
 		.map(track -> {
 			try {
-				return TrackService.uncompress(track.getData(), new TypeReference<StoredData>() {});
+				return TrackStorage.V1V2Bridge.v2ToV1Dto(track.getData());
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}

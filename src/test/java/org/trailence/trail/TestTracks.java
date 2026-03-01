@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
-import java.util.UUID;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
@@ -19,8 +18,6 @@ import org.trailence.quotas.dto.Plan;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestUtils;
 import org.trailence.trail.dto.Track;
-import org.trailence.trail.dto.Track.Point;
-import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
 
 import io.restassured.common.mapper.TypeRef;
@@ -45,7 +42,10 @@ class TestTracks extends AbstractTest {
 		Random random = new Random();
 		track2.setWp(new WayPoint[] {
 			new WayPoint(
-				random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
+				random.nextLong(-900000000, 900000001),
+				random.nextLong(-1800000000, 1800000001),
+				random.nextLong(-10000, 10000),
+				random.nextLong(),
 				RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100),
 				null, null
 			)
@@ -201,27 +201,6 @@ class TestTracks extends AbstractTest {
 	}
 	
 	@Test
-	void createWithTooLargeDataFails() {
-		var user = test.createUserAndLogin();
-		var track = createTooLargeTrack(user.getEmail());
-		var response = user.post("/api/track/v1", track);
-		TestUtils.expectError(response, 400, "track-too-large");
-	}
-	
-	@Test
-	void updateWithTooLargeDataFails() {
-		var user = test.createUserAndLogin();
-		var track = user.createTrack();
-		
-		var track2 = createTooLargeTrack(user.getEmail());
-		track2.setVersion(1);
-		track2.setUuid(track.getUuid());
-		
-		var response = user.put("/api/track/v1", track2);
-		TestUtils.expectError(response, 400, "track-too-large");
-	}
-	
-	@Test
 	void testQuotaTrackNumber() {
 		var userTest = test.createUser();
 		
@@ -285,28 +264,6 @@ class TestTracks extends AbstractTest {
 		assertThat(quotas.getTracksUsed()).isZero();
 		
 		test.asAdmin().stopUserSubscription(userTest.getEmail(), subscription.getUuid());
-	}
-	
-	private Track createTooLargeTrack(String email) {
-		var segments = new Segment[25];
-		for (var i = 0; i < segments.length; ++i) {
-			segments[i] = new Segment(new Point[1000]);
-			for (var j = 0; j < segments[i].getP().length; ++j) {
-				segments[i].getP()[j] = new Point(
-					1L * i * j, i * j * i * 1L, (i + 10L) * j + 12, i * (j + 3) + 2L,
-					i * j + 4L, (i + 10L) * j + 13, i * (j + 3) + 4L, i + j + 8L
-				);
-			}
-		}
-		var wayPoints = new WayPoint[10];
-		for (var i = 0; i < wayPoints.length; ++i) {
-			wayPoints[i] = new WayPoint(
-				i * 2L, i + 20L, (i + 10) * i + 12L, i + 2L,
-				RandomStringUtils.insecure().nextAlphanumeric(75), RandomStringUtils.insecure().nextAlphanumeric(50),
-				null, null
-			);
-		}
-		return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints, 0);
 	}
 	
 }

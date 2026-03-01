@@ -245,15 +245,24 @@ public class TestService {
 				segments[i] = new Segment(new Point[random.nextInt(minPointsPerSegment, maxPointsPerSegment + 1)]);
 				for (var j = 0; j < segments[i].getP().length; ++j) {
 					segments[i].getP()[j] = new Point(
-						random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
-						random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong()
+						random.nextLong(-900000000, 900000001),
+						random.nextLong(-1800000000, 1800000001),
+						random.nextLong(-10000, 10000),
+						random.nextLong(-0x3000000000000000L, 0x3000000000000000L),
+						random.nextLong(0, 1000000),
+						random.nextLong(0, 1000000),
+						null,
+						null
 					);
 				}
 			}
 			var wayPoints = new WayPoint[random.nextInt(minWayPoints, maxWayPoints + 1)];
 			for (var i = 0; i < wayPoints.length; ++i) {
 				wayPoints[i] = new WayPoint(
-					random.nextLong(), random.nextLong(), random.nextLong(), random.nextLong(),
+					random.nextLong(-900000000, 900000001),
+					random.nextLong(-1800000000, 1800000001),
+					random.nextLong(-10000, 10000),
+					random.nextLong(-0x3000000000000000L, 0x3000000000000000L),
 					RandomStringUtils.insecure().nextAlphanumeric(0, 100), RandomStringUtils.insecure().nextAlphanumeric(0, 100),
 					null, null
 				);

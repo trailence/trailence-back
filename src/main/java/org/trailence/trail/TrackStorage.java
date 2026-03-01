@@ -3,6 +3,7 @@ package org.trailence.trail;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,10 +25,9 @@ import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
+import tools.jackson.core.type.TypeReference;
 
 public class TrackStorage {
 
@@ -78,11 +78,11 @@ public class TrackStorage {
 						(hasTime ? 0x02 : 0) |
 						(hasPa ? 0x04 : 0) |
 						(hasEa ? 0x08 : 0);
-				if (nbSegments == 2)
+				if (nbSegments == 1)
 					i |= 0x10;
-				else if (nbSegments == 3)
+				else if (nbSegments == 2)
 					i |= 0x20;
-				else if (nbSegments > 3)
+				else if (nbSegments > 2)
 					i |= 0x30;
 				if (nbWaypoints == 1)
 					i |= 0x40;
@@ -91,28 +91,29 @@ public class TrackStorage {
 				else if (nbWaypoints > 2)
 					i |= 0xC0;
 				out.write(i);
-				if (nbSegments > 3) IOEncoding.encodeInteger2(nbSegments - 3, out);
-				if (nbWaypoints > 2) IOEncoding.encodeInteger2(nbWaypoints - 2, out);
+				if (nbSegments > 2) IOEncoding.encodeInteger2(nbSegments - 3, out);
+				if (nbWaypoints > 2) IOEncoding.encodeInteger2(nbWaypoints - 3, out);
 			}
 			
 			public static Info decode(InputStream in) throws IOException {
 				Info info = new Info();
 				int i = in.read();
+				if (i == -1) throw new EOFException();
 				if ((i & 0x01) != 0) info.hasElevation = true;
 				if ((i & 0x02) != 0) info.hasTime = true;
 				if ((i & 0x04) != 0) info.hasPa = true;
 				if ((i & 0x08) != 0) info.hasEa = true;
 				switch ((i & 0x30) >> 4) {
-				case 0: info.nbSegments = 1; break;
-				case 1: info.nbSegments = 2; break;
-				case 2: info.nbSegments = 3; break;
+				case 0: info.nbSegments = 0; break;
+				case 1: info.nbSegments = 1; break;
+				case 2: info.nbSegments = 2; break;
 				default: info.nbSegments = IOEncoding.decodeInteger2(in) + 3;
 				}
 				switch ((i & 0xC0) >> 6) {
 				case 0: info.nbWaypoints = 0; break;
 				case 1: info.nbWaypoints = 1; break;
 				case 2: info.nbWaypoints = 2; break;
-				default: info.nbWaypoints = IOEncoding.decodeInteger2(in) + 2;
+				default: info.nbWaypoints = IOEncoding.decodeInteger2(in) + 3;
 				}
 				return info;
 			}
@@ -120,9 +121,11 @@ public class TrackStorage {
 		
 		public static byte[] v1DtoToV2(V1.StoredData value) throws IOException {
 			try (AccessibleByteArrayOutputStream bos = new AccessibleByteArrayOutputStream(8192)) {
-				Deflater def = new Deflater(Deflater.BEST_COMPRESSION, true);
-				try (DeflaterOutputStream gos = new DeflaterOutputStream(bos, def, 2048);
-					BufferedOutputStream out = new BufferedOutputStream(gos, 8192)) {
+				try (
+					Deflater def = new Deflater(Deflater.BEST_COMPRESSION, true);
+					DeflaterOutputStream gos = new DeflaterOutputStream(bos, def, 2048);
+					BufferedOutputStream out = new BufferedOutputStream(gos, 8192)
+				) {
 					Info info = new Info();
 					info.nbSegments = value.s.length;
 					info.nbWaypoints = value.wp.length;
@@ -171,7 +174,7 @@ public class TrackStorage {
 						}
 						if (info.hasTime) {
 							v = points[0].getT();
-							l = encode64bitsNullable(v);
+							l = toUnsigned(encode64bitsNullable(v));
 							IOEncoding.encodeNumber(out, l, 8);
 						}
 
@@ -258,7 +261,6 @@ public class TrackStorage {
 						}
 					}
 				}
-				def.end();
 				byte[] result = bos.getData();
 				int len = bos.getLength();
 				if (result.length == len) return result;
@@ -270,9 +272,11 @@ public class TrackStorage {
 		
 		public static V1.StoredData v2ToV1Dto(byte[] v2) throws IOException {
 			try (ByteArrayInputStream bis = new ByteArrayInputStream(v2)) {
-				Inflater inf = new Inflater(true);
-				try (InflaterInputStream gis = new InflaterInputStream(bis, inf, 4096);
-					BufferedInputStream in = new BufferedInputStream(gis, 8192)) {
+				try (
+					Inflater inf = new Inflater(true);
+					InflaterInputStream gis = new InflaterInputStream(bis, inf, 4096);
+					BufferedInputStream in = new BufferedInputStream(gis, 8192)
+				) {
 					Info info = Info.decode(in);
 					Track.Point[][] segments = new Track.Point[info.nbSegments][];
 					for (int i = 0; i < info.nbSegments; ++i) {
@@ -285,7 +289,7 @@ public class TrackStorage {
 						long lat = toSigned(IOEncoding.decodeNumber(in, 4));
 						long lon = toSigned(IOEncoding.decodeNumber(in, 4));
 						Long ele = info.hasElevation ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
-						Long tim = info.hasTime ? decode64bitsNullable(IOEncoding.decodeNumber(in, 8)) : null;
+						Long tim = info.hasTime ? decode64bitsNullable(toSigned(IOEncoding.decodeNumber(in, 8))) : null;
 						Long pa = info.hasPa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
 						Long ea = info.hasEa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
 						segments[s][0] = new Track.Point(lat == 0 ? null : lat, lon == 0 ? null : lon, ele, tim, pa, ea, null, null);
@@ -351,8 +355,6 @@ public class TrackStorage {
 					}
 
 					return v1;
-				} finally {
-					inf.end();
 				}
 			}
 		}
@@ -905,7 +907,8 @@ public class TrackStorage {
 			if (l == 0) return "";
 			byte[] bytes = new byte[l];
 			IOUtils.readFully(in, bytes);
-			return new String(bytes, StandardCharsets.UTF_8);
+			var s = new String(bytes, StandardCharsets.UTF_8);
+			return s;
 		}
 		
 		private static void encodeStringMap(OutputStream out, Map<String, String> map) throws IOException {
@@ -960,7 +963,7 @@ public class TrackStorage {
 			if (v == null) return 0;
 			if (v > 0x7FFFFFFE) return 0x7FFFFFFFFL;
 			if (v >= 0) return v + 1;
-			if (v < -0x7FFFFFFF) return -0x7FFFFFFFL;
+			if (v < -0x7FFFFFFFL) return -0x7FFFFFFFL;
 			return v;
 		}
 		

@@ -1,5 +1,6 @@
 package org.trailence.global.io;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -8,7 +9,6 @@ import org.trailence.global.AccessibleByteArrayOutputStream;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class IOEncoding {
@@ -30,8 +30,10 @@ public final class IOEncoding {
 	
 	public static int decodeInteger2(InputStream in) throws IOException {
 		int i1 = in.read();
+		if (i1 == -1) throw new EOFException();
 		if ((i1 & 0x80) == 0) return i1;
 		int i2 = in.read();
+		if (i2 == -1) throw new EOFException();
 		return ((i1 & 0x7F) << 8) | i2;
 	}
 	
@@ -68,49 +70,88 @@ public final class IOEncoding {
 	public static int decodeInteger2to4(InputStream in) throws IOException {
 		int i1 = in.read();
 		int i2 = in.read();
+		if (i1 == -1 || i2 == -1) throw new EOFException();
 		if ((i1 & 0x80) == 0) return (i1 << 8) | i2;
 		if ((i1 & 0xC0) == 0x80) {
 			return (((i1 & 0x3F) << 16) | (i2 << 8) | in.read()) + 0x8000;
 		}
 		int i3 = in.read();
 		int i4 = in.read();
+		if (i3 == -1 || i4 == -1) throw new EOFException();
 		return (((i1 & 0x3F) << 24) | (i2 << 16) | (i3 << 8) | i4) + 0x408000;
 	}
 	
 	public static void encodeNumber(OutputStream out, long v, int bytes) throws IOException {
+		if (v < 0) throw new IOException("Invalid number: " + v);
 		out.write((int)(v & 0xFF));
-		if (bytes == 1) return;
+		if (bytes == 1) {
+			if (v > 0xFF) throw new IOException("Invalid 1-byte number: " + v);
+			return;
+		}
 		out.write((int)((v & 0xFF00) >> 8));
-		if (bytes == 2) return;
+		if (bytes == 2) {
+			if (v > 0xFFFF) throw new IOException("Invalid 2-byte number: " + v);
+			return;
+		}
 		out.write((int)((v & 0xFF0000) >> 16));
-		if (bytes == 3) return;
-		out.write((int)((v & 0xFF000000) >> 24));
-		if (bytes == 4) return;
+		if (bytes == 3) {
+			if (v > 0xFFFFFF) throw new IOException("Invalid 3-byte number: " + v);
+			return;
+		}
+		out.write((int)((v & 0xFF000000L) >> 24));
+		if (bytes == 4) {
+			if (v > 0xFFFFFFFFL) throw new IOException("Invalid 4-byte number: " + v);
+			return;
+		}
 		out.write((int)((v & 0xFF00000000L) >> 32));
-		if (bytes == 5) return;
+		if (bytes == 5) {
+			if (v > 0xFFFFFFFFFFL) throw new IOException("Invalid 5-byte number: " + v);
+			return;
+		}
 		out.write((int)((v & 0xFF0000000000L) >> 40));
-		if (bytes == 6) return;
+		if (bytes == 6) {
+			if (v > 0xFFFFFFFFFFFFL) throw new IOException("Invalid 6-byte number: " + v);
+			return;
+		}
 		out.write((int)((v & 0xFF000000000000L) >> 48));
-		if (bytes == 7) return;
+		if (bytes == 7) {
+			if (v > 0xFFFFFFFFFFFFFFL) throw new IOException("Invalid 7-byte number: " + v);
+			return;
+		}
 		out.write((int)((v >> 56) & 0xFF));
 	}
 	
 	public static long decodeNumber(InputStream in, int bytes) throws IOException {
 		long v = in.read();
+		if (v == -1) throw new EOFException();
 		if (bytes == 1) return v;
-		v |= in.read() << 8;
+		int i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= i << 8;
 		if (bytes == 2) return v;
-		v |= in.read() << 16;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= i << 16;
 		if (bytes == 3) return v;
-		v |= ((long)in.read()) << 24;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= ((long)i) << 24;
 		if (bytes == 4) return v;
-		v |= ((long)in.read()) << 32;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= ((long)i) << 32;
 		if (bytes == 5) return v;
-		v |= ((long)in.read()) << 40;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= ((long)i) << 40;
 		if (bytes == 6) return v;
-		v |= ((long)in.read()) << 48;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= ((long)i) << 48;
 		if (bytes == 7) return v;
-		v |= ((long)in.read()) << 56;
+		i = in.read();
+		if (i == -1) throw new EOFException();
+		v |= ((long)i) << 56;
 		return v;
 	}
 	

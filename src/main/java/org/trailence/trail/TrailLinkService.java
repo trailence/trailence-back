@@ -15,7 +15,7 @@ import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ConflictException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.storage.FileService;
-import org.trailence.trail.TrackService.StoredData;
+import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
 import org.trailence.trail.db.TrackEntity;
@@ -34,7 +34,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
-import tools.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -150,7 +149,7 @@ public class TrailLinkService {
 	private TrailLinkContent toTrailLinkContent(String link, TrailEntity trail, TrackEntity track, List<PhotoEntity> photos) {
 		StoredData trackData;
 		try {
-			trackData = TrackService.uncompress(track.getData(), new TypeReference<StoredData>() {});
+			trackData = TrackStorage.V1V2Bridge.v2ToV1Dto(track.getData());
 		} catch (IOException _) {
 			throw new  NotFoundException("trail-link", link);
 		}
