@@ -22,6 +22,7 @@ public class TrackStorageV1toV2Migration implements Migration {
 	}
 	
 	@Override
+	@SuppressWarnings("java:S112")
 	public void execute(R2dbcEntityTemplate db, ApplicationContext context) throws Exception {
 		var dialect = DialectResolver.getDialect(db.getDatabaseClient().getConnectionFactory());
 		
@@ -79,7 +80,6 @@ public class TrackStorageV1toV2Migration implements Migration {
 		byte[] data = new byte[source.remaining()];
 		source.get(data);
 		var v1 = TrackStorage.V1.uncompress(data);
-		var v2 = TrackStorage.V1V2Bridge.v1DtoToV2(v1);
-		return v2;
+		return TrackStorage.V1V2Bridge.v1DtoToV2(v1);
 	}
 }

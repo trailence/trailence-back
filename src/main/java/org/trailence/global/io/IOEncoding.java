@@ -81,6 +81,7 @@ public final class IOEncoding {
 		return (((i1 & 0x3F) << 24) | (i2 << 16) | (i3 << 8) | i4) + 0x408000;
 	}
 	
+	@SuppressWarnings("java:S3776")
 	public static void encodeNumber(OutputStream out, long v, int bytes) throws IOException {
 		if (v < 0) throw new IOException("Invalid number: " + v);
 		out.write((int)(v & 0xFF));

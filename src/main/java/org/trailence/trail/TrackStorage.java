@@ -25,13 +25,16 @@ import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Track.Segment;
 import org.trailence.trail.dto.Track.WayPoint;
 
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import tools.jackson.core.type.TypeReference;
 
-public class TrackStorage {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class TrackStorage {
 
-	public static class V1 {
+	@NoArgsConstructor(access = AccessLevel.PRIVATE)
+	public static final class V1 {
 		@SuppressWarnings("java:S1104") // only used for serialization
 		@NoArgsConstructor
 		@AllArgsConstructor
@@ -61,7 +64,9 @@ public class TrackStorage {
 		}
 	}
 	
-	public static class V1V2Bridge {
+	@NoArgsConstructor(access = AccessLevel.PRIVATE)
+	@SuppressWarnings({"java:S3776"})
+	public static final class V1V2Bridge {
 		
 		private static final int WP_BYTES = 4 + 4 + 3 + 8;
 		
@@ -288,10 +293,10 @@ public class TrackStorage {
 						// first point
 						long lat = toSigned(IOEncoding.decodeNumber(in, 4));
 						long lon = toSigned(IOEncoding.decodeNumber(in, 4));
-						Long ele = info.hasElevation ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
-						Long tim = info.hasTime ? decode64bitsNullable(toSigned(IOEncoding.decodeNumber(in, 8))) : null;
-						Long pa = info.hasPa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
-						Long ea = info.hasEa ? decode24bitsNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
+						Long ele = info.hasElevation ? decodeNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
+						Long tim = info.hasTime ? decodeNullable(toSigned(IOEncoding.decodeNumber(in, 8))) : null;
+						Long pa = info.hasPa ? decodeNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
+						Long ea = info.hasEa ? decodeNullable(toSigned(IOEncoding.decodeNumber(in, 3))) : null;
 						segments[s][0] = new Track.Point(lat == 0 ? null : lat, lon == 0 ? null : lon, ele, tim, pa, ea, null, null);
 						
 						if (nb > 1) {
@@ -340,10 +345,10 @@ public class TrackStorage {
 						byte[] bytes = new byte[nb * WP_BYTES];
 						IOUtils.readFully(in, bytes);
 						for (int i = 0; i < nb; ++i) {
-							Long lat = decode32bitsNullable(toSigned(decodePoint32Bits(bytes, nb, i, new int[] { 4, 6, 8, 10 })));
-							Long lon = decode32bitsNullable(toSigned(decodePoint32Bits(bytes, nb, i, new int[] { 5, 7, 9, 11 })));
-							Long ele = decode24bitsNullable(toSigned(decodePoint24Bits(bytes, nb, i, new int[] { 0, 3, 12 })));
-							Long tim = decode64bitsNullable(decodePoint64Bits(bytes, nb, i, new int[] { 1, 2, 13, 14, 15, 16, 17, 18 }));
+							Long lat = decodeNullable(toSigned(decodePoint32Bits(bytes, nb, i, new int[] { 4, 6, 8, 10 })));
+							Long lon = decodeNullable(toSigned(decodePoint32Bits(bytes, nb, i, new int[] { 5, 7, 9, 11 })));
+							Long ele = decodeNullable(toSigned(decodePoint24Bits(bytes, nb, i, new int[] { 0, 3, 12 })));
+							Long tim = decodeNullable(decodePoint64Bits(bytes, nb, i, new int[] { 1, 2, 13, 14, 15, 16, 17, 18 }));
 							v1.wp[i] = new Track.WayPoint(lat, lon, ele, tim, null, null, null, null);
 						}
 						for (int i = 0; i < nb; ++i) {
@@ -777,10 +782,6 @@ public class TrackStorage {
 			
 			bits.close();
 			encodeSplitNumbers(out, values, encodingLength, hasNegative, 1L << (encodingLength * 8 + 7));
-			/*
-			encodeSplitBitsNumbers(bits, values, encodingLength, hasNegative, 1L << (encodingLength * 8 + 7));
-			bits.close();
-			*/
 		}
 
 		private static void decodeTime(InputStream in, Long[] values) throws IOException {
@@ -808,7 +809,6 @@ public class TrackStorage {
 			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0) | (bits.decode() ? 4 : 0);
 
 			decodeSplitNumbers(in, values, encodingLength, hasNegative, isNull, addLastDigit, 1L << (encodingLength * 8 + 7));
-			//decodeSplitBitsNumbers(bits, values, encodingLength, hasNegative, isNull, addLastDigit, 1L << (encodingLength * 8 + 7));
 		}
 
 		private static void encodeAccuracy(OutputStream out, Long[] values) throws IOException {
@@ -856,10 +856,6 @@ public class TrackStorage {
 			else encodingLength = 2;
 			bits.encode((encodingLength & 1) != 0);
 			bits.encode((encodingLength & 2) != 0);
-			/*
-			bits.close();
-			encodeSplitNumbers(out, values, encodingLength, hasNegative, 1L << (encodingLength * 8 + 7));
-			*/
 			encodeSplitBitsNumbers(bits, values, encodingLength, hasNegative, 1L << (encodingLength * 8 + 7));
 			bits.close();
 		}
@@ -888,7 +884,6 @@ public class TrackStorage {
 
 			int encodingLength = (bits.decode() ? 1 : 0) | (bits.decode() ? 2 : 0);
 			
-			//decodeSplitNumbers(in, values, encodingLength, hasNegative, isNull, addLastDigit, 1L << (encodingLength * 8 + 7));
 			decodeSplitBitsNumbers(bits, values, encodingLength, hasNegative, isNull, addLastDigit, 1L << (encodingLength * 8 + 7));
 		}
 		
@@ -907,8 +902,7 @@ public class TrackStorage {
 			if (l == 0) return "";
 			byte[] bytes = new byte[l];
 			IOUtils.readFully(in, bytes);
-			var s = new String(bytes, StandardCharsets.UTF_8);
-			return s;
+			return new String(bytes, StandardCharsets.UTF_8);
 		}
 		
 		private static void encodeStringMap(OutputStream out, Map<String, String> map) throws IOException {
@@ -953,24 +947,12 @@ public class TrackStorage {
 			return v;
 		}
 		
-		private static Long decode24bitsNullable(long v) {
-			if (v == 0) return null;
-			if (v > 0) return Long.valueOf(v - 1);
-			return Long.valueOf(v);
-		}
-		
 		private static long encode32bitsNullable(Long v) {
 			if (v == null) return 0;
 			if (v > 0x7FFFFFFE) return 0x7FFFFFFFFL;
 			if (v >= 0) return v + 1;
 			if (v < -0x7FFFFFFFL) return -0x7FFFFFFFL;
 			return v;
-		}
-		
-		private static Long decode32bitsNullable(long v) {
-			if (v == 0) return null;
-			if (v > 0) return Long.valueOf(v - 1);
-			return Long.valueOf(v);
 		}
 		
 		private static long encode64bitsNullable(Long v) {
@@ -981,7 +963,7 @@ public class TrackStorage {
 			return l;
 		}
 		
-		private static Long decode64bitsNullable(long v) {
+		private static Long decodeNullable(long v) {
 			if (v == 0) return null;
 			if (v > 0) return Long.valueOf(v - 1);
 			return Long.valueOf(v);

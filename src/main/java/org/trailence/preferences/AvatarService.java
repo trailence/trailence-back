@@ -13,9 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ForbiddenException;
-import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.notifications.NotificationsService;
+import org.trailence.preferences.AvatarNotFound.CurrentAvatarNotFound;
+import org.trailence.preferences.AvatarNotFound.PendingAvatarNotFound;
 import org.trailence.preferences.db.UserAvatarEntity;
 import org.trailence.preferences.db.UserAvatarRepository;
 import org.trailence.preferences.dto.AvatarDto;
@@ -58,7 +59,7 @@ public class AvatarService {
 		.filter(entity -> entity.getCurrentFileId() != null)
 		.map(UserAvatarEntity::getCurrentFileId)
 		.flatMap(fileId -> Mono.just(fileService.getFileContent(fileId)))
-		.switchIfEmpty(Mono.error(new NotFoundException("avatar", "current")));
+		.switchIfEmpty(Mono.error(new CurrentAvatarNotFound()));
 	}
 	
 	public Mono<Flux<DataBuffer>> getMyPendingAvatarFile(Authentication auth) {
@@ -67,16 +68,16 @@ public class AvatarService {
 		.filter(entity -> entity.getNewFileId() != null)
 		.map(UserAvatarEntity::getNewFileId)
 		.flatMap(fileId -> Mono.just(fileService.getFileContent(fileId)))
-		.switchIfEmpty(Mono.error(new NotFoundException("avatar", "pending")));
+		.switchIfEmpty(Mono.error(new PendingAvatarNotFound()));
 	}
 
-	public Mono<Flux<DataBuffer>> getPublicAvatarFile(String uuid, Authentication auth) {
+	public Mono<Flux<DataBuffer>> getPublicAvatarFile(String uuid) {
 		ValidationUtils.field("uuid", uuid).notNull().isUuid();
 		UUID publicUuid = UUID.fromString(uuid);
 		return repo.findByPublicUuidAndCurrentPublicTrue(publicUuid)
 		.map(UserAvatarEntity::getCurrentFileId)
 		.flatMap(fileId -> Mono.just(fileService.getFileContent(fileId)))
-		.switchIfEmpty(Mono.error(new NotFoundException("avatar", uuid)));
+		.switchIfEmpty(Mono.error(new AvatarNotFound(uuid)));
 	}
 	
 	public Mono<AvatarDto> storeNewAvatar(boolean isPublic, Flux<DataBuffer> data, long size, Authentication auth) {
@@ -191,7 +192,7 @@ public class AvatarService {
 		.filter(entity -> entity.getNewFileId() != null)
 		.map(UserAvatarEntity::getNewFileId)
 		.flatMap(fileId -> Mono.just(fileService.getFileContent(fileId)))
-		.switchIfEmpty(Mono.error(new NotFoundException("avatar", "pending")));
+		.switchIfEmpty(Mono.error(new PendingAvatarNotFound()));
 	}
 	
 	public Mono<Void> avatarModeration(String email, boolean accepted, Authentication auth) {
@@ -199,7 +200,7 @@ public class AvatarService {
 			return Mono.error(new ForbiddenException());
 		return repo.findById(email)
 		.flatMap(entity -> {
-			if (entity.getNewFileId() == null) return Mono.error(new NotFoundException("avatar", "pending"));
+			if (entity.getNewFileId() == null) return Mono.error(new PendingAvatarNotFound());
 			Long toDelete;
 			if (accepted) {
 				toDelete = entity.getCurrentFileId();

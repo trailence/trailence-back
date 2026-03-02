@@ -210,48 +210,53 @@ public class AuthService {
 	public Mono<Tuple2<AuthResponse, String>> renew(RenewTokenRequest request, String trustToken) {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
 		.switchIfEmpty(Mono.error(new ForbiddenException()))
-		.flatMap(key -> {
-			if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
-			boolean isValid = key.getRandom().equals(request.getRandom());
-			if (isValid && !isValidSignature(key.getPublicKey(), request.getEmail(), key.getRandom(), request.getSignature())) isValid = false;
-			if (isValid && key.getTrustToken() != null) isValid = key.getTrustToken().equals(trustToken);
-			if (!isValid) {
-				key.setInvalidAttempts(key.getInvalidAttempts() + 1);
-				if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
-					key.setDeletedAt(System.currentTimeMillis());
-				}
-				return keyRepo.save(key).then(Mono.error(new ForbiddenException()));
-			}
-			return userRepo.findById(key.getEmail())
-			.switchIfEmpty(Mono.error(new ForbiddenException()))
-			.flatMap(user -> {
-				key.setLastUsage(System.currentTimeMillis());
-				toDeviceInfo(request.getDeviceInfo(), key);
-				key.setRandom(null);
-				key.setRandomExpires(0L);
-				key.setInvalidAttempts(0);
-				var newTrustToken = RandomStringUtils.secureStrong().next(64, true, true);
-				if (request.getNewPublicKey() == null) {
-					key.setTrustToken(newTrustToken);
-					var roles = getRoles(user);
-					var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-					var response = response(token, user, key, null, null, roles, null);
-					return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas).map(r -> Tuples.of(r,  newTrustToken));
-				}
-				// new key
-				UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo(), newTrustToken);
+		.flatMap(key -> validKeyAndGetUser(key, request, trustToken))
+		.flatMap(tuple -> {
+			var key = tuple.getT1();
+			var user = tuple.getT2();
+			key.setLastUsage(System.currentTimeMillis());
+			toDeviceInfo(request.getDeviceInfo(), key);
+			key.setRandom(null);
+			key.setRandomExpires(0L);
+			key.setInvalidAttempts(0);
+			var newTrustToken = RandomStringUtils.secureStrong().next(64, true, true);
+			if (request.getNewPublicKey() == null) {
+				key.setTrustToken(newTrustToken);
 				var roles = getRoles(user);
-				var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-				var response = response(token, user, newKey, null, null, roles, null);
-				key.setDeletedAt(System.currentTimeMillis());
-				return keyRepo.save(key)
-					.then(r2dbc.insert(newKey))
-					.thenReturn(response)
-					.flatMap(this::withPreferences)
-					.flatMap(this::withQuotas)
-					.map(r -> Tuples.of(r,  newTrustToken));
-			});
+				var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
+				var response = response(token, user, key, null, null, roles, null);
+				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas).map(r -> Tuples.of(r,  newTrustToken));
+			}
+			// new key
+			UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo(), newTrustToken);
+			var roles = getRoles(user);
+			var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
+			var response = response(token, user, newKey, null, null, roles, null);
+			key.setDeletedAt(System.currentTimeMillis());
+			return keyRepo.save(key)
+				.then(r2dbc.insert(newKey))
+				.thenReturn(response)
+				.flatMap(this::withPreferences)
+				.flatMap(this::withQuotas)
+				.map(r -> Tuples.of(r,  newTrustToken));
 		});
+	}
+	
+	private Mono<Tuple2<UserKeyEntity, UserEntity>> validKeyAndGetUser(UserKeyEntity key, RenewTokenRequest request, String trustToken) {
+		if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
+		boolean isValid = key.getRandom().equals(request.getRandom());
+		if (isValid && !isValidSignature(key.getPublicKey(), request.getEmail(), key.getRandom(), request.getSignature())) isValid = false;
+		if (isValid && key.getTrustToken() != null) isValid = key.getTrustToken().equals(trustToken);
+		if (!isValid) {
+			key.setInvalidAttempts(key.getInvalidAttempts() + 1);
+			if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
+				key.setDeletedAt(System.currentTimeMillis());
+			}
+			return keyRepo.save(key).then(Mono.error(new ForbiddenException()));
+		}
+		return userRepo.findById(key.getEmail())
+		.switchIfEmpty(Mono.error(new ForbiddenException()))
+		.map(user -> Tuples.of(key, user));
 	}
 	
 	private boolean isValidSignature(byte[] publicKeyBytes, String email, String random, byte[] signature) {

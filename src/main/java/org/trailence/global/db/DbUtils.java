@@ -89,8 +89,10 @@ public final class DbUtils {
 		
 		Condition where = Conditions.isEqual(Column.create(PROPERTY_UUID, table), SQL.literalOf(uuid.toString()))
 			.and(Conditions.isEqual(Column.create(PROPERTY_OWNER, table), SQL.literalOf(owner)));
-		if (versionProperty.isPresent())
-			where = where.and(Conditions.isEqual(Column.create(versionProperty.get().getColumnName(), table), SQL.literalOf((Long) accessor.getProperty(versionProperty.get()))));
+		if (versionProperty.isPresent()) {
+			var prop = versionProperty.get();
+			where = where.and(Conditions.isEqual(Column.create(prop.getColumnName(), table), SQL.literalOf((Long) accessor.getProperty(prop))));
+		}
 		
 		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
 		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create()); 

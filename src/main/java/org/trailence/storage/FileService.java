@@ -85,7 +85,7 @@ public class FileService {
 	public Mono<Long> getFileSize(long fileId) {
 		return repo.findById(fileId)
 		.switchIfEmpty(Mono.error(new NotFoundException("file", "" + fileId)))
-		.map(entity -> entity.getSize());
+		.map(FileEntity::getSize);
 	}
 	
 	private String getPath(long id) {

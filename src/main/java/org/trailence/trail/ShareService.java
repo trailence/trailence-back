@@ -64,6 +64,7 @@ import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
 
@@ -484,6 +485,7 @@ public class ShareService {
 			.build();
 	}
 	
+	@SuppressWarnings("java:S3776")
 	public Mono<Boolean> hasAccessThroughShare(String email, String owner, String uuid) {
 		SqlBuilder sql = new SqlBuilder()
 			.select(ShareEntity.COL_UUID, ShareEntity.COL_ELEMENT_TYPE)
@@ -502,15 +504,15 @@ public class ShareService {
 	    ).all().collectList()
 		.flatMap(tuples -> {
 			if (tuples.isEmpty()) return Mono.just(false);
-			var byTrail = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TRAIL.name())).map(t -> t.getT1()).toList();
+			var byTrail = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TRAIL.name())).map(Tuple2::getT1).toList();
 			Mono<Boolean> throughTrail = byTrail.isEmpty() ? Mono.just(false) : isSharingByTrail(byTrail, UUID.fromString(uuid));
 			return throughTrail.flatMap(shareByTrail -> {
 				if (shareByTrail.booleanValue()) return Mono.just(true);
-				var byCollection = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.COLLECTION.name())).map(t -> t.getT1()).toList();
+				var byCollection = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.COLLECTION.name())).map(Tuple2::getT1).toList();
 				Mono<Boolean> throughCollection = byCollection.isEmpty() ? Mono.just(false) : isSharingByCollection(byCollection, UUID.fromString(uuid));
 				return throughCollection.flatMap(shareByCollection -> {
 					if (shareByCollection.booleanValue()) return Mono.just(true);
-					var byTag = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TAG.name())).map(t -> t.getT1()).toList();
+					var byTag = tuples.stream().filter(t -> t.getT2().equals(ShareElementType.TAG.name())).map(Tuple2::getT1).toList();
 					return byTag.isEmpty() ? Mono.just(false) : isSharingByTag(byTag, UUID.fromString(uuid));
 				});
 			});

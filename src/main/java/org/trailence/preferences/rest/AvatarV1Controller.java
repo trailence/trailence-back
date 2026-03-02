@@ -43,8 +43,8 @@ public class AvatarV1Controller {
 	}
 
 	@GetMapping("/public/{uuid}")
-	public Mono<ResponseEntity<Flux<DataBuffer>>> getPublicAvatarFile(@PathVariable("uuid") String uuid, Authentication auth) {
-		return RetryRest.retry(service.getPublicAvatarFile(uuid, auth).map(flux -> ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux)));
+	public Mono<ResponseEntity<Flux<DataBuffer>>> getPublicAvatarFile(@PathVariable("uuid") String uuid) {
+		return RetryRest.retry(service.getPublicAvatarFile(uuid).map(flux -> ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(flux)));
 	}
 	
 	@PostMapping(consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)

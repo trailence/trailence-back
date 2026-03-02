@@ -52,6 +52,7 @@ public class FeedbackService {
 	private final UserPreferencesService prefService;
 	
 	@Transactional
+	@SuppressWarnings("java:S3776")
 	public Mono<Void> createFeedback(CreateFeedbackRequest request, Authentication auth) {
 		long date = System.currentTimeMillis();
 		String email = TrailenceUtils.email(auth);

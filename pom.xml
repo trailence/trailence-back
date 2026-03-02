@@ -25,10 +25,13 @@
 		<sonar.coverage.exclusions>**/test/**</sonar.coverage.exclusions>
 	    <sonar.cpd.exclusions>**/test/**,**/dto/*.*,**/db/*Entity.*</sonar.cpd.exclusions>
 	    
-	    <sonar.issue.ignore.multicriteria>e1</sonar.issue.ignore.multicriteria>
+	    <sonar.issue.ignore.multicriteria>e1,e2</sonar.issue.ignore.multicriteria>
 	    <!-- ignore: too many assertions.... -->
 	    <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S5961</sonar.issue.ignore.multicriteria.e1.ruleKey>
 	    <sonar.issue.ignore.multicriteria.e1.resourceKey>**/src/test/**/*.java</sonar.issue.ignore.multicriteria.e1.resourceKey>
+	    <!-- ignore: order of import with static -->
+	    <sonar.issue.ignore.multicriteria.e2.ruleKey>java:S8445</sonar.issue.ignore.multicriteria.e2.ruleKey>
+	    <sonar.issue.ignore.multicriteria.e2.resourceKey>**/src/test/**/*.java</sonar.issue.ignore.multicriteria.e2.resourceKey>
 	</properties>
 
 	<dependencyManagement>
