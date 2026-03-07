@@ -15,6 +15,9 @@ public class PublicTrail {
 	private long createdAt;
 	private long updatedAt;
 	private String authorAlias;
+	private String authorAvatar;
+	private String authorPublicId;
+	private Integer authorNbPublications;
 	private String myUuid;
 	private boolean itsMine;
 	

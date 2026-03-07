@@ -31,6 +31,7 @@ import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsResponse;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileResponse;
+import org.trailence.trail.dto.UserTrails;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -73,6 +74,11 @@ public class PublicTrailV1Controller {
 	public Flux<MyPublicTrail> getMines(Authentication auth) {
 		if (auth == null) return Flux.error(new UnauthorizedException());
 		return service.getMines(auth);
+	}
+	
+	@GetMapping("/user/{userId}")
+	public Mono<UserTrails> getUserTrails(@PathVariable("userId") String userId, Authentication auth) {
+		return service.getUserTrails(userId, auth);
 	}
 	
 	private static final long PHOTO_CACHE_SECONDS = 100L * 24 * 60 * 60;

@@ -24,6 +24,9 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 	@Query("SELECT uuid as public_uuid, author_uuid as private_uuid FROM public_trails WHERE author = :author")
 	Flux<MyPublicTrail> findMyPublicTrails(String author);
 	
+	@Query("SELECT uuid FROM public_trails WHERE author = :author")
+	Flux<UUID> findIdsByAuthor(String author);
+	
 	@Query("SELECT author, name FROM public_trails WHERE uuid = :uuid LIMIT 1")
 	Mono<AuthorAndName> getAuthorAndName(UUID uuid);
 	

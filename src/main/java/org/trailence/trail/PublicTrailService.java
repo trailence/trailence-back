@@ -43,8 +43,10 @@ import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.notifications.NotificationsService;
-import org.trailence.preferences.UserPreferencesService;
+import org.trailence.preferences.UserCommunityService;
+import org.trailence.preferences.dto.UserCommunity;
 import org.trailence.storage.FileService;
 import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.ModerationMessageEntity;
@@ -68,6 +70,7 @@ import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByBoundsResponse;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileRequest;
 import org.trailence.trail.dto.PublicTrailSearch.SearchByTileResponse;
+import org.trailence.trail.dto.UserTrails;
 import org.trailence.trail.exceptions.PublicTrailNotFound;
 import org.trailence.trail.exceptions.TrailNotFound;
 
@@ -95,9 +98,9 @@ public class PublicTrailService {
 	private final TrailService trailService;
 	private final FileService fileService;
 	private final NotificationsService notificationsService;
-	private final UserPreferencesService prefService;
 	private final ModerationMessageRepository messageRepo;
 	private final FeedbackService feedbackService;
+	private final UserCommunityService userCommunityService;
 	
 	private static final Map<String, String> TEXT_SEARCH_LANGS = Map.of("fr", "french", "en", "english");
 	
@@ -113,6 +116,7 @@ public class PublicTrailService {
 				publicTrackRepo.deleteById(existing.getUuid())
 				.then(publicPhotoRepo.deleteAllByTrailUuid(existing.getUuid()))
 				.then(publicTrailRepo.deleteById(existing.getUuid()))
+				.then(userCommunityService.removePublication(author))
 				.then(Mono.just(Tuples.of(existing.getUuid(), existing.getSlug(), Optional.of(existing))))
 			)
 			.switchIfEmpty(Mono.defer(() -> generateSlug(request.getName()).map(slug -> Tuples.of(UUID.randomUUID(), slug, Optional.empty()))));
@@ -126,6 +130,7 @@ public class PublicTrailService {
 				.then(r2dbc.insert(toTrailEntity(tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), request)).flatMap(this::updateTextSearch))
 				.then(trailService.delete(Flux.just(fromTrail), author))
 				.then(notificationsService.create(author, "publications.accepted", List.of(request.getName(), tuple.getT1().toString())))
+				.then(userCommunityService.addPublication(author))
 			)
 			.thenReturn(tuple.getT1().toString())
 		);
@@ -462,13 +467,7 @@ public class PublicTrailService {
 	public Mono<PublicTrail> getById(String uuid, Authentication auth) {
 		return publicTrailRepo.findById(UUID.fromString(uuid))
 		.switchIfEmpty(Mono.error(new PublicTrailNotFound(uuid)))
-		.flatMap(trail ->
-			publicPhotoRepo.findAllByTrailUuid(trail.getUuid()).collectList()
-			.flatMap(photos ->
-				prefService.getAlias(trail.getAuthor())
-				.map(alias -> this.toPublicTrailDto(trail, photos.stream(), alias, auth))
-			)
-		);
+		.flatMap(trail -> toDto(trail, auth));
 	}
 	
 	public Mono<PublicTrail> getBySlug(String slug, Authentication auth) {
@@ -479,34 +478,37 @@ public class PublicTrailService {
 			return publicTrailRepo.findOneBySlug(slug2)
 			.switchIfEmpty(Mono.error(new PublicTrailNotFound(slug)));
 		}))
-		.flatMap(trail ->
-			publicPhotoRepo.findAllByTrailUuid(trail.getUuid()).collectList()
-			.flatMap(photos ->
-				prefService.getAlias(trail.getAuthor())
-				.map(alias -> this.toPublicTrailDto(trail, photos.stream(), alias, auth))
-			)
-			
-		);
+		.flatMap(trail -> toDto(trail, auth));
 	}
 	
 	public Mono<List<PublicTrail>> getByIds(List<String> uuids, Authentication auth) {
 		if (uuids.size() > 200) return Mono.error(new BadRequestException("too-many-trails", "Maximum 200 trails"));
 		return publicTrailRepo.findAllById(uuids.stream().map(UUID::fromString).toList())
 		.collectList()
-		.flatMap(trails ->
-			publicPhotoRepo.findAllByTrailUuidIn(trails.stream().map(PublicTrailEntity::getUuid).toList()).collectList()
-			.flatMap(photos ->
-				prefService.getAliases(trails.stream().map(t -> t.getAuthor()).toList()).collectList()
-				.map(aliases ->
-					trails.stream()
-					.map(trail -> this.toPublicTrailDto(
-						trail,
-						photos.stream().filter(p -> p.getTrailUuid().equals(trail.getUuid())),
-						aliases.stream().filter(a -> a.getT1().equals(trail.getAuthor())).map(Tuple2::getT2).findAny(),
-						auth
-					))
-					.toList()
-				)
+		.flatMap(trails -> toDtos(trails, auth));
+	}
+
+	private Mono<PublicTrail> toDto(PublicTrailEntity entity, Authentication auth) {
+		return publicPhotoRepo.findAllByTrailUuid(entity.getUuid()).collectList()
+		.flatMap(photos ->
+			userCommunityService.getUserCommunity(entity.getAuthor())
+			.map(userCommunity -> this.toPublicTrailDto(entity, photos.stream(), userCommunity, auth))
+		);
+	}
+	
+	private Mono<List<PublicTrail>> toDtos(List<PublicTrailEntity> trails, Authentication auth) {
+		return publicPhotoRepo.findAllByTrailUuidIn(trails.stream().map(PublicTrailEntity::getUuid).toList()).collectList()
+		.flatMap(photos ->
+			userCommunityService.getUsersCommunity(trails.stream().map(t -> t.getAuthor()).toList()).collectList()
+			.map(usersCommunity ->
+				trails.stream()
+				.map(trail -> this.toPublicTrailDto(
+					trail,
+					photos.stream().filter(p -> p.getTrailUuid().equals(trail.getUuid())),
+					usersCommunity.stream().filter(a -> a.getEmail().equals(trail.getAuthor())).findAny().orElse(new UserCommunity()),
+					auth
+				))
+				.toList()
 			)
 		);
 	}
@@ -516,7 +518,17 @@ public class PublicTrailService {
 		return publicTrailRepo.findMyPublicTrails(user);
 	}
 	
-	private PublicTrail toPublicTrailDto(PublicTrailEntity entity, Stream<PublicPhotoEntity> photos, Optional<String> authorAlias, Authentication auth) {
+	public Mono<UserTrails> getUserTrails(String userPublicId, Authentication auth) {
+		ValidationUtils.field("userId", userPublicId).notBlank().isUuid();
+		return userCommunityService.getUserCommunityFromPublicId(userPublicId)
+		.flatMap(user ->
+			publicTrailRepo.findIdsByAuthor(user.getEmail()).map(UUID::toString).collectList()
+			.map(ids -> new UserTrails(ids, user.getAlias(), user.getAvatar()))
+		)
+		.switchIfEmpty(Mono.defer(() -> Mono.just(new UserTrails(List.of(), null, null))));
+	}
+	
+	private PublicTrail toPublicTrailDto(PublicTrailEntity entity, Stream<PublicPhotoEntity> photos, UserCommunity authorCommunity, Authentication auth) {
 		Map<String, String> nameTranslations = new HashMap<>();
 		Map<String, String> descriptionTranslations = new HashMap<>();
 		try {
@@ -534,7 +546,10 @@ public class PublicTrailService {
 			entity.getSlug(),
 			entity.getCreatedAt(),
 			entity.getUpdatedAt(),
-			authorAlias.orElse(null),
+			authorCommunity.getAlias() != null && !authorCommunity.getAlias().isBlank() ? authorCommunity.getAlias() : null,
+			authorCommunity.getAvatar(),
+			authorCommunity.getPublicId(),
+			authorCommunity.getNbPublications(),
 			auth == null || !auth.getPrincipal().toString().equals(entity.getAuthor()) || entity.getAuthorUuid() == null ? null : entity.getAuthorUuid().toString(),
 			auth != null && auth.getPrincipal().toString().equals(entity.getAuthor()),
 			entity.getName(),
@@ -612,6 +627,7 @@ public class PublicTrailService {
 				, 1, 1).then()
 			)
 			.then(feedbackService.publicTrailDeleted(trailUuid))
+			.then(userCommunityService.removePublication(trail.getAuthor()))
 			.then(
 				messageRepo.deleteAllByUuidInAndMessageType(List.of(trailUuid), ModerationMessageEntity.TYPE_REMOVE)
 			)
