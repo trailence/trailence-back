@@ -102,7 +102,7 @@ public class SqlBuilder {
 			case Expression e -> append(e);
 			default -> { return null; }
 		}
-		result.append(' ').append(order.isAscending() ? "ASC" : "DESC");
+		result.append(' ').append(order.isAscending() ? "ASC NULLS FIRST" : "DESC NULLS LAST");
 		return result.toString();
 	}
 	

@@ -21,7 +21,7 @@ import org.trailence.global.db.DbUtils;
 import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.notifications.NotificationsService;
-import org.trailence.preferences.UserPreferencesService;
+import org.trailence.preferences.UserCommunityService;
 import org.trailence.trail.db.PublicTrailEntity;
 import org.trailence.trail.db.PublicTrailFeedbackEntity;
 import org.trailence.trail.db.PublicTrailFeedbackReplyEntity;
@@ -49,7 +49,7 @@ public class FeedbackService {
 	private final PublicTrailRepository publicTrailRepo;
 	private final R2dbcEntityTemplate r2dbc;
 	private final NotificationsService notificationsService;
-	private final UserPreferencesService prefService;
+	private final UserCommunityService userCommunityService;
 	
 	@Transactional
 	@SuppressWarnings("java:S3776")
@@ -83,11 +83,12 @@ public class FeedbackService {
 					return update
 					.then(Mono.defer(() -> {
 						if (c == null) return Mono.empty();
-						return this.createFeedback(trailUuid, email, date, null, c, authorAndName.getAuthor(), authorAndName.getName());
+						return this.createFeedback(trailUuid, email, date, null, c, authorAndName.getAuthor(), authorAndName.getName())
+						.then(userCommunityService.addComment(email, true, false));
 					}));
 				}
-				return this.createFeedback(trailUuid, email, date, r, c, authorAndName.getAuthor(), authorAndName.getName());
-				
+				return this.createFeedback(trailUuid, email, date, r, c, authorAndName.getAuthor(), authorAndName.getName())
+				.then(userCommunityService.addComment(email, c != null, r != null));
 			});
 		});
 	}
@@ -141,8 +142,12 @@ public class FeedbackService {
 			.doOnNext(_ -> notifyUsersForCommentReply(feedback, email))
 		)
 		.flatMap(entity ->
-			prefService.getPublicAliasAndAvatar(email)
-			.map(tuple -> new PublicTrailFeedback.Reply(entity.getUuid().toString(), tuple.getT1().orElse(null), tuple.getT2().orElse(null), true, entity.getDate(), c, entity.isReviewed()))
+			userCommunityService.getUserCommunity(email)
+			.map(userCommunity -> {
+				String alias = userCommunity.getAlias();
+				if (alias != null && alias.isBlank()) alias = null;
+				return new PublicTrailFeedback.Reply(entity.getUuid().toString(), alias, userCommunity.getAvatar(), true, entity.getDate(), c, entity.isReviewed());
+			})
 		);
 	}
 	
@@ -325,9 +330,12 @@ public class FeedbackService {
 			if (entity.getComment() == null) return Mono.empty();
 			if (entity.getRate() != null) {
 				entity.setComment(null);
-				return feedbackRepo.save(entity);
+				return feedbackRepo.save(entity)
+				.flatMap(e -> userCommunityService.removeComment(entity.getEmail(), true, false).thenReturn(e));
 			} else {
-				return feedbackRepo.delete(entity).thenReturn(entity);
+				return feedbackRepo.delete(entity)
+				.then(userCommunityService.removeComment(entity.getEmail(), true, false))
+				.thenReturn(entity);
 			}
 		})
 		.flatMap(entity -> feedbackReplyRepo.deleteAllByReplyTo(entity.getUuid()));
@@ -349,6 +357,7 @@ public class FeedbackService {
 		.flatMap(comment ->
 			feedbackReplyRepo.deleteAllByReplyTo(comment.getUuid())
 			.then(feedbackRepo.delete(comment))
+			.then(userCommunityService.removeComment(comment.getEmail(), comment.getComment() != null, comment.getRate() != null))
 		, 1, 1).then();
 	}
 	

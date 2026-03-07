@@ -14,6 +14,7 @@ import org.springframework.data.relational.core.sql.AsteriskFromTable;
 import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expressions;
+import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.SimpleFunction;
 import org.springframework.data.relational.core.sql.Table;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +36,7 @@ import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.rest.TokenService;
 import org.trailence.global.rest.TokenService.TokenData;
 import org.trailence.notifications.db.NotificationsRepository;
+import org.trailence.preferences.db.UserCommunityEntity;
 import org.trailence.preferences.db.UserPreferencesRepository;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotasEntity;
@@ -307,6 +309,9 @@ public class UserService {
 		userDtoFieldMapping.put("quotas.photosUsed", UserQuotasEntity.COL_PHOTOS_USED);
 		userDtoFieldMapping.put("quotas.photosSizeUsed", UserQuotasEntity.COL_PHOTOS_SIZE_USED);
 		userDtoFieldMapping.put("quotas.sharesUsed", UserQuotasEntity.COL_SHARES_USED);
+		userDtoFieldMapping.put("nbPublications", UserCommunityEntity.COL_NB_PUBLICATIONS);
+		userDtoFieldMapping.put("nbComments", UserCommunityEntity.COL_NB_COMMENTS);
+		userDtoFieldMapping.put("nbRates", UserCommunityEntity.COL_NB_RATES);
 	}
 
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
@@ -323,11 +328,16 @@ public class UserService {
 			UserKeyEntity.COL_LAST_USAGE,
 			COL_MIN_VERSION,
 			COL_MAX_VERSION,
-			AsteriskFromTable.create(UserQuotasEntity.TABLE)
+			AsteriskFromTable.create(UserQuotasEntity.TABLE),
+			new AliasedExpression(SimpleFunction.create("COALESCE", List.of(UserCommunityEntity.COL_NB_PUBLICATIONS, SQL.literalOf(0))), UserCommunityEntity.COL_NB_PUBLICATIONS.getName()),
+			new AliasedExpression(SimpleFunction.create("COALESCE", List.of(UserCommunityEntity.COL_NB_COMMENTS, SQL.literalOf(0))), UserCommunityEntity.COL_NB_COMMENTS.getName()),
+			new AliasedExpression(SimpleFunction.create("COALESCE", List.of(UserCommunityEntity.COL_NB_RATES, SQL.literalOf(0))), UserCommunityEntity.COL_NB_RATES.getName())
 		)
 		.from(UserEntity.TABLE)
 		// user quotas
 		.leftJoinTable(UserQuotasEntity.TABLE, Conditions.isEqual(UserQuotasEntity.COL_EMAIL, UserEntity.COL_EMAIL), null)
+		// user community
+		.leftJoinTable(UserCommunityEntity.TABLE,Conditions.isEqual(UserCommunityEntity.COL_EMAIL, UserEntity.COL_EMAIL), null)
 		// last usage from keys
 		.leftJoinSubSelect(new SqlBuilder()
 			.select(
@@ -405,7 +415,10 @@ public class UserService {
 				row.get(UserQuotasEntity.COL_TRAIL_TAGS_MAX.getName().toString(), Integer.class),
 				row.get(UserQuotasEntity.COL_SHARES_USED.getName().toString(), Short.class),
 				row.get(UserQuotasEntity.COL_SHARES_MAX.getName().toString(), Short.class)
-			)
+			),
+			row.get(UserCommunityEntity.COL_NB_PUBLICATIONS.getName().toString(), Integer.class),
+			row.get(UserCommunityEntity.COL_NB_COMMENTS.getName().toString(), Integer.class),
+			row.get(UserCommunityEntity.COL_NB_RATES.getName().toString(), Integer.class)
 		);
 	}
 	

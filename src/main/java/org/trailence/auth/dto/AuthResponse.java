@@ -28,5 +28,8 @@ public class AuthResponse {
 	private List<String> allowedExtensions;
 	private List<String> roles;
 	private AvatarDto avatar;
+	private int nbPublications;
+	private int nbComments;
+	private int nbRates;
 	
 }

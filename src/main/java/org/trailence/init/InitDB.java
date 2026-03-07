@@ -15,6 +15,7 @@ import org.springframework.data.relational.core.sql.SQL;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.init.migrations.AddLanguageAndTranslationsToPublicTrails;
 import org.trailence.init.migrations.TrackStorageV1toV2Migration;
+import org.trailence.preferences.UserCommunityService;
 import org.trailence.quotas.QuotaService;
 import org.trailence.quotas.db.UserQuotaInit;
 import org.trailence.user.UserService;
@@ -30,6 +31,7 @@ public class InitDB {
 	@Autowired private UserService userService;
 	@Autowired private FreePlanProperties freePlan;
 	@Autowired private QuotaService quotaService;
+	@Autowired private UserCommunityService communityService;
 	
 	private static final String[] TABLES = {
 		"users", "user_keys", "user_preferences", "user_extensions",
@@ -38,7 +40,7 @@ public class InitDB {
 		"user_quotas", "user_subscriptions", "plans", "donations", "donation_goals",
 		"contact_messages", "public_trails", "notifications", "moderation_messages",
 		"public_trail_feedback", "public_trail_feedback_reply",
-		"user_selection", "trail_links", "user_avatar", "live_groups",
+		"user_selection", "trail_links", "user_avatar", "live_groups", "user_community",
 		"migrations"
 	};
 	
@@ -81,6 +83,7 @@ public class InitDB {
 		log.info("Configuring free plan: {}", freePlan);
 		setFreePlan();
 		quotaService.computeQuotas().block();
+		communityService.computeUserCommunity();
 		if (System.getenv("TRAILENCE_INIT_USER") != null && System.getenv("TRAILENCE_INIT_PASSWORD") != null)
 			userService.createUser(System.getenv("TRAILENCE_INIT_USER"), System.getenv("TRAILENCE_INIT_PASSWORD"), true, List.of(Tuples.of(TrailenceUtils.FREE_PLAN, Optional.empty())))
 					.onErrorComplete(DuplicateKeyException.class)

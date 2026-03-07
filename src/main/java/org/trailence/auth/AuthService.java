@@ -50,10 +50,8 @@ import org.trailence.global.rest.JwtAuthenticationManager;
 import org.trailence.global.rest.TokenService;
 import org.trailence.preferences.AvatarService;
 import org.trailence.preferences.UserPreferencesService;
-import org.trailence.preferences.dto.AvatarDto;
-import org.trailence.preferences.dto.UserPreferences;
+import org.trailence.preferences.db.UserCommunityRepository;
 import org.trailence.quotas.QuotaService;
-import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.user.UserService;
 import org.trailence.user.db.UserEntity;
 import org.trailence.user.db.UserRepository;
@@ -85,6 +83,7 @@ public class AuthService {
 	private final QuotaService quotaService;
 	private final UserExtensionsService extensionsService;
 	private final AvatarService avatarService;
+	private final UserCommunityRepository communityRepo;
 	
 	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
 	private static final String ERROR_CODE_LOCKED = "locked";
@@ -109,13 +108,13 @@ public class AuthService {
 				
 				UserKeyEntity key = createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo(), trustToken);
 				
-				var response = response(token, user, key, null, null, roles, null);
+				var response = response(token, user, key, roles);
 				user.setInvalidAttempts(0);
 				
 				return userRepo.save(user)
 				.then(r2dbc.insert(key))
 				.thenReturn(response)
-				.flatMap(this::withPreferences).flatMap(this::withQuotas)
+				.flatMap(this::withInfos)
 				.map(r -> Tuples.of(r, trustToken));
 			});
 	}
@@ -185,8 +184,8 @@ public class AuthService {
 				var trustToken = RandomStringUtils.secureStrong().next(64, true, true);
 				UserKeyEntity key =  createKey(user.getEmail(), request.getPublicKey(), request.getExpiresAfter(), request.getDeviceInfo(), trustToken);
 
-				var response = response(token, user, key, null, null, List.of(), null);
-				return r2dbc.insert(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas)
+				var response = response(token, user, key, List.of());
+				return r2dbc.insert(key).thenReturn(response).flatMap(this::withInfos)
 				.map(r -> Tuples.of(r, trustToken));
 			})
 		);
@@ -224,20 +223,19 @@ public class AuthService {
 				key.setTrustToken(newTrustToken);
 				var roles = getRoles(user);
 				var token = auth.generateToken(key.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-				var response = response(token, user, key, null, null, roles, null);
-				return keyRepo.save(key).thenReturn(response).flatMap(this::withPreferences).flatMap(this::withQuotas).map(r -> Tuples.of(r,  newTrustToken));
+				var response = response(token, user, key, roles);
+				return keyRepo.save(key).thenReturn(response).flatMap(this::withInfos).map(r -> Tuples.of(r, newTrustToken));
 			}
 			// new key
 			UserKeyEntity newKey = createKey(user.getEmail(), request.getNewPublicKey(), request.getNewKeyExpiresAfter(), request.getDeviceInfo(), newTrustToken);
 			var roles = getRoles(user);
 			var token = auth.generateToken(user.getEmail(), user.getPassword() != null, user.isAdmin(), roles);
-			var response = response(token, user, newKey, null, null, roles, null);
+			var response = response(token, user, newKey, roles);
 			key.setDeletedAt(System.currentTimeMillis());
 			return keyRepo.save(key)
 				.then(r2dbc.insert(newKey))
 				.thenReturn(response)
-				.flatMap(this::withPreferences)
-				.flatMap(this::withQuotas)
+				.flatMap(this::withInfos)
 				.map(r -> Tuples.of(r,  newTrustToken));
 		});
 	}
@@ -271,7 +269,7 @@ public class AuthService {
 		}
 	}
 	
-	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, UserPreferences preferences, UserQuotas quotas, List<String> roles, AvatarDto avatar) {
+	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, List<String> roles) {
 		return new AuthResponse(
 			token.getT1(),
 			token.getT2().toEpochMilli(),
@@ -279,13 +277,14 @@ public class AuthService {
 			key.getId().toString(),
 			key.getCreatedAt(),
 			key.getCreatedAt() + key.getExpiresAfter(),
-			preferences,
+			null, // preferences
 			user.getPassword() != null,
 			user.isAdmin(),
-			quotas,
+			null, // quotas
 			extensionsService.getAllowedExtensions(user.isAdmin(), roles),
 			roles,
-			avatar
+			null, // avatar
+			0, 0, 0 // community participation
 		);
 	}
 	
@@ -297,19 +296,22 @@ public class AuthService {
 		}
 	}
 	
-	private Mono<AuthResponse> withPreferences(AuthResponse response) {
-		return Mono.zip(userPreferencesService.getPreferences(response.getEmail()), avatarService.getAvatarInfo(response.getEmail()))
+	private Mono<AuthResponse> withInfos(AuthResponse response) {
+		return Mono.zip(
+			userPreferencesService.getPreferences(response.getEmail()),
+			avatarService.getAvatarInfo(response.getEmail()),
+			quotaService.getUserQuotas(response.getEmail()),
+			communityRepo.findById(response.getEmail()).map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
+		)
 		.map(tuple -> {
 			response.setPreferences(tuple.getT1());
 			response.setAvatar(tuple.getT2());
-			return response;
-		});
-	}
-	
-	private Mono<AuthResponse> withQuotas(AuthResponse response) {
-		return quotaService.getUserQuotas(response.getEmail())
-		.map(quotas -> {
-			response.setQuotas(quotas);
+			response.setQuotas(tuple.getT3());
+			tuple.getT4().ifPresent(community -> {
+				response.setNbPublications(community.getNbPublications());
+				response.setNbComments(community.getNbComments());
+				response.setNbRates(community.getNbRates());
+			});
 			return response;
 		});
 	}

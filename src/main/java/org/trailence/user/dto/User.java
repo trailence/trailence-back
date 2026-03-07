@@ -28,4 +28,8 @@ public class User {
 	
 	private UserQuotas quotas;
 	
+	private int nbPublications;
+	private int nbComments;
+	private int nbRates;
+	
 }
