@@ -3,6 +3,7 @@ package org.trailence.livegroup;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,8 @@ import org.trailence.livegroup.db.LiveGroupRepository;
 import org.trailence.livegroup.dto.LiveGroup;
 import org.trailence.livegroup.dto.LiveGroupRequest;
 import org.trailence.livegroup.dto.UpdateMyPositionRequest;
+import org.trailence.stats.EventType;
+import org.trailence.stats.StatsService;
 import org.trailence.trail.ShareService;
 import org.trailence.trail.TrailLinkService;
 
@@ -48,6 +51,7 @@ public class LiveGroupService {
 	private final R2dbcEntityTemplate r2dbc;
 	private final ShareService shareService;
 	private final TrailLinkService linkService;
+	private final StatsService stats;
 	@Lazy @Autowired @SuppressWarnings("java:S6813")
 	private LiveGroupService self;
 	
@@ -102,7 +106,8 @@ public class LiveGroupService {
 			null, null, null // position
 		);
 		return this.self.createGroup(groupEntity, memberEntity)
-		.flatMap(tuple -> toDto(tuple.getT1(), Stream.of(tuple.getT2()), owner));
+		.flatMap(tuple -> toDto(tuple.getT1(), Stream.of(tuple.getT2()), owner))
+		.flatMap(dto -> stats.addEvent(EventType.NEW_LIVE_GROUP, Map.of()).thenReturn(dto));
 	}
 	
 	@Transactional

@@ -44,6 +44,8 @@ import org.trailence.quotas.db.UserQuotasRepository;
 import org.trailence.quotas.db.UserSubscriptionEntity;
 import org.trailence.quotas.db.UserSubscriptionRepository;
 import org.trailence.quotas.dto.UserQuotas;
+import org.trailence.stats.EventType;
+import org.trailence.stats.StatsService;
 import org.trailence.trail.ShareService;
 import org.trailence.trail.TrailCollectionService;
 import org.trailence.trail.db.TrailCollectionEntity;
@@ -87,6 +89,7 @@ public class UserService {
 	private final CaptchaService captchaService;
 	private final TrailCollectionService collectionService;
 	private final ShareService shareService;
+	private final StatsService stats;
 	
 	private static final String CHANGE_PASSWORD_VERIFICATION_CODE_TYPE = "change_password";
 	private static final String FORGOT_PASSWORD_VERIFICATION_CODE_TYPE = "forgot_password";
@@ -119,7 +122,8 @@ public class UserService {
 		return r2dbc.insert(entity)
 		.then(r2dbc.insert(myTrails))
 		.thenMany(Flux.fromStream(subscriptionsEntities).flatMap(r2dbc::insert, 1, 2))
-		.then(quotaService.initUserQuotas(email, now));
+		.then(quotaService.initUserQuotas(email, now))
+		.then(stats.addEvent(EventType.NEW_USER, Map.of("from", password != null ? "register" : "share")));
 	}
 	
 	public List<String> toRolesList(Json roles) {
@@ -267,9 +271,11 @@ public class UserService {
 	}
 	
 	@Transactional
-	public Mono<Void> deleteUser(String code, String email) {
+	public Mono<Void> deleteMe(String code, Authentication auth) {
+		String email = TrailenceUtils.email(auth);
 		return verificationCodeService.check(code, DELETION_VERIFICATION_CODE_TYPE, email, String.class)
-		.flatMap(_ ->
+		.flatMap(_ -> userRepo.findByEmail(email))
+		.flatMap(userEntity ->
 			collectionService.deleteUser(email)
 			.then(shareService.deleteRecipient(email))
 			.then(userRepo.deleteByEmail(email))
@@ -279,6 +285,7 @@ public class UserService {
 			.then(userPreferencesRepo.deleteById(email))
 			.then(userSubscriptionRepo.deleteAllByUserEmail(email))
 			.then(notificationsRepo.deleteByOwner(email))
+			.then(stats.addEvent(EventType.DELETED_USER, Map.of("from", "request", "since", userEntity.getCreatedAt())))
 			.then()
 		);
 	}

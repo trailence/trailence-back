@@ -73,7 +73,7 @@ public class UserV1Controller {
 
 	@PostMapping("deleteMe")
 	public Mono<Void> deleteMe(@RequestBody String code, Authentication auth) {
-		return RetryRest.retry(service.deleteUser(code, auth.getPrincipal().toString()));
+		return RetryRest.retry(service.deleteMe(code, auth));
 	}
 	
 }

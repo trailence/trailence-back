@@ -14,6 +14,7 @@ import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.SQL;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.init.migrations.AddLanguageAndTranslationsToPublicTrails;
+import org.trailence.init.migrations.InitDailyStats;
 import org.trailence.init.migrations.TrackStorageV1toV2Migration;
 import org.trailence.preferences.UserCommunityService;
 import org.trailence.quotas.QuotaService;
@@ -41,6 +42,7 @@ public class InitDB {
 		"contact_messages", "public_trails", "notifications", "moderation_messages",
 		"public_trail_feedback", "public_trail_feedback_reply",
 		"user_selection", "trail_links", "user_avatar", "live_groups", "user_community",
+		"daily_stats", "events",
 		"migrations"
 	};
 	
@@ -75,6 +77,7 @@ public class InitDB {
 		new DatabaseMigration("1.3_preferences_add_trail_filters"),
 		new DatabaseMigration("1.5_trust_token"),
 		new TrackStorageV1toV2Migration(),
+		new InitDailyStats(),
 	};
 	
 	public void init(ApplicationContext context) {

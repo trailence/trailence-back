@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS public.daily_stats
+(
+	date date NOT NULL PRIMARY KEY,
+	nb_users int NOT NULL DEFAULT 0,
+	new_users int NOT NULL DEFAULT 0,
+	deleted_users int NOT NULL DEFAULT 0,
+	connected_users int NOT NULL DEFAULT 0,
+	active_users_30_30 int NOT NULL DEFAULT 0,
+	active_users_60_45 int NOT NULL DEFAULT 0,
+	active_users_90_45 int NOT NULL DEFAULT 0,
+	active_users_180_45 int NOT NULL DEFAULT 0,
+	inactive_users_30_30 int NOT NULL DEFAULT 0,
+	inactive_users_60_45 int NOT NULL DEFAULT 0,
+	inactive_users_90_45 int NOT NULL DEFAULT 0,
+	inactive_users_180_45 int NOT NULL DEFAULT 0,
+	nb_collections int NOT NULL DEFAULT 0,
+	nb_trails int NOT NULL DEFAULT 0,
+	nb_tracks int NOT NULL DEFAULT 0,
+	nb_tags int NOT NULL DEFAULT 0,
+	nb_trail_tags int NOT NULL DEFAULT 0,
+	nb_shares int NOT NULL DEFAULT 0,
+	nb_photos int NOT NULL DEFAULT 0,
+	nb_public_trails int NOT NULL DEFAULT 0,
+	nb_public_links int NOT NULL DEFAULT 0,
+	new_live_groups int NOT NULL DEFAULT 0
+);
