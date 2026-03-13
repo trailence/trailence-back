@@ -2,13 +2,28 @@ package org.trailence.stats;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.sql.Column;
+import org.springframework.data.relational.core.sql.Expression;
+import org.springframework.data.relational.core.sql.Expressions;
+import org.springframework.data.relational.core.sql.SQL;
+import org.springframework.data.relational.core.sql.SimpleFunction;
+import org.springframework.data.relational.core.sql.Table;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.global.db.DbUtils;
+import org.trailence.global.db.SqlBuilder;
+import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.stats.db.EventEntity;
 import org.trailence.stats.db.EventRepository;
+import org.trailence.stats.dto.StatsValue;
 
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
@@ -118,6 +133,124 @@ public class StatsService {
 		r2dbc.getDatabaseClient().sql(sql).fetch().rowsUpdated().block();
 		long totalTime = System.currentTimeMillis() - startTime;
 		log.info("Daily stats computed in {} ms.", totalTime);
+	}
+	
+	private static final Table STATS_TABLE = Table.create("daily_stats");
+	private static final Map<String, String> COL_BY_TYPE;
+	private static final Map<String, String> AGG_BY_TYPE;
+	static {
+		COL_BY_TYPE = new HashMap<>();
+		COL_BY_TYPE.put("nbUsers", "nb_users");
+		COL_BY_TYPE.put("newUsers", "new_users");
+		COL_BY_TYPE.put("deletedUsers", "deleted_users");
+		COL_BY_TYPE.put("connectedUsers", "connected_users");
+		COL_BY_TYPE.put("nbCollections", "nb_collections");
+		COL_BY_TYPE.put("nbTrails", "nb_trails");
+		COL_BY_TYPE.put("nbTracks", "nb_tracks");
+		COL_BY_TYPE.put("nbTags", "nb_tags");
+		COL_BY_TYPE.put("nbTrailTags", "nb_trail_tags");
+		COL_BY_TYPE.put("nbShares", "nb_shares");
+		COL_BY_TYPE.put("nbPhotos", "nb_photos");
+		COL_BY_TYPE.put("nbPublicTrails", "nb_public_trails");
+		COL_BY_TYPE.put("nbPublicLinks", "nb_public_links");
+		COL_BY_TYPE.put("newLiveGroups", "new_live_groups");
+		COL_BY_TYPE.put("nbActiveUsers3030", "active_users_30_30");
+		COL_BY_TYPE.put("nbInactiveUsers3030", "inactive_users_30_30");
+		COL_BY_TYPE.put("nbActiveUsers6045", "active_users_60_45");
+		COL_BY_TYPE.put("nbInactiveUsers6045", "inactive_users_60_45");
+		COL_BY_TYPE.put("nbActiveUsers9045", "active_users_90_45");
+		COL_BY_TYPE.put("nbInactiveUsers9045", "inactive_users_90_45");
+		COL_BY_TYPE.put("nbActiveUsers18045", "active_users_180_45");
+		COL_BY_TYPE.put("nbInactiveUsers18045", "inactive_users_180_45");
+
+		AGG_BY_TYPE = new HashMap<>();
+		AGG_BY_TYPE.put("nbUsers", "MAX");
+		AGG_BY_TYPE.put("newUsers", "SUM");
+		AGG_BY_TYPE.put("deletedUsers", "SUM");
+		AGG_BY_TYPE.put("connectedUsers", "AVG");
+		AGG_BY_TYPE.put("nbCollections", "MAX");
+		AGG_BY_TYPE.put("nbTrails", "MAX");
+		AGG_BY_TYPE.put("nbTracks", "MAX");
+		AGG_BY_TYPE.put("nbTags", "MAX");
+		AGG_BY_TYPE.put("nbTrailTags", "MAX");
+		AGG_BY_TYPE.put("nbShares", "MAX");
+		AGG_BY_TYPE.put("nbPhotos", "MAX");
+		AGG_BY_TYPE.put("nbPublicTrails", "MAX");
+		AGG_BY_TYPE.put("nbPublicLinks", "MAX");
+		AGG_BY_TYPE.put("newLiveGroups", "SUM");
+		AGG_BY_TYPE.put("nbActiveUsers3030", "MAX");
+		AGG_BY_TYPE.put("nbInactiveUsers3030", "MAX");
+		AGG_BY_TYPE.put("nbActiveUsers6045", "MAX");
+		AGG_BY_TYPE.put("nbInactiveUsers6045", "MAX");
+		AGG_BY_TYPE.put("nbActiveUsers9045", "MAX");
+		AGG_BY_TYPE.put("nbInactiveUsers9045", "MAX");
+		AGG_BY_TYPE.put("nbActiveUsers18045", "MAX");
+		AGG_BY_TYPE.put("nbInactiveUsers18045", "MAX");
+	}
+	
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
+	public Mono<List<StatsValue>> getStats(String type, String aggregation) {
+		String colName = COL_BY_TYPE.get(type);
+		if (colName == null) return Mono.error(new BadRequestException("Invalid type: " + type));
+		List<Expression> selectFields;
+		Expression groupBy = null;
+		switch (aggregation) {
+		case "day":
+			selectFields = List.of(
+				Expressions.just("EXTRACT(year FROM date)"),
+				Expressions.just("EXTRACT(month FROM date)"),
+				SQL.nullLiteral(),
+				Expressions.just("EXTRACT(day FROM date)"),
+				Column.create(colName, STATS_TABLE)
+			);
+			break;
+		case "week":
+			selectFields = List.of(
+				Expressions.just("EXTRACT(isoyear FROM date_trunc('week', date))"),
+				SQL.nullLiteral(),
+				Expressions.just("EXTRACT(week FROM date_trunc('week', date))"),
+				SQL.nullLiteral(),
+				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
+				Expressions.just("date_trunc('week', date) AS grouper")
+			);
+			groupBy = Expressions.just("grouper");
+			break;
+		case "month":
+			selectFields = List.of(
+				Expressions.just("EXTRACT(year FROM date_trunc('month', date))"),
+				Expressions.just("EXTRACT(month FROM date_trunc('month', date))"),
+				SQL.nullLiteral(),
+				SQL.nullLiteral(),
+				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
+				Expressions.just("date_trunc('month', date) AS grouper")
+			);
+			groupBy = Expressions.just("grouper");
+			break;
+		case "year":
+			selectFields = List.of(
+				Expressions.just("EXTRACT(year FROM date_trunc('year', date))"),
+				SQL.nullLiteral(),
+				SQL.nullLiteral(),
+				SQL.nullLiteral(),
+				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
+				Expressions.just("date_trunc('year', date) AS grouper")
+			);
+			groupBy = Expressions.just("grouper");
+			break;
+		default: return Mono.error(new BadRequestException("Invalid aggregation: " + aggregation));
+		}
+
+		SqlBuilder builder = new SqlBuilder()
+		.select(selectFields)
+		.from(STATS_TABLE);
+		if (groupBy != null) {
+			builder.groupBy(groupBy);
+		}
+		builder.orderBy(List.of(Order.asc("order")), Map.of("order", groupBy != null ? groupBy : Column.create("date", STATS_TABLE)));
+		
+		return r2dbc.query(DbUtils.operation(builder.build(), null),
+			row -> new StatsValue(row.get(0, Long.class), row.get(1, Long.class), row.get(2, Long.class), row.get(3, Long.class), row.get(4, Long.class))
+		).all().collectList();
 	}
 	
 }

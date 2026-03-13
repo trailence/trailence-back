@@ -1,9 +1,12 @@
 package org.trailence.global.db;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.stream.Streams;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.data.relational.core.sql.Aliased;
@@ -11,14 +14,18 @@ import org.springframework.data.relational.core.sql.Column;
 import org.springframework.data.relational.core.sql.Condition;
 import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.Table;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 public class SqlBuilder {
 	
 	private final StringBuilder sql = new StringBuilder();
 	
 	public SqlBuilder select(Expression... fields) {
+		sql.append("SELECT ");
+		append(fields);
+		return this;
+	}
+
+	public SqlBuilder select(List<Expression> fields) {
 		sql.append("SELECT ");
 		append(fields);
 		return this;
@@ -111,6 +118,15 @@ public class SqlBuilder {
 	}
 	
 	private void append(Expression... expressions) {
+		boolean first = true;
+		for (Expression e : expressions) {
+			if (first) first = false;
+			else sql.append(',');
+			append(e);
+		}
+	}
+	
+	private void append(List<Expression> expressions) {
 		boolean first = true;
 		for (Expression e : expressions) {
 			if (first) first = false;
