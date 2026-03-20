@@ -25,6 +25,11 @@ public class VisorandoService {
 		if (userRole == null || userRole.isEmpty()) return true;
 		return TrailenceUtils.hasRole(auth, userRole);
 	}
+
+	public boolean isAvailable(boolean isAdmin, List<String> roles) {
+		if (userRole == null || userRole.isEmpty()) return true;
+		return isAdmin || roles.contains(userRole);
+	}
 	
 	@Data
 	@NoArgsConstructor

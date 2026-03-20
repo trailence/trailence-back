@@ -31,5 +31,6 @@ public class AuthResponse {
 	private int nbPublications;
 	private int nbComments;
 	private int nbRates;
+	private List<String> enabledSearchTrails;
 	
 }

@@ -9,6 +9,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +41,8 @@ import org.trailence.auth.dto.RenewTokenRequest;
 import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.extensions.UserExtensionsService;
+import org.trailence.external.outdooractive.OutdoorActiveService;
+import org.trailence.external.visorando.VisorandoService;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.db.DbUtils;
 import org.trailence.global.db.PlusExpression;
@@ -84,6 +87,8 @@ public class AuthService {
 	private final UserExtensionsService extensionsService;
 	private final AvatarService avatarService;
 	private final UserCommunityRepository communityRepo;
+	private final OutdoorActiveService outdoorActiveService;
+	private final VisorandoService visorandoService;
 	
 	private static final String ERROR_CODE_INVALID_CREDENTIALS = "invalid-credentials";
 	private static final String ERROR_CODE_LOCKED = "locked";
@@ -270,6 +275,9 @@ public class AuthService {
 	}
 	
 	private AuthResponse response(Tuple2<String, Instant> token, UserEntity user, UserKeyEntity key, List<String> roles) {
+		var enabledSearchTrails = new LinkedList<String>();
+		if (outdoorActiveService.available(user.isAdmin(), roles)) enabledSearchTrails.add("outdooractive");
+		if (visorandoService.isAvailable(user.isAdmin(), roles)) enabledSearchTrails.add("visorando");
 		return new AuthResponse(
 			token.getT1(),
 			token.getT2().toEpochMilli(),
@@ -284,7 +292,8 @@ public class AuthService {
 			extensionsService.getAllowedExtensions(user.isAdmin(), roles),
 			roles,
 			null, // avatar
-			0, 0, 0 // community participation
+			0, 0, 0, // community participation
+			enabledSearchTrails
 		);
 	}
 	

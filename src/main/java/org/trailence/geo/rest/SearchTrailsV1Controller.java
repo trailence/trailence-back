@@ -30,6 +30,7 @@ public class SearchTrailsV1Controller {
 	private final OutdoorActiveService outdoor;
 	
 	@GetMapping("/visorando/available")
+	@Deprecated(since = "1.5.5", forRemoval = true)
 	public boolean isVisorandoAvailable(Authentication auth) {
 		return visorando.isAvailable(auth);
 	}
@@ -40,6 +41,7 @@ public class SearchTrailsV1Controller {
 	}
 	
 	@GetMapping("/outdooractive/available")
+	@Deprecated(since = "1.5.5", forRemoval = true)
 	public boolean isOutdoorActiveAvailable(Authentication auth) {
 		return outdoor.available(auth);
 	}

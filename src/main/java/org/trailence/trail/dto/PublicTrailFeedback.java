@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class PublicTrailFeedback {
 
 	private String uuid;
+	private String trailUuid;
 	private String alias;
 	private String avatarUuid;
 	private boolean you;

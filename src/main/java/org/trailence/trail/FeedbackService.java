@@ -190,6 +190,21 @@ public class FeedbackService {
 		);
 	}
 	
+	public Mono<List<PublicTrailFeedback>> getMyFeedbacks(Authentication auth) {
+		String email = TrailenceUtils.email(auth);
+		return feedbackRepo.findAllByEmail(email)
+		.map(entity -> new PublicTrailFeedback(
+			entity.getUuid().toString(),
+			entity.getPublicTrailUuid().toString(),
+			null, null, true,
+			entity.getDate(),
+			entity.getRate(),
+			entity.getComment(),
+			entity.isReviewed(),
+			new LinkedList<>()
+		)).collectList();
+	}
+	
 	public Mono<List<PublicTrailFeedback>> getFeedbacks(String trailUuid, long pageFromDate, int size, String excludeFromStartingDate, Integer filterRate, Authentication auth) {
 		return this.fetchFeedbacks(trailUuid, (sql, _) -> {
 			if (pageFromDate > 0) {
@@ -244,6 +259,7 @@ public class FeedbackService {
 		addWhereAndPaging.accept(sql, bindings);
 		return r2dbc.query(DbUtils.operation(sql.toString(), bindings), row -> new PublicTrailFeedback(
 			row.get("uuid", UUID.class).toString(),
+			trailUuid,
 			row.get("alias", String.class),
 			optionalUuidToString(row.get("avatar_uuid", UUID.class)),
 			youEmail.equals(row.get("email", String.class)),

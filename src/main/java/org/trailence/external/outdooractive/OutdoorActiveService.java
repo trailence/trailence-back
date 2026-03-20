@@ -47,6 +47,14 @@ public class OutdoorActiveService {
 		return true;
 	}
 	
+	public boolean available(boolean isAdmin, List<String> roles) {
+		if (!this.configured()) return false;
+		if (userRole != null && !userRole.isEmpty()) {
+			return isAdmin || roles.contains(userRole);
+		}
+		return true;
+	}
+	
 	public Mono<List<String>> search(double lat, double lng, int radius, int limit, Authentication auth) {
 		if (!this.available(auth)) return Mono.just(List.of());
 		WebClient client = WebClient.builder().baseUrl("https://www.outdooractive.com").build();

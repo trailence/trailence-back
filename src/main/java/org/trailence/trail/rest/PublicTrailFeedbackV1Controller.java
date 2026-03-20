@@ -72,4 +72,9 @@ public class PublicTrailFeedbackV1Controller {
 	public Mono<MyFeedback> getMyFeedback(@PathVariable("trailUuid") String trailUuid, Authentication auth) {
 		return service.getMyFeedback(trailUuid, auth);
 	}
+	
+	@GetMapping("/my-comments")
+	public Mono<List<PublicTrailFeedback>> getMyFeedbacks(Authentication auth) {
+		return service.getMyFeedbacks(auth);
+	}
 }

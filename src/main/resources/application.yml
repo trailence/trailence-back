@@ -71,7 +71,7 @@ trailence:
     root: ${TRAILENCE_STORAGE_ROOT:./storage-fs}
     url: ${TRAILENCE_STORAGE_URL:}
   free-plan:
-    collections: ${FREE_PLAN_COLLECTIONS:10}
+    collections: ${FREE_PLAN_COLLECTIONS:20}
     trails: ${FREE_PLAN_TRAILS:1000}
     tracks: ${FREE_PLAN_TRACKS:2000}
     tracks_size: ${FREE_PLAN_TRACKS_SIZE:10485760}

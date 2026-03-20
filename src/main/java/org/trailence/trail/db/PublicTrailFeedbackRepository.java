@@ -18,6 +18,8 @@ public interface PublicTrailFeedbackRepository extends ReactiveCrudRepository<Pu
 	
 	Flux<PublicTrailFeedbackEntity> findAllByPublicTrailUuid(UUID publicTrailUuid);
 	
+	Flux<PublicTrailFeedbackEntity> findAllByEmail(String email);
+	
 	@Query("SELECT uuid, public_trail_uuid FROM public_trail_feedback WHERE reviewed = FALSE ORDER BY date ASC LIMIT 25")
 	Flux<UuidAndTrailUuid> getToReview();
 

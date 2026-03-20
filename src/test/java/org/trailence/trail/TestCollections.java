@@ -318,22 +318,23 @@ class TestCollections extends AbstractTest {
 	@Test
 	void testQuotas() {
 		var user = test.createUserAndLogin();
+		var maxCollections = user.getAuth().getQuotas().getCollectionsMax();
 		
 		var collections = new LinkedList<TrailCollection>();
 		// create collections under quota
 		collections.addAll(user.createCollections(2));
 		assertThat(collections).hasSize(2);
-		collections.addAll(user.createCollections(6));
-		assertThat(collections).hasSize(8);
-		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 9);
+		collections.addAll(user.createCollections(maxCollections - 4));
+		assertThat(collections).hasSize(maxCollections - 2);
+		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) (maxCollections - 1));
 		// create more than quota should create the 1 remaining in quota and ignore the 2 others
 		collections.addAll(user.createCollections(3));
-		assertThat(collections).hasSize(9);
-		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 10);
+		assertThat(collections).hasSize(maxCollections - 1);
+		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		// quota reached: create should return an error 
 		user.createCollections(1, 403, "quota-exceeded-collections");
 		user.createCollections(2, 403, "quota-exceeded-collections");
-		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 10);
+		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		
 		// create 2 existing ones, plus 2 new ones, with quota reached: should say the 2 existing ones are created
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
@@ -362,12 +363,12 @@ class TestCollections extends AbstractTest {
 		user.deleteCollections(collections.subList(0, 2));
 		collections.removeFirst();
 		collections.removeFirst();
-		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 8);
+		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) (maxCollections - 2));
 		
 		// we can create again up to 2 collections
 		collections.addAll(user.createCollections(5));
-		assertThat(collections).hasSize(9);
-		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 10);
+		assertThat(collections).hasSize(maxCollections - 1);
+		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		
 		// delete all collections should decrement the quota until 1 (my trails is always remaining)
 		user.deleteCollections(collections);
