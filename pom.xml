@@ -11,7 +11,7 @@
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 
-		<spring-boot.version>4.0.3</spring-boot.version>
+		<spring-boot.version>4.0.4</spring-boot.version>
 		<java-jwt.version>4.5.1</java-jwt.version>
 		
 		<maven-jacoco.version>0.8.14</maven-jacoco.version>
