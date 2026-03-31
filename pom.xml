@@ -11,15 +11,15 @@
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 
-		<spring-boot.version>4.0.3</spring-boot.version>
+		<spring-boot.version>4.0.5</spring-boot.version>
 		<java-jwt.version>4.5.1</java-jwt.version>
 		
 		<maven-jacoco.version>0.8.14</maven-jacoco.version>
 		<maven-compiler.version>3.15.0</maven-compiler.version>
 		<maven-surefire.version>3.5.5</maven-surefire.version>
-		<wiremock.version>4.2.0</wiremock.version>
+		<wiremock.version>4.2.1</wiremock.version>
 		<rest-assured.version>6.0.0</rest-assured.version>
-		<test-containers.version>2.0.3</test-containers.version>
+		<test-containers.version>2.0.4</test-containers.version>
 		
 		<!-- sonar -->
 		<sonar.coverage.exclusions>**/test/**</sonar.coverage.exclusions>
