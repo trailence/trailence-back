@@ -29,7 +29,7 @@ public class FileService {
 	private final StorageProperties properties;
 	private final FileRepository repo;
 	
-	private Mono<FileStorageProvider> provider;
+	private Mono<? extends FileStorageProvider> provider;
 	
 	private static final long MAX_FILE_SIZE = 25L * 1024 * 1024;
 	
@@ -40,11 +40,15 @@ public class FileService {
 			if (properties.getType() != null)
 				switch (properties.getType()) {
 				case "fs": return new FileSystemProvider(properties.getRoot());
-				case "pcloud": return new PCloudProvider(properties.getUrl(), properties.getUsername(), properties.getPassword(), properties.getRoot().isBlank() ? 0 : Long.parseLong(properties.getRoot()));
+				case "pcloud": return new PCloudProvider(properties.getUrl(), properties.getUsername(), properties.getPassword(), properties.getAuthkey(), properties.getRoot().isBlank() ? 0 : Long.parseLong(properties.getRoot()));
 				default: break;
 				}
 			throw new RuntimeException("Invalid storage type: " + properties.getType());
-		}).share();
+		})
+		.flatMap(p -> p.init())
+		.share();
+		// force init at startup
+		provider.subscribe();
 	}
 
 	public Mono<Long> storeFile(long size, Flux<DataBuffer> content) {

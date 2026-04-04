@@ -11,6 +11,7 @@ public class StorageProperties {
 	private String type;
 	private String username;
 	private String password;
+	private String authkey;
 	private String root;
 	private String url;
 	

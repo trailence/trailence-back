@@ -68,6 +68,7 @@ trailence:
     type: ${TRAILENCE_STORAGE_TYPE:fs}
     username: ${TRAILENCE_STORAGE_USERNAME:}
     password: ${TRAILENCE_STORAGE_PASSWORD:}
+    authkey: ${TRAILENCE_STORAGE_AUTH_KEY:}
     root: ${TRAILENCE_STORAGE_ROOT:./storage-fs}
     url: ${TRAILENCE_STORAGE_URL:}
   free-plan:

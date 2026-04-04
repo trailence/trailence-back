@@ -31,13 +31,16 @@ public class PCloudProvider implements FileStorageProvider {
 	private final String hostname;
 	private final String username;
 	private final String password;
+	private final String authKey;
 	private final long rootFolderId;
 	private FolderCache root = null;
 	
 	private static final String PROTOCOL = "https://";
-	private static final String PARAM_USERNAME = "username";
-	private static final String PARAM_PASSWORD = "password";
-	private static final String QUERY_AUTH = "?" + PARAM_USERNAME + "={" + PARAM_USERNAME + "}&" + PARAM_PASSWORD + "={" + PARAM_PASSWORD + "}";
+	//private static final String PARAM_USERNAME = "username";
+	//private static final String PARAM_PASSWORD = "password";
+	//private static final String QUERY_AUTH = "?" + PARAM_USERNAME + "={" + PARAM_USERNAME + "}&" + PARAM_PASSWORD + "={" + PARAM_PASSWORD + "}";
+	private static final String QUERY_AUTH = "?auth={authToken}";
+	private static final String PARAM_AUTH = "authToken";
 	private static final String PARAM_FOLDERID = "folderid";
 	private static final String QUERY_FOLDERID = "&" + PARAM_FOLDERID + "={" + PARAM_FOLDERID + "}";
 	private static final String PARAM_FILEID = "fileid";
@@ -46,6 +49,58 @@ public class PCloudProvider implements FileStorageProvider {
 	private WebClient getClient() {
 		return WebClient.builder().baseUrl(PROTOCOL + hostname).build();
 	}
+	
+	private String authToken = null;
+	
+	@Override
+	public Mono<PCloudProvider> init() {
+		log.info("Authenticating to PCloud...");
+		return (this.authKey != null && !this.authKey.isBlank() ? this.checkAuthKey() : Mono.just(false))
+		.flatMap(withKey -> {
+			if (withKey.booleanValue()) return Mono.just(this);
+			return this.authenticate().thenReturn(this);
+		});
+	}
+	
+	private Mono<Boolean> checkAuthKey() {
+		return getClient().get().uri("/userinfo?auth={authKey}", Map.of("authKey", this.authKey))
+		.exchangeToMono(response -> response.bodyToMono(Map.class))
+		.map(m -> {
+			var email = m.get("email");
+			if (this.username.equals(email)) {
+				log.info("PCloud auth key is valid.");
+				this.authToken = this.authKey;
+				return true;
+			}
+			log.error("PCloud auth key is not valid: {}", m);
+			return false;
+		});
+	}
+	
+	private Mono<Boolean> authenticate() {
+		return getClient().post()
+		.uri("/login")
+		.contentType(MediaType.APPLICATION_FORM_URLENCODED)
+		.body(BodyInserters
+			.fromFormData("username", username)
+			.with("password", password)
+			.with("os", "4")
+			.with("osversion", "0.0.0")
+			.with("deviceid", "trailence")
+		)
+		.exchangeToMono(response -> response.bodyToMono(Map.class))
+		.map(m -> {
+			var auth = m.get("auth");
+			if (auth != null) {
+				this.authToken = auth.toString();
+				log.info("PCloud authentication done.");
+				return true;
+			}
+			log.error("PCloud authentication failed: {}", m);
+			return false;
+		});
+	}
+	
 
 	@Override
 	public Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize) {
@@ -59,7 +114,7 @@ public class PCloudProvider implements FileStorageProvider {
 				log.info("Uploading file {} in folder {}", filename, folderid);
 				return getClient().post()
 				.uri("/uploadfile" + QUERY_AUTH + QUERY_FOLDERID + "&filename={filename}&nopartial=1", 
-					Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FOLDERID, Long.toString(folderid), "filename", filename)
+					Map.of(PARAM_AUTH, authToken, PARAM_FOLDERID, Long.toString(folderid), "filename", filename)
 				)
 				.contentType(MediaType.APPLICATION_OCTET_STREAM)
 				.body(BodyInserters.fromResource(new FileSystemResource(fileAndDigests.getKey())))
@@ -110,7 +165,7 @@ public class PCloudProvider implements FileStorageProvider {
 		log.info("Creating download link for file {}", fileId);
 		return getClient().get()
 		.uri("/getfilelink" + QUERY_AUTH + QUERY_FILEID,
-			Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FILEID, Long.toString(fileId))
+			Map.of(PARAM_AUTH, authToken, PARAM_FILEID, Long.toString(fileId))
 		)
 		.exchangeToMono(response -> response.bodyToMono(PCloudFileLinkResponse.class))
 		.doOnNext(_ -> log.info("Download link created for file {}", fileId))
@@ -124,7 +179,7 @@ public class PCloudProvider implements FileStorageProvider {
 			log.info("Deleting file id {} in {}", fileId, path);
 			return getClient().get()
 			.uri("/deletefile" + QUERY_AUTH + QUERY_FILEID,
-				Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FILEID, fileId)
+				Map.of(PARAM_AUTH, authToken, PARAM_FILEID, fileId)
 			)
 			.exchangeToMono(_ -> Mono.<Void>empty())
 			.doOnSuccess(_ -> log.info("File deleted: {} in {}", fileId, path))
@@ -171,7 +226,7 @@ public class PCloudProvider implements FileStorageProvider {
 	private Mono<Map<String, Mono<FolderCache>>> listFolder(FolderCache cache) {
 		return getClient().get()
 		.uri("/listfolder" + QUERY_AUTH + QUERY_FOLDERID,
-			Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FOLDERID, Long.toString(cache.id))
+			Map.of(PARAM_AUTH, authToken, PARAM_FOLDERID, Long.toString(cache.id))
 		)
 		.exchangeToMono(response -> response.bodyToMono(PCloudFolderResponse.class))
 		.map(response -> {
@@ -189,7 +244,7 @@ public class PCloudProvider implements FileStorageProvider {
 	private Mono<FolderCache> createFolder(long parentFolderId, String name) {
 		return getClient().get()
 		.uri("/createfolder" + QUERY_AUTH + QUERY_FOLDERID + "&name={name}",
-			Map.of(PARAM_USERNAME, username, PARAM_PASSWORD, password, PARAM_FOLDERID, Long.toString(parentFolderId), "name", name)
+			Map.of(PARAM_AUTH, authToken, PARAM_FOLDERID, Long.toString(parentFolderId), "name", name)
 		)
 		.exchangeToMono(response -> response.bodyToMono(PCloudFolderResponse.class))
 		.map(response -> new FolderCache(response.getMetadata().getFolderid()))

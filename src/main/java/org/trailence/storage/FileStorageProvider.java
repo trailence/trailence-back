@@ -6,6 +6,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public interface FileStorageProvider {
+	
+	Mono<? extends FileStorageProvider> init();
 
 	Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize);
 	

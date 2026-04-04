@@ -23,6 +23,11 @@ public class FileSystemProvider implements FileStorageProvider {
 	private final String rootPath;
 	
 	@Override
+	public Mono<FileSystemProvider> init() {
+		return Mono.just(this);
+	}
+	
+	@Override
 	public Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize) {
 		return Mono.defer(() -> {
 			FileOutputStream out;
