@@ -15,6 +15,7 @@ import org.trailence.global.exceptions.ForbiddenException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.notifications.NotificationsService;
+import org.trailence.preferences.db.UserAvatarRepository;
 import org.trailence.storage.FileService;
 import org.trailence.trail.db.ModerationMessageEntity;
 import org.trailence.trail.db.ModerationMessageRepository;
@@ -27,6 +28,7 @@ import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailCollectionRepository;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.FeedbackToReview;
+import org.trailence.trail.dto.ModerationCounts;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.PublicTrailRemoveRequest;
 import org.trailence.trail.dto.Track;
@@ -51,6 +53,7 @@ public class ModerationService {
 	private final PublicTrailFeedbackRepository feedbackRepo;
 	private final PublicTrailFeedbackReplyRepository feedbackReplyRepo;
 	private final PublicTrailRepository publicTrailRepo;
+	private final UserAvatarRepository avatarRepo;
 	private final TrailService trailService;
 	private final TrackService trackService;
 	private final PhotoService photoService;
@@ -60,7 +63,7 @@ public class ModerationService {
 	private final FeedbackService feedbackService;
 	
 	public Flux<TrailAndPhotos> getTrailsToReview(int size, Authentication auth) {
-		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : auth.getPrincipal().toString(), size)
+		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : TrailenceUtils.email(auth), size)
 		.flatMap(trail ->
 			photoRepo.findAllByTrailUuidInAndOwner(List.of(trail.getUuid()), trail.getOwner())
 			.map(photoService::toDto)
@@ -72,7 +75,7 @@ public class ModerationService {
 	
 	public Mono<TrailAndPhotos> getTrailToReview(String trailUuid, String owner, Authentication auth) {
 		owner = owner.toLowerCase();
-		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (owner.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findTrailToReview(UUID.fromString(trailUuid), owner)
 		.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, owner)))
 		.flatMap(trail ->
@@ -95,14 +98,14 @@ public class ModerationService {
 	}
 	
 	public Mono<Track> getTrackFromReview(String trailUuid, String trailOwner, String trackUuid, Authentication auth) {
-		if (trailOwner.toLowerCase().equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (trailOwner.toLowerCase().equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trackRepo.findTrackForReview(UUID.fromString(trailUuid), UUID.fromString(trackUuid), trailOwner.toLowerCase())
 		.map(trackService::toDTO)
 		.switchIfEmpty(Mono.error(new NotFoundException("track", trackUuid)));
 	}
 	
 	public Mono<Flux<DataBuffer>> getPhotoFileContentFromReview(String photoOwner, String photoUuid, Authentication auth) {
-		if (photoOwner.toLowerCase().equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (photoOwner.toLowerCase().equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return photoRepo.findByUuidAndOwnerFromReview(UUID.fromString(photoUuid), photoOwner.toLowerCase())
 		.switchIfEmpty(Mono.error(new NotFoundException("photo", photoUuid + '-' + photoOwner)))
 		.flatMap(photo -> Mono.just(fileService.getFileContent(photo.getFileId())));
@@ -110,7 +113,7 @@ public class ModerationService {
 	
 	public Mono<Trail> updateTrailForReview(Trail trail, Authentication auth) {
 		String owner = trail.getOwner().toLowerCase();
-		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (owner.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findByUuidAndOwner(UUID.fromString(trail.getUuid()), owner)
 		.switchIfEmpty(Mono.error(new TrailNotFound(trail.getUuid(), owner)))				
 		.flatMap(entity -> trailService.updateTrailAsModerator(entity, trail, false));
@@ -118,7 +121,7 @@ public class ModerationService {
 	
 	public Mono<Trail> reject(Trail trail, Authentication auth) {
 		String owner = trail.getOwner().toLowerCase();
-		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (owner.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trailRepo.findByUuidAndOwner(UUID.fromString(trail.getUuid()), owner)
 		.switchIfEmpty(Mono.error(new TrailNotFound(trail.getUuid(), owner)))
 		.flatMap(entity -> trailService.updateTrailAsModerator(entity, trail, true))
@@ -127,7 +130,7 @@ public class ModerationService {
 	
 	public Mono<Photo> updatePhoto(Photo photo, Authentication auth) {
 		String owner = photo.getOwner().toLowerCase();
-		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (owner.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return photoRepo.findByUuidAndOwner(UUID.fromString(photo.getUuid()), owner)
 		.switchIfEmpty(Mono.error(new NotFoundException("photo", photo.getUuid() + '-' + owner)))
 		.flatMap(entity ->
@@ -147,7 +150,7 @@ public class ModerationService {
 	
 	public Mono<Void> deletePhoto(String uuid, String owner, Authentication auth) {
 		String email = owner.toLowerCase();
-		if (email.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (email.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return photoRepo.findByUuidAndOwner(UUID.fromString(uuid), email)
 		.flatMap(entity ->
 			trailRepo.findByUuidAndOwner(entity.getTrailUuid(), email)
@@ -168,7 +171,7 @@ public class ModerationService {
 		Authentication auth
 	) {
 		String email = owner.toLowerCase();
-		if (email.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (email.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		ValidationUtils.field("photoUuid", photoUuid).notNull().isUuid();
 		ValidationUtils.field("trailUuid", trailUuid).notNull().isUuid();
 		ValidationUtils.field("description", description).nullable().maxLength(5000);
@@ -185,7 +188,7 @@ public class ModerationService {
 	
 	public Mono<Trail> updateTrailTrack(String trailUuid, String trailOwner, Track track, Authentication auth) {
 		String owner = trailOwner.toLowerCase();
-		if (owner.equals(auth.getPrincipal().toString()) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
+		if (owner.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		track.setOwner(owner);
 		return trailRepo.findTrailToReview(UUID.fromString(trailUuid), owner)
 		.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, owner)))
@@ -200,7 +203,7 @@ public class ModerationService {
 	}
 	
 	public Mono<List<FeedbackToReview>> getFeedbackToReview(Authentication auth) {
-		return getFeedbackUuidWithTrailToReview()
+		return getFeedbackUuidWithTrailToReview(TrailenceUtils.isAdmin(auth) ? null : TrailenceUtils.email(auth))
 		.flatMap(feedbackUuids -> {
 			if (feedbackUuids.isEmpty()) return Mono.just(List.<FeedbackToReview>of());
 			Set<UUID> trailsUuids = new HashSet<>();
@@ -222,13 +225,13 @@ public class ModerationService {
 		});
 	}
 	
-	private Mono<List<UuidAndTrailUuid>> getFeedbackUuidWithTrailToReview() {
-		return feedbackRepo.getToReview().collectList()
+	private Mono<List<UuidAndTrailUuid>> getFeedbackUuidWithTrailToReview(String emailToExclude) {
+		return (emailToExclude == null ? feedbackRepo.getToReview() : feedbackRepo.getToReview(emailToExclude)).collectList()
 		.flatMap(uuids -> {
 			Set<UUID> notIn = new HashSet<>();
 			for (var u : uuids) notIn.add(u.getUuid());
 			if (notIn.isEmpty()) notIn.add(UUID.randomUUID());
-			return feedbackReplyRepo.getToReview(notIn).collectList()
+			return (emailToExclude == null ? feedbackReplyRepo.getToReview(notIn) : feedbackReplyRepo.getToReview(notIn, emailToExclude)).collectList()
 			.map(moreUuids -> {
 				if (moreUuids.isEmpty()) return uuids;
 				List<UuidAndTrailUuid> all = new ArrayList<>(uuids.size() + moreUuids.size());
@@ -239,18 +242,22 @@ public class ModerationService {
 		});
 	}
 	
-	public Mono<Void> feedbackValidated(String feedbackUuid) {
+	public Mono<Void> feedbackValidated(String feedbackUuid, Authentication auth) {
 		return feedbackRepo.findById(UUID.fromString(feedbackUuid))
 		.flatMap(entity -> {
+			if (!TrailenceUtils.isAdmin(auth) && TrailenceUtils.email(auth).equals(entity.getEmail()))
+				return Mono.error(new ForbiddenException());
 			entity.setReviewed(true);
 			return feedbackRepo.save(entity);
 		})
 		.then();
 	}
 
-	public Mono<Void> feedbackReplyValidated(String replyUuid) {
+	public Mono<Void> feedbackReplyValidated(String replyUuid, Authentication auth) {
 		return feedbackReplyRepo.findById(UUID.fromString(replyUuid))
 		.flatMap(entity -> {
+			if (!TrailenceUtils.isAdmin(auth) && TrailenceUtils.email(auth).equals(entity.getEmail()))
+				return Mono.error(new ForbiddenException());
 			entity.setReviewed(true);
 			return feedbackReplyRepo.save(entity);
 		})
@@ -261,7 +268,7 @@ public class ModerationService {
 		if (auth == null) return Mono.error(new ForbiddenException());
 		Flux<ModerationMessageEntity> messages;
 		if (TrailenceUtils.isAdmin(auth)) messages = messageRepo.getRemoveRequests(ModerationMessageEntity.TYPE_REMOVE);
-		else if (TrailenceUtils.hasRole(auth, TrailenceUtils.ROLE_MODERATOR)) messages = messageRepo.getRemoveRequestsNotFrom(ModerationMessageEntity.TYPE_REMOVE, auth.getPrincipal().toString());
+		else if (TrailenceUtils.hasRole(auth, TrailenceUtils.ROLE_MODERATOR)) messages = messageRepo.getRemoveRequestsNotFrom(ModerationMessageEntity.TYPE_REMOVE, TrailenceUtils.email(auth));
 		else return Mono.error(new ForbiddenException());
 		return messages.map(entity -> new PublicTrailRemoveRequest(entity.getUuid().toString(), entity.getOwner(), entity.getAuthorMessage())).collectList();
 	}
@@ -272,7 +279,7 @@ public class ModerationService {
 		return messageRepo.findAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE).collectList()
 		.flatMap(entities -> {
 			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
-			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
+			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(TrailenceUtils.email(auth)))) return Mono.error(new ForbiddenException());
 			return messageRepo.deleteAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE);
 		});
 	}
@@ -283,7 +290,7 @@ public class ModerationService {
 		return messageRepo.findAllByUuidInAndMessageType(toRemove, ModerationMessageEntity.TYPE_REMOVE).collectList()
 		.flatMap(entities -> {
 			if (entities.size() != toRemove.size()) return Mono.error(new NotFoundException("remove-request", uuids.toString()));
-			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(auth.getPrincipal().toString()))) return Mono.error(new ForbiddenException());
+			if (!TrailenceUtils.isAdmin(auth) && entities.stream().anyMatch(e -> e.getOwner().equals(TrailenceUtils.email(auth)))) return Mono.error(new ForbiddenException());
 			return Flux.fromIterable(entities)
 			.flatMap(entity -> publicTrailService.deletePublicTrailAsModerator(entity.getUuid().toString()), 1, 1)
 			.then();
@@ -304,5 +311,17 @@ public class ModerationService {
 	
 	public Mono<Long> getNumberOfRemovalRequestsToReview() {
 		return messageRepo.countRemoveRequests(ModerationMessageEntity.TYPE_REMOVE);
+	}
+	
+	public Mono<ModerationCounts> getCounters(Authentication auth) {
+		boolean admin = TrailenceUtils.isAdmin(auth);
+		String email = TrailenceUtils.email(auth);
+		Mono<Long> trails = admin ? trailRepo.countTrailsToReview() : trailRepo.countTrailsToReview(email);
+		Mono<Long> comments = admin ? feedbackRepo.countToReview() : feedbackRepo.countToReview(email);
+		Mono<Long> commentReplies = admin ? feedbackReplyRepo.countToReview() : feedbackReplyRepo.countToReview(email);
+		Mono<Long> removeRequests = admin ? messageRepo.countRemoveRequests(ModerationMessageEntity.TYPE_REMOVE) : messageRepo.countRemoveRequests(ModerationMessageEntity.TYPE_REMOVE, email);
+		Mono<Long> avatars = admin ? avatarRepo.countAvatarToReview() : avatarRepo.countAvatarToReview(email);
+		return Mono.zip(trails, comments, commentReplies, removeRequests, avatars)
+		.map(t -> new ModerationCounts(t.getT1(), t.getT2(), t.getT3(), t.getT4(), t.getT5()));
 	}
 }

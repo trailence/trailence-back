@@ -29,5 +29,8 @@ public interface ModerationMessageRepository extends ReactiveCrudRepository<Mode
 
 	@Query("SELECT COUNT(*) FROM moderation_messages WHERE message_type = :type")
 	Mono<Long> countRemoveRequests(String type);
+
+	@Query("SELECT COUNT(*) FROM moderation_messages WHERE message_type = :type AND owner <> :emailToExclude")
+	Mono<Long> countRemoveRequests(String type, String emailToExclude);
 	
 }

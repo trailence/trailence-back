@@ -22,9 +22,15 @@ public interface PublicTrailFeedbackRepository extends ReactiveCrudRepository<Pu
 	
 	@Query("SELECT uuid, public_trail_uuid FROM public_trail_feedback WHERE reviewed = FALSE ORDER BY date ASC LIMIT 25")
 	Flux<UuidAndTrailUuid> getToReview();
+	
+	@Query("SELECT uuid, public_trail_uuid FROM public_trail_feedback WHERE reviewed = FALSE AND email <> :emailToExclude ORDER BY date ASC LIMIT 25")
+	Flux<UuidAndTrailUuid> getToReview(String emailToExclude);
 
 	@Query("SELECT COUNT(uuid) FROM public_trail_feedback WHERE reviewed = FALSE")
 	Mono<Long> countToReview();
+
+	@Query("SELECT COUNT(uuid) FROM public_trail_feedback WHERE reviewed = FALSE AND email <> :emailToExclude")
+	Mono<Long> countToReview(String emailToExclude);
 	
 	@Data
 	@NoArgsConstructor

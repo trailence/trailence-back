@@ -22,4 +22,7 @@ public interface TrailRepository extends UuidOwnerRepository<TrailEntity> {
 	@Query("SELECT COUNT(trails.*) FROM trails LEFT JOIN collections ON collections.uuid = trails.collection_uuid AND collections.owner = trails.owner WHERE collections.type = 'PUB_SUBMIT'")
 	Mono<Long> countTrailsToReview();
 
+	@Query("SELECT COUNT(trails.*) FROM trails LEFT JOIN collections ON collections.uuid = trails.collection_uuid AND collections.owner = trails.owner WHERE collections.type = 'PUB_SUBMIT' AND trails.owner <> :ownerToExclude")
+	Mono<Long> countTrailsToReview(String ownerToExclude);
+
 }

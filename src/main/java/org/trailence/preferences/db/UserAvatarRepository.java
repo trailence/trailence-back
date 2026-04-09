@@ -12,6 +12,9 @@ public interface UserAvatarRepository extends ReactiveCrudRepository<UserAvatarE
 
 	@Query("SELECT COUNT(*) FROM user_avatar WHERE new_file_id IS NOT NULL AND new_public = true")
 	Mono<Long> countAvatarToReview();
+
+	@Query("SELECT COUNT(*) FROM user_avatar WHERE new_file_id IS NOT NULL AND new_public = true AND email <> :emailToExclude")
+	Mono<Long> countAvatarToReview(String emailToExclude);
 	
 	@Query("SELECT email FROM user_avatar WHERE new_file_id IS NOT NULL AND new_public = true ORDER BY new_file_submitted_at ASC LIMIT 25")
 	Flux<String> getAvatarsToReview();

@@ -27,6 +27,7 @@ import org.trailence.trail.ModerationService;
 import org.trailence.trail.PublicTrailService;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.FeedbackToReview;
+import org.trailence.trail.dto.ModerationCounts;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.PublicTrailRemoveRequest;
 import org.trailence.trail.dto.Track;
@@ -198,14 +199,14 @@ public class ModerationV1Controller {
 	
 	@PutMapping("/commentsToReview/validate/{feedbackUuid}")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Mono<Void> validateFeedback(@PathVariable("feedbackUuid") String feedbackUuid) {
-		return service.feedbackValidated(feedbackUuid);
+	public Mono<Void> validateFeedback(@PathVariable("feedbackUuid") String feedbackUuid, Authentication auth) {
+		return service.feedbackValidated(feedbackUuid, auth);
 	}
 	
 	@PutMapping("/commentsToReview/reply/validate/{replyUuid}")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Mono<Void> validateFeedbackReply(@PathVariable("replyUuid") String replyUuid) {
-		return service.feedbackReplyValidated(replyUuid);
+	public Mono<Void> validateFeedbackReply(@PathVariable("replyUuid") String replyUuid, Authentication auth) {
+		return service.feedbackReplyValidated(replyUuid, auth);
 	}
 	
 	@GetMapping("/removeRequests")
@@ -254,5 +255,11 @@ public class ModerationV1Controller {
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
 	public Mono<Void> declineAvatar(@PathVariable("email") String email, Authentication auth) {
 		return avatarService.avatarModeration(email, false, auth);
+	}
+	
+	@GetMapping("/counters")
+	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
+	public Mono<ModerationCounts> getCounters(Authentication auth) {
+		return service.getCounters(auth);
 	}
 }
