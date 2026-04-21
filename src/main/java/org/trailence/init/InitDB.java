@@ -93,6 +93,7 @@ public class InitDB {
 					.block();
 	}
 	
+	@SuppressWarnings("java:S112") // RuntimeException
 	private void createTable(String tableName) {
 		log.info("Create table {}", tableName);
 		try (InputStream in = InitDB.class.getClassLoader().getResourceAsStream("db_init/" + tableName + ".sql")) {
@@ -100,6 +101,7 @@ public class InitDB {
 			db.getDatabaseClient().sql(sql).then().block();
 		} catch (Exception e) {
 			log.error("Error creating table {}", tableName, e);
+			throw new RuntimeException("Error initializing database", e);
 		}
 	}
 	
