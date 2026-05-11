@@ -39,8 +39,7 @@ import reactor.util.function.Tuples;
 	"trailence.jwt.secret=test-secret",
 	"spring.r2dbc.username=postgres",
 	"spring.r2dbc.password=postgres",
-	"trailence.storage.type=fs",
-	"trailence.storage.root=./storage-tests",
+	"spring.config.import=file:./storage.test.yaml",
 	"trailence.jobs.initialDelay=5",
 	"trailence.jobs.delay=1",
 	"trailence.mail.throttling.min-delay=1s",
@@ -58,7 +57,8 @@ import reactor.util.function.Tuples;
 	"trailence.extensions.allowed.[thunderforest.com].enabled=true",
 	"trailence.extensions.allowed.[thunderforest.com].role=thunderforest",
 	"trailence.extensions.allowed.[thunderforest.com].content.apikey.pattern=[0-9a-f]{32}",
-	"trailence.external.kofi.verificationToken=05ae7a8e-e497-4bec-8919-79c56bf097df"
+	"trailence.external.kofi.verificationToken=05ae7a8e-e497-4bec-8919-79c56bf097df",
+	"trailence.osm-data.v1=20260511"
 })
 @Slf4j
 public abstract class AbstractTest {

@@ -20,3 +20,4 @@ replay_pid*
 
 storage-fs/
 storage-tests/
+storage.dev.yaml

@@ -12,8 +12,8 @@ import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.storage.db.FileEntity;
 import org.trailence.storage.db.FileRepository;
-import org.trailence.storage.provider.fs.FileSystemProvider;
-import org.trailence.storage.provider.pcloud.PCloudProvider;
+import org.trailence.storage.provider.FileStorageLocation;
+import org.trailence.storage.provider.FileStorageProviderService;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -26,29 +26,16 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class FileService {
 	
-	private final StorageProperties properties;
 	private final FileRepository repo;
+	private final FileStorageProviderService providers;
 	
-	private Mono<? extends FileStorageProvider> provider;
+	private Mono<? extends FileStorageLocation> provider;
 	
 	private static final long MAX_FILE_SIZE = 25L * 1024 * 1024;
 	
 	@PostConstruct
-	@SuppressWarnings("java:S112") // RuntimeException
 	public void init() {
-		provider = Mono.fromSupplier(() -> {
-			if (properties.getType() != null)
-				switch (properties.getType()) {
-				case "fs": return new FileSystemProvider(properties.getRoot());
-				case "pcloud": return new PCloudProvider(properties.getUrl(), properties.getUsername(), properties.getPassword(), properties.getAuthkey(), properties.getRoot().isBlank() ? 0 : Long.parseLong(properties.getRoot()));
-				default: break;
-				}
-			throw new RuntimeException("Invalid storage type: " + properties.getType());
-		})
-		.flatMap(p -> p.init())
-		.share();
-		// force init at startup
-		provider.subscribe();
+		provider = providers.getLocation("files");
 	}
 
 	public Mono<Long> storeFile(long size, Flux<DataBuffer> content) {
@@ -82,7 +69,7 @@ public class FileService {
 	
 	public Flux<DataBuffer> getFileContent(long fileId) {
 		return repo.findById(fileId).flatMapMany(entity ->
-			provider.flatMapMany(storage -> storage.getFile(entity.getStorageId(), getPath(fileId)))
+			provider.flatMapMany(storage -> storage.getFile(entity.getStorageId(), getPath(fileId), () -> new NotFoundException("file", "" + fileId)))
 		);
 	}
 	

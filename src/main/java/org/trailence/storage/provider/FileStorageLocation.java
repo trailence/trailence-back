@@ -1,17 +1,18 @@
-package org.trailence.storage;
+package org.trailence.storage.provider;
+
+import java.util.function.Supplier;
 
 import org.springframework.core.io.buffer.DataBuffer;
+import org.trailence.global.exceptions.NotFoundException;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface FileStorageProvider {
+public interface FileStorageLocation {
 	
-	Mono<? extends FileStorageProvider> init();
-
 	Mono<String> storeFile(String path, Flux<DataBuffer> content, long expectedSize);
 	
-	Flux<DataBuffer> getFile(String fileId, String path);
+	Flux<DataBuffer> getFile(String fileId, String path, Supplier<NotFoundException> onNotFound);
 	
 	Mono<Void> deleteFile(String fileId, String path);
 	

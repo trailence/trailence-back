@@ -1,0 +1,9 @@
+trailence:
+  storage:
+    providers:
+      - id: local_fs
+        type: fs
+    locations:
+      files:
+        provider: local_fs
+        root: ./storage-tests
