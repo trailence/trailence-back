@@ -227,7 +227,7 @@ public class FeedbackService {
 			sql.append(" LIMIT ").append(size > 100 || size < 1 ? 100 : size);
 		}, auth);
 	}
-	
+
 	public Mono<List<PublicTrailFeedback>> fetchFeedbacks(String trailUuid, BiConsumer<StringBuilder, MutableBindings> addWhereAndPaging, Authentication auth) {
 		String youEmail = auth == null ? "" : TrailenceUtils.email(auth);
 		
@@ -315,6 +315,10 @@ public class FeedbackService {
 				return feedbacks;
 			});
 		});
+	}
+	
+	public Mono<Long> getFeedbacksCount(String trailUuid) {
+		return feedbackRepo.countByPublicTrailUuid(UUID.fromString(trailUuid));
 	}
 	
 	private String optionalUuidToString(UUID uuid) {

@@ -32,6 +32,8 @@ public interface PublicTrailFeedbackRepository extends ReactiveCrudRepository<Pu
 	@Query("SELECT COUNT(uuid) FROM public_trail_feedback WHERE reviewed = FALSE AND email <> :emailToExclude")
 	Mono<Long> countToReview(String emailToExclude);
 	
+	Mono<Long> countByPublicTrailUuid(UUID publicTrailUuid);
+	
 	@Data
 	@NoArgsConstructor
 	public static class UuidAndTrailUuid {

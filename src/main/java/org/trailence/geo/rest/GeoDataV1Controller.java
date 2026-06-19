@@ -33,7 +33,14 @@ public class GeoDataV1Controller {
 	public Mono<ResponseEntity<Flux<DataBuffer>>> getTile(@PathVariable("type") String type, @PathVariable("tile") String tile) {
 		if (!KNOWN_TYPES.contains(type)) return Mono.error(new NotFoundException(type, tile));
 		Long tileNum = Long.parseLong(tile);
-		String filePath = type + "/" + tileNum + ".tile";
+		String filePath;
+		switch (type) {
+		case "ways":
+			filePath = type + "/" + (tileNum / 1000) + "/" + tileNum + ".tile";
+			break;
+		default:
+			filePath = type + "/" + tileNum + ".tile";
+		}
 		var getFile = storageService.getLocation("osmData")
 			.map(storage -> storage.getFile(null, filePath, () -> new NotFoundException(type, tile)))
 			.switchIfEmpty(Mono.error(new NotFoundException(type, tile)));

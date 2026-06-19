@@ -35,7 +35,7 @@ public class UserCommunityService {
 	}
 	
 	public Mono<Void> removeComment(String email, boolean withComment, boolean withRate) {
-		return repo.removeCommentRate(email, withComment ? 1 : 0, withRate ? 1 : 0);
+		return repo.removeCommentRate(withComment ? 1 : 0, withRate ? 1 : 0, email);
 	}
 	
 	public Mono<UserCommunity> getUserCommunity(String email) {

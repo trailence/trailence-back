@@ -68,6 +68,11 @@ public class PublicTrailFeedbackV1Controller {
 		return service.getFeedbacks(trailUuid, pageFromDate, size, excludeFromStartingDate, filterRate, auth);
 	}
 	
+	@GetMapping("/{trailUuid}/count")
+	public Mono<Long> getFeedbacksCount(@PathVariable("trailUuid") String trailUuid) {
+		return service.getFeedbacksCount(trailUuid);
+	}
+	
 	@GetMapping("/{trailUuid}/mine")
 	public Mono<MyFeedback> getMyFeedback(@PathVariable("trailUuid") String trailUuid, Authentication auth) {
 		return service.getMyFeedback(trailUuid, auth);

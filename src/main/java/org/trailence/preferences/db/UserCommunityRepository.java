@@ -27,7 +27,7 @@ public interface UserCommunityRepository extends ReactiveCrudRepository<UserComm
 	
 	@Modifying
 	@Query("UPDATE user_community SET nb_comments = nb_comments - :nbComments, nb_rates = nb_rates - :nbRates WHERE email = :email")
-	Mono<Void> removeCommentRate(String email, int nbComments, int nbRates);
+	Mono<Void> removeCommentRate(int nbComments, int nbRates, String email);
 	
 	@Query("SELECT u.email as email, c.public_uuid as public_id, pref.alias as alias, avatar.public_uuid as avatar, COALESCE(c.nb_publications, 0) as nb_publications, COALESCE(c.nb_comments, 0) as nb_comments, COALESCE(c.nb_rates, 0) as nb_rates FROM users u LEFT JOIN user_preferences pref ON pref.email = u.email LEFT JOIN user_avatar avatar ON avatar.email = pref.email AND avatar.current_file_id IS NOT NULL AND avatar.current_public = TRUE LEFT JOIN user_community c ON c.email = pref.email WHERE u.email = :email")
 	Mono<UserCommunity> getUserCommunity(String email);
