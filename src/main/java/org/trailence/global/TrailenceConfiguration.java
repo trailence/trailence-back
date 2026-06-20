@@ -77,6 +77,7 @@ public class TrailenceConfiguration implements WebFluxConfigurer {
 			.pathMatchers(HttpMethod.POST, "/api/live-group/v1/join/**").permitAll()
 			.pathMatchers(HttpMethod.DELETE, "/api/live-group/v1/join/**").permitAll()
 			.pathMatchers(HttpMethod.GET, "/api/avatar/v1/public/**").permitAll()
+			.pathMatchers(HttpMethod.GET, "/api/geo-data/**").permitAll()
 			.pathMatchers("/**").authenticated()
 		)
 		.addFilterBefore(new HttpFilter(), SecurityWebFiltersOrder.HTTP_BASIC)
