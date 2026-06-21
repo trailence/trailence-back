@@ -302,7 +302,7 @@ public class PublicTrailService {
 		.where(where)
 		.groupBy(zoomColumn)
 		.build();
-
+		
 		return r2dbc.query(DbUtils.operation(sql, bindings), row -> new PublicTrailSearch.NbTrailsByTile(row.get("tile", Integer.class), row.get("nb_trails", Long.class)))
 			.all().collectList()
 			.flatMap(counts -> {
@@ -367,7 +367,7 @@ public class PublicTrailService {
 		if (filter.getFrom() != null)
 			where = where.and(Conditions.isGreaterOrEqualTo(valueExpression, SQL.literalOf(filter.getFrom())));
 		if (filter.getTo() != null)
-			where = where.and(Conditions.isLessOrEqualTo(valueExpression, SQL.literalOf(filter.getFrom())));
+			where = where.and(Conditions.isLessOrEqualTo(valueExpression, SQL.literalOf(filter.getTo())));
 		return where;
 	}
 	

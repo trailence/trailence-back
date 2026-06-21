@@ -57,7 +57,7 @@ public class PCloudProvider implements FileStorageProvider {
 	@Override
 	public Mono<PCloudProvider> init() {
 		log.info("Authenticating to PCloud...");
-		return (properties.getAuthkey()!= null && !properties.getAuthkey().isBlank() ? this.checkAuthKey() : Mono.just(false))
+		return (properties.getAuthkey() != null && !properties.getAuthkey().isBlank() ? this.checkAuthKey() : Mono.just(false))
 		.flatMap(withKey -> {
 			if (withKey.booleanValue()) return Mono.just(this);
 			return this.authenticate().thenReturn(this);
@@ -74,7 +74,7 @@ public class PCloudProvider implements FileStorageProvider {
 				this.authToken = properties.getAuthkey();
 				return true;
 			}
-			log.error("PCloud auth key is not valid: {}", m);
+			log.error("PCloud auth key is not valid: {}\nExpected email is {}, found is {}", m, properties.getUsername(), email);
 			return false;
 		});
 	}
