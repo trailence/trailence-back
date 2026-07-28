@@ -57,7 +57,7 @@ import org.trailence.trail.db.PublicTrackEntity;
 import org.trailence.trail.db.PublicTrackRepository;
 import org.trailence.trail.db.PublicTrailEntity;
 import org.trailence.trail.db.PublicTrailRepository;
-import org.trailence.trail.db.PublicTrailRepository.SlugAndDate;
+import org.trailence.trail.db.PublicTrailRepository.SlugWithDatesAndLanguages;
 import org.trailence.trail.db.TrailRepository;
 import org.trailence.trail.dto.CreatePublicTrailRequest;
 import org.trailence.trail.dto.MyPublicTrail;
@@ -652,8 +652,8 @@ public class PublicTrailService {
 		return publicTrailRepo.random();
 	}
 	
-	public Flux<SlugAndDate> slugsWithDate(long offset, int nb) {
-		return publicTrailRepo.slugsWithDate(nb, offset);
+	public Flux<SlugWithDatesAndLanguages> slugsWithDatesAndLanguages(long offset, int nb) {
+		return publicTrailRepo.slugsWithDatesAndLanguages(nb, offset);
 	}
 	
 	public Mono<Long> count() {

@@ -1,5 +1,6 @@
 package org.trailence.trail.db;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,16 +46,17 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
 	Flux<PublicTrailEntity> random();
 	
-	@Query("SELECT slug, MAX(updated_at) as updated_at, MAX(public_trail_feedback.date) as latestFeedbackAt, MIN(public_trails.created_at) as created_at FROM public_trails LEFT JOIN public_trail_feedback ON public_trail_feedback.public_trail_uuid = public_trails.uuid GROUP BY slug ORDER BY created_at ASC LIMIT :nb OFFSET :start")
-	Flux<SlugAndDate> slugsWithDate(int nb, long offset);
+	@Query("SELECT pt.slug, MAX(pt.updated_at) as updated_at, MAX(ptf.date) as latestFeedbackAt, MIN(pt.created_at) as created_at, ARRAY_AGG(DISTINCT l.lang ORDER BY l.lang) AS languages FROM public_trails pt LEFT JOIN public_trail_feedback ptf ON ptf.public_trail_uuid = pt.uuid LEFT JOIN LATERAL (SELECT pt.lang UNION SELECT jsonb_object_keys(COALESCE(pt.name_translations, '{}'::jsonb))) AS l(lang) ON TRUE GROUP BY pt.slug ORDER BY created_at ASC LIMIT :nb OFFSET :start")
+	Flux<SlugWithDatesAndLanguages> slugsWithDatesAndLanguages(int nb, long offset);
 	
 	@Data
 	@NoArgsConstructor
-	public static class SlugAndDate {
+	public static class SlugWithDatesAndLanguages {
 		private String slug;
 		private long updatedAt;
 		private Long latestFeedbackAt;
 		private long createdAt;
+		private List<String> languages;
 	}
 	
 	@Query("SELECT uuid, name, description FROM public_trails WHERE uuid IN (:uuids)")

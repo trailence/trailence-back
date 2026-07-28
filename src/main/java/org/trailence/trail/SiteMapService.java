@@ -64,25 +64,24 @@ public class SiteMapService {
 		return Flux.concat(
 			Mono.just(XML_HEADER),
 			Mono.just(URLSET_HEADER),
-			service.slugsWithDate(((long) (page - 1)) * MAX_TRAILS_BY_SITEMAP, MAX_TRAILS_BY_SITEMAP)
+			service.slugsWithDatesAndLanguages(((long) (page - 1)) * MAX_TRAILS_BY_SITEMAP, MAX_TRAILS_BY_SITEMAP)
 			.map(slug -> {
 				StringBuilder s = new StringBuilder(2048);
 				long ts = slug.getUpdatedAt();
 				if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
 				if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
 				String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
-				s.append(URL_START);
-					s.append(LOC_START);publicUrl("fr", slug.getSlug(), s).append(LOC_END);
-					s.append(LASTMOD_START).append(date).append(LASTMOD_END);
-					alternate("en", slug.getSlug(), s);
-					alternate("fr", slug.getSlug(), s);
-				s.append(URL_END);
-				s.append(URL_START);
-					s.append(LOC_START);publicUrl("en", slug.getSlug(), s).append(LOC_END);
-					s.append(LASTMOD_START).append(date).append(LASTMOD_END);
-					alternate("en", slug.getSlug(), s);
-					alternate("fr", slug.getSlug(), s);
-				s.append(URL_END);
+				for (String lang : slug.getLanguages()) {
+					s.append(URL_START);
+						s.append(LOC_START);publicUrl(lang, slug.getSlug(), s).append(LOC_END);
+						s.append(LASTMOD_START).append(date).append(LASTMOD_END);
+						if (slug.getLanguages().size() > 1) {
+							for (String alternateLange : slug.getLanguages()) {
+								alternate(alternateLange, slug.getSlug(), s);
+							}
+						}
+					s.append(URL_END);
+				}
 				s.append(URL_START);
 					s.append(LOC_START).append(protocol).append("://").append(hostname).append("/trail/trailence/").append(slug.getSlug()).append(LOC_END);
 					s.append(LASTMOD_START).append(date).append(LASTMOD_END);
