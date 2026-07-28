@@ -1,0 +1,1 @@
+Bestätigen Sie die Löschung Ihres Kontos auf {{hostname}}

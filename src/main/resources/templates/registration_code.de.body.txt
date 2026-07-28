@@ -1,0 +1,6 @@
+Guten Tag,
+
+Hier ist Ihr Code, um die Erstellung Ihres Kontos auf {{hostname}} zu bestätigen: {{code}}
+
+Wenn Sie diese Anfrage nicht veranlasst haben, können Sie die Anfrage über den unten stehenden Link stornieren:
+{{stop_url}}
