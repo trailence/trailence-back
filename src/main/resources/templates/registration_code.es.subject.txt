@@ -1,0 +1,1 @@
+Confirma la creación de tu cuenta en {{hostname}}

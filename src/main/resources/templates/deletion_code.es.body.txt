@@ -1,0 +1,6 @@
+Hola,
+
+Aquí tienes tu código para confirmar la eliminación de tu cuenta en {{hostname}}: {{code}}
+
+Si no has sido tú quien ha realizado esta solicitud, puedes cancelarla a través del enlace de abajo:
+{{stop_url}}

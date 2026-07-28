@@ -1,0 +1,7 @@
+Hola,
+
+{{from}} quiere compartir rutas contigo en {{hostname}}.
+
+Para acceder a ellas solo tienes que iniciar sesión y abrir el menú "Compartido conmigo"
+
+Este correo se envía por iniciativa de {{from}}, para compartir rutas contigo; no te enviaremos ningún otro correo más adelante sobre este elemento compartido.

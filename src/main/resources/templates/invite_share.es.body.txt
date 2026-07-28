@@ -1,0 +1,9 @@
+Hola,
+
+{{from}} quiere compartir rutas contigo en {{hostname}}.
+
+Puedes acceder a ellas sin tener una cuenta usando este enlace: {{link}}
+
+Si más adelante quieres gestionar tus propias rutas, o acceder a las rutas que se comparten contigo sin necesidad de un enlace, podrás crear una cuenta gratis.
+
+Este correo se envía por iniciativa de {{from}}, para compartir rutas contigo; no te enviaremos ningún otro correo más adelante sobre este elemento compartido.
