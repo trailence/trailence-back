@@ -1,0 +1,7 @@
+Ciao,
+
+{{from}} vuole condividere dei percorsi con te su {{hostname}}.
+
+Per accedervi basta effettuare l'accesso e aprire il menu "Condiviso con me"
+
+Questa email è inviata su iniziativa di {{from}}, per condividere dei percorsi con te; non ti invieremo altre email in seguito riguardo a questa condivisione.

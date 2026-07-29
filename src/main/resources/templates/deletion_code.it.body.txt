@@ -1,0 +1,6 @@
+Ciao,
+
+Ecco il tuo codice per confermare l'eliminazione del tuo account su {{hostname}}: {{code}}
+
+Se non sei tu ad aver fatto questa richiesta, puoi annullarla tramite il link qui sotto:
+{{stop_url}}

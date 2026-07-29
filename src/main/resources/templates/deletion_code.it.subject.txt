@@ -1,0 +1,1 @@
+Conferma l'eliminazione del tuo account su {{hostname}}
