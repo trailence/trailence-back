@@ -1,0 +1,9 @@
+Olá,
+
+{{from}} pretende partilhar percursos consigo em {{hostname}}.
+
+Pode aceder aos mesmos sem ter uma conta através desta ligação: {{link}}
+
+Se, mais tarde, pretender gerir os seus próprios percursos, ou aceder aos percursos que são partilhados consigo sem necessidade de uma ligação, poderá criar uma conta gratuitamente.
+
+Este email é enviado por iniciativa de {{from}}, para partilhar percursos consigo; não lhe enviaremos qualquer outro email posteriormente relativo a esta partilha.

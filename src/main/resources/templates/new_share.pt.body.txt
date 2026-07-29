@@ -1,0 +1,7 @@
+Olá,
+
+{{from}} pretende partilhar percursos consigo em {{hostname}}.
+
+Para aceder aos mesmos basta iniciar sessão e ir ao menu "Partilhado comigo"
+
+Este email é enviado por iniciativa de {{from}}, para partilhar percursos consigo; não lhe enviaremos qualquer outro email posteriormente relativo a esta partilha.
