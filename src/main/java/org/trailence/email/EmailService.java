@@ -25,6 +25,7 @@ public class EmailService {
 	private String linkpath;
 	
 	private static final String TEMPLATES_DIR = "templates/";
+	private static final String[] LANGUAGES = {"de", "en", "es", "fr", "it", "pt" };
 	
 	public static final int REGISTER_USER_PRIORITY = 1;
 	public static final int CHANGE_PASSWORD_PRIORITY = 3;
@@ -46,13 +47,11 @@ public class EmailService {
 		});
 	}
 	
-	@SuppressWarnings("java:S1301") // switch instead of if
 	private String getLanguage(String lang) {
 		if (lang == null) return "en";
-		switch (lang.toLowerCase()) {
-		case "fr": return "fr";
-		default: return "en";
-		}
+		String l = lang.toLowerCase();
+		for (int i = 0; i < LANGUAGES.length; ++i) if (l.equals(LANGUAGES[i])) return l;
+		return "en";
 	}
 	
 	public String getLinkUrl(String link) {
