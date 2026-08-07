@@ -31,5 +31,6 @@ public class CreateShareRequest {
 	@Size(min = 2, max = 2)
 	private String mailLanguage;
 	private boolean includePhotos = false;
+	private boolean editable = false;
 	
 }

@@ -104,6 +104,11 @@ public class ShareService {
 			share.setElementType(request.getType());
 			share.setName(request.getName());
 			share.setIncludePhotos(request.isIncludePhotos());
+			share.setEditable(request.isEditable());
+			
+			if (!ShareElementType.COLLECTION.equals(request.getType())) share.setEditable(false);
+			if (share.isEditable()) share.setIncludePhotos(true);
+			
 			List<ShareRecipientEntity> shareRecipients = new ArrayList<>(request.getRecipients().size());
 			Set<String> recipients = new HashSet<>();
 			for (String to : request.getRecipients()) {
@@ -434,6 +439,7 @@ public class ShareService {
 			entity.getElementType(),
 			entity.getName(),
 			entity.isIncludePhotos(),
+			entity.isEditable(),
 			elements != null ? elements.stream().map(UUID::toString).toList() : null,
 			trails != null ? trails.stream().map(UUID::toString).toList() : null
 		);
@@ -590,6 +596,11 @@ public class ShareService {
 		.flatMap(share -> {
 			share.setName(request.getName());
 			share.setIncludePhotos(request.isIncludePhotos());
+			share.setEditable(request.isEditable());
+			
+			if (!ShareElementType.COLLECTION.equals(share.getElementType())) share.setEditable(false);
+			if (share.isEditable()) share.setIncludePhotos(true);
+			
 			Mono<Long> updateEntity = DbUtils.updateByUuidAndOwner(r2dbc, share);
 			return updateEntity.then(updateRecipients(share, uuid, owner, request))
 			.flatMap(added ->

@@ -17,6 +17,7 @@ public class UpdateShareRequest {
 	@Size(min = 1)
 	private String name;
 	private boolean includePhotos = false;
+	private boolean editable = false;
 	private List<String> recipients;
 	private String mailLanguage;
 	

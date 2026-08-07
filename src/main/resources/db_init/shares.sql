@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.shares
 	name character varying(50) COLLATE pg_catalog."default" NOT NULL,
     element_type element_type NOT NULL,
 	include_photos boolean NOT NULL DEFAULT FALSE,
+	editable boolean NOT NULL DEFAULT FALSE,
     CONSTRAINT shares_pkey PRIMARY KEY (uuid, owner)
 );
 

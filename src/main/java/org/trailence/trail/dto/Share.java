@@ -23,6 +23,7 @@ public class Share {
 	private ShareElementType type;
 	private String name;
 	private boolean includePhotos;
+	private boolean editable;
 
 	private List<String> elements;
 	private List<String> trails;

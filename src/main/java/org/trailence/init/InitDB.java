@@ -78,6 +78,7 @@ public class InitDB {
 		new DatabaseMigration("1.5_trust_token"),
 		new TrackStorageV1toV2Migration(),
 		new InitDailyStats(),
+		new DatabaseMigration("2.3_shares_add_column_editable"),
 	};
 	
 	public void init(ApplicationContext context) {
