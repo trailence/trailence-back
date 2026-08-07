@@ -18,7 +18,7 @@ class TestChangePassword extends AbstractTest {
 	void testChangePassword() {
 		var user = test.createUserAndLogin();
 		
-		var response = user.get("/api/user/v1/sendChangePasswordCode?lang=es");
+		var response = user.get("/api/user/v1/sendChangePasswordCode?lang=aa");
 		assertThat(response.statusCode()).isEqualTo(200);
 		
 		var email = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
