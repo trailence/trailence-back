@@ -26,7 +26,19 @@ public class JwtFilter implements WebFilter {
 		return Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
 		.filter(authHeader -> authHeader.startsWith(BEARER))
 		.map(authHeader -> authHeader.substring(BEARER.length()))
-		.flatMap(token -> authManager.authenticate(new UsernamePasswordAuthenticationToken(null, token)))
+		.flatMap(token -> {
+			var auth = new UsernamePasswordAuthenticationToken(null, token);
+			var versionHeader = exchange.getRequest().getHeaders().getFirst(AuthDetails.HEADER_VERSION);
+			int version = AuthDetails.MIN_VERSION;
+			if (versionHeader != null)
+				try {
+					version = Integer.parseInt(versionHeader);
+				} catch (Exception _) {
+					// ignore
+				}
+			auth.setDetails(new AuthDetails(version));
+			return authManager.authenticate(auth);
+		})
 		.map(Optional::of)
 		.switchIfEmpty(Mono.just(Optional.empty()))
 		.flatMap(auth -> {
