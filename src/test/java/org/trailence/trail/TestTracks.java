@@ -29,11 +29,12 @@ class TestTracks extends AbstractTest {
 	@Test
 	void crud() {
 		var user = test.createUserAndLogin();
+		var col = user.getMyTrails();
 		// create 4 tracks
-		var track1 = user.createTrack();
-		var track2 = user.createTrack();
-		var track3 = user.createTrack();
-		var track4 = user.createTrack();
+		var track1 = user.createTrack(col);
+		var track2 = user.createTrack(col);
+		var track3 = user.createTrack(col);
+		var track4 = user.createTrack(col);
 		
 		// get
 		user.expectTracks(track1, track2, track3, track4);
@@ -85,7 +86,7 @@ class TestTracks extends AbstractTest {
 		var user1 = test.createUserAndLogin();
 		var user2 = test.createUserAndLogin();
 		
-		var track2 = user2.createTrack();
+		var track2 = user2.createTrack(user2.getMyTrails());
 		
 		// cannot read
 		var response = user1.get("/api/track/v1/" + user2.getEmail() + "/" + track2.getUuid());
@@ -107,7 +108,7 @@ class TestTracks extends AbstractTest {
 	void createTrackWithInvalidInput() {
 		var user = test.createUserAndLogin();
 		
-		var track = user.generateRandomTrack();
+		var track = user.generateRandomTrack(user.getMyTrails());
 		track.setUuid("1234");
 		var response = user.post("/api/track/v1", track);
 		TestUtils.expectError(response, 400, "invalid-uuid");
@@ -116,7 +117,7 @@ class TestTracks extends AbstractTest {
 		response = user.post("/api/track/v1", track);
 		TestUtils.expectError(response, 400, "missing-uuid");
 		
-		track = user.generateRandomTrack();
+		track = user.generateRandomTrack(user.getMyTrails());
 		track.setOwner(test.email());
 		response = user.post("/api/track/v1", track);
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -126,9 +127,9 @@ class TestTracks extends AbstractTest {
 	@Test
 	void createTwiceTheSameCreateOnlyFirst() {
 		var user = test.createUserAndLogin();
-		var track = user.createTrack();
+		var track = user.createTrack(user.getMyTrails());
 
-		var track2 = user.generateRandomTrack();
+		var track2 = user.generateRandomTrack(user.getMyTrails());
 		track2.setUuid(track.getUuid());
 		var response = user.post("/api/track/v1", track);
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -144,9 +145,9 @@ class TestTracks extends AbstractTest {
 	@Test
 	void updateWithOlderVersionDoNotUpdate() {
 		var user = test.createUserAndLogin();
-		var track = user.createTrack();
+		var track = user.createTrack(user.getMyTrails());
 		
-		var track2 = user.generateRandomTrack();
+		var track2 = user.generateRandomTrack(user.getMyTrails());
 		track2.setUuid(track.getUuid());
 		track2.setVersion(track.getVersion());
 		track2.setCreatedAt(track.getCreatedAt());
@@ -166,7 +167,7 @@ class TestTracks extends AbstractTest {
 		track2.setSizeUsed(updated.getSizeUsed());
 		assertThat(updated).isEqualTo(track2);
 		
-		var track3 = user.generateRandomTrack();
+		var track3 = user.generateRandomTrack(user.getMyTrails());
 		track3.setUuid(track.getUuid());
 		track3.setVersion(track.getVersion());
 		response = user.put("/api/track/v1", track3);
@@ -182,9 +183,9 @@ class TestTracks extends AbstractTest {
 	@Test
 	void updateWithSameValuesDoNotUpdate() {
 		var user = test.createUserAndLogin();
-		var track = user.createTrack();
+		var track = user.createTrack(user.getMyTrails());
 		
-		var track2 = user.generateRandomTrack();
+		var track2 = user.generateRandomTrack(user.getMyTrails());
 		track2.setUuid(track.getUuid());
 		track2.setS(track.getS());
 		track2.setWp(track.getWp());
@@ -210,26 +211,27 @@ class TestTracks extends AbstractTest {
 		var user = test.login(userTest, null, new HashMap<String, Object>());
 		var quotas = user.getAuth().getQuotas();
 		assertThat(quotas.getTracksMax()).isEqualTo(5);
+		var mytrails = user.getMyTrails();
 		
 		var tracks = new LinkedList<Track>();
-		tracks.add(user.createTrack());
-		tracks.add(user.createTrack());
-		tracks.add(user.createTrack());
-		tracks.add(user.createTrack());
+		tracks.add(user.createTrack(mytrails));
+		tracks.add(user.createTrack(mytrails));
+		tracks.add(user.createTrack(mytrails));
+		tracks.add(user.createTrack(mytrails));
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(4);
-		tracks.add(user.createTrack());
+		tracks.add(user.createTrack(mytrails));
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(5);
-		user.createTrack(user.generateRandomTrack(), 403, "quota-exceeded-tracks");
+		user.createTrack(user.generateRandomTrack(mytrails), 403, "quota-exceeded-tracks");
 		
 		user.deleteTracks(tracks.subList(0, 2));
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(3);
 		tracks.removeFirst();
 		tracks.removeFirst();
 
-		tracks.add(user.createTrack());
-		tracks.add(user.createTrack());
+		tracks.add(user.createTrack(mytrails));
+		tracks.add(user.createTrack(mytrails));
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isEqualTo(5);
-		user.createTrack(user.generateRandomTrack(), 403, "quota-exceeded-tracks");
+		user.createTrack(user.generateRandomTrack(mytrails), 403, "quota-exceeded-tracks");
 		
 		user.deleteTracks(tracks);
 		assertThat(user.renewToken().getQuotas().getTracksUsed()).isZero();
@@ -249,11 +251,12 @@ class TestTracks extends AbstractTest {
 		var quotas = user.getAuth().getQuotas();
 		assertThat(quotas.getTracksSizeMax()).isEqualTo(10000);
 		
-		var track = user.createTrack(user.generateRandomTrack(new Random(), 1, 1, 1, 1, 1, 1), -1, null);
+		var mytrails = user.getMyTrails();
+		var track = user.createTrack(user.generateRandomTrack(mytrails, new Random(), 1, 1, 1, 1, 1, 1), -1, null);
 		var size = user.renewToken().getQuotas().getTracksSizeUsed();
 		assertThat(size).isPositive().isEqualTo(track.getSizeUsed());
 
-		user.createTrack(user.generateRandomTrack(new Random(), 20, 20, 100, 100, 1, 1), 403, "quota-exceeded-tracks-size");
+		user.createTrack(user.generateRandomTrack(mytrails, new Random(), 20, 20, 100, 100, 1, 1), 403, "quota-exceeded-tracks-size");
 		quotas = user.renewToken().getQuotas();
 		assertThat(quotas.getTracksSizeUsed()).isEqualTo(size);
 		assertThat(quotas.getTracksUsed()).isEqualTo(1);

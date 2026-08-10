@@ -43,6 +43,7 @@ public class InitDB {
 		"public_trail_feedback", "public_trail_feedback_reply",
 		"user_selection", "trail_links", "user_avatar", "live_groups", "user_community",
 		"daily_stats", "events",
+		"shared_collections",
 		"migrations"
 	};
 	

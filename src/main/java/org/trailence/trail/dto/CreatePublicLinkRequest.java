@@ -5,13 +5,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
-public class MyTrailLink {
-
-	private String link;
+@NoArgsConstructor
+public class CreatePublicLinkRequest {
 	private String trailOwner;
 	private String trailUuid;
-	private long createdAt;
-	
 }

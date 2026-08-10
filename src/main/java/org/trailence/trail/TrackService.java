@@ -16,6 +16,7 @@ import org.springframework.data.relational.core.sql.Conditions;
 import org.springframework.data.relational.core.sql.Expression;
 import org.springframework.data.relational.core.sql.SQL;
 import org.springframework.data.relational.core.sql.Select;
+import org.springframework.data.relational.core.sql.SimpleFunction;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,9 +28,14 @@ import org.trailence.global.dto.Versioned;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
+import org.trailence.global.rest.AuthDetails;
 import org.trailence.quotas.QuotaService;
 import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.ShareRecipientEntity;
+import org.trailence.trail.db.SharedCollectionEntity;
+import org.trailence.trail.db.SharedCollectionMemberEntity;
+import org.trailence.trail.db.SharedCollectionMemberRepository;
+import org.trailence.trail.db.SharedCollectionRepository;
 import org.trailence.trail.db.TrackEntity;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailEntity;
@@ -50,6 +56,8 @@ public class TrackService {
 	private final R2dbcEntityTemplate r2dbc;
 	private final QuotaService quotaService;
 	private final ShareService shareService;
+	private final SharedCollectionRepository sharedCollectionRepo;
+	private final SharedCollectionMemberRepository sharedCollectionMemberRepo;
 	
 	@Autowired @Lazy @SuppressWarnings("java:S6813")
 	private TrackService self;
@@ -57,19 +65,33 @@ public class TrackService {
 	private static final long MAX_DATA_SIZE = 512L * 1024;
 	
 	public Mono<Track> createTrack(Track track, Authentication auth) {
-		return Mono.fromCallable(() -> {
+		String owner = track.getOwner();
+		String user = TrailenceUtils.email(auth);
+		Mono<Optional<SharedCollectionEntity>> sharedCollection;
+		if (SharedCollectionUtils.isSharedCollectionOwner(owner))
+			sharedCollection = sharedCollectionRepo.getSharedCollectionHavingMember(SharedCollectionUtils.getSharedCollectionUuid(owner), user)
+				.map(Optional::of).switchIfEmpty(Mono.error(new NotFoundException("shared_collection", owner)));
+		else
+			sharedCollection = Mono.just(Optional.empty());
+		
+		return sharedCollection
+		.flatMap(colOpt -> {
+			var col = colOpt.orElse(null);
 			validate(track);
 			TrackEntity entity = new TrackEntity();
 			entity.setUuid(UUID.fromString(track.getUuid()));
-			entity.setOwner(auth.getPrincipal().toString());
+			entity.setOwner(col == null ? user : SharedCollectionUtils.SHARED_OWNER_PREFIX + col.getUuid());
 			entity.setCreatedAt(System.currentTimeMillis());
 			entity.setUpdatedAt(entity.getCreatedAt());
-			entity.setData(TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp())));
+			try {
+				entity.setData(TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp())));
+			} catch (Exception e) {
+				return Mono.error(e);
+			}
 			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
-			return entity;
-		})
-		.flatMap(self::createTrackWithQuota)
-		.map(this::toDTO);
+			return self.createTrackWithQuota(entity, col != null ? col.getOwner() : user)
+				.map(e -> toDTO(e, col != null ? owner : null));
+		});
 	}
 	
 	public Mono<Track> createTrackAsSuperUser(Track track) {
@@ -84,16 +106,16 @@ public class TrackService {
 			if (entity.getData().length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + entity.getData().length + " > " + MAX_DATA_SIZE + ")");
 			return entity;
 		})
-		.flatMap(self::createTrackWithQuota)
-		.map(this::toDTO);
+		.flatMap(entity -> self.createTrackWithQuota(entity, track.getOwner()))
+		.map(e -> toDTO(e, null));
 	}
 	
 	@Transactional
-	public Mono<TrackEntity> createTrackWithQuota(TrackEntity entity) {
+	public Mono<TrackEntity> createTrackWithQuota(TrackEntity entity, String quotaUser) {
 		return repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner())
 		.switchIfEmpty(Mono.defer(() ->
 			r2dbc.insert(entity)
-			.flatMap(e -> quotaService.addTrack(entity.getOwner(), entity.getData().length).thenReturn(e))
+			.flatMap(e -> quotaService.addTrack(quotaUser, entity.getData().length).thenReturn(e))
 		));
 	}
 	
@@ -104,50 +126,80 @@ public class TrackService {
 	@Transactional
 	public Mono<Track> updateTrack(Track track, Authentication auth) {
 		validate(track);
-		return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), TrailenceUtils.email(auth))
-		.switchIfEmpty(Mono.error(new TrackNotFound(TrailenceUtils.email(auth), track.getUuid())))
-		.flatMap(entity -> {
-			if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
-			int previousDataSize = entity.getData().length;
-			try {
-				var newData = TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp()));
-				if (newData.length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + newData.length + " > " + MAX_DATA_SIZE + ")");
-				if (Arrays.equals(newData, entity.getData())) return Mono.just(entity);
-				entity.setData(newData);
-			} catch (Exception e) {
-				return Mono.error(e);
-			}
-			return DbUtils.updateByUuidAndOwner(r2dbc, entity).flatMap(nb -> nb == 0 ? Mono.just(entity) :
-				quotaService.updateTrackSize(entity.getOwner(), entity.getData().length - previousDataSize)
-				.then(repo.findByUuidAndOwner(entity.getUuid(), entity.getOwner()))
-			);
-		})
-		.map(this::toDTO);
+		String owner = track.getOwner();
+		String user = TrailenceUtils.email(auth);
+		Mono<Optional<SharedCollectionEntity>> sharedCollection;
+		if (SharedCollectionUtils.isSharedCollectionOwner(owner))
+			sharedCollection = sharedCollectionRepo.getSharedCollectionHavingMember(SharedCollectionUtils.getSharedCollectionUuid(owner), user)
+				.map(Optional::of).switchIfEmpty(Mono.error(new NotFoundException("shared_collection", owner)));
+		else
+			sharedCollection = Mono.just(Optional.empty());
+		return sharedCollection
+		.flatMap(colOpt -> {
+			var col = colOpt.orElse(null);
+			String trackOwner = col == null ? user : SharedCollectionUtils.SHARED_OWNER_PREFIX + col.getUuid();
+			return repo.findByUuidAndOwner(UUID.fromString(track.getUuid()), trackOwner)
+			.switchIfEmpty(Mono.error(new TrackNotFound(owner, track.getUuid())))
+			.flatMap(entity -> {
+				if (track.getVersion() != entity.getVersion()) return Mono.just(entity);
+				int previousDataSize = entity.getData().length;
+				try {
+					var newData = TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(track.getS(), track.getWp()));
+					if (newData.length > MAX_DATA_SIZE) throw new BadRequestException("track-too-large", "Track data max size exceeded (" + newData.length + " > " + MAX_DATA_SIZE + ")");
+					if (Arrays.equals(newData, entity.getData())) return Mono.just(entity);
+					entity.setData(newData);
+				} catch (Exception e) {
+					return Mono.error(e);
+				}
+				String quotaUser = col != null ? col.getOwner() : user;
+				return DbUtils.updateByUuidAndOwner(r2dbc, entity).flatMap(nb -> nb == 0 ? Mono.just(entity) :
+					quotaService.updateTrackSize(quotaUser, entity.getData().length - previousDataSize)
+					.then(repo.findByUuidAndOwner(entity.getUuid(), trackOwner))
+				);
+			})
+			.map(e -> toDTO(e, col != null ? owner : null));
+		});
 	}
 	
 	public Mono<Void> bulkDelete(Collection<String> uuids, Authentication auth) {
-		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), TrailenceUtils.email(auth));
+		var user = TrailenceUtils.email(auth);
+		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), user, user);
 	}
 	
-	public Mono<Void> deleteTracksWithQuota(Set<UUID> uuids, String owner) {
+	public Mono<Void> bulkDelete(String shareId, List<String> uuids, Authentication auth) {
+    	String caller = TrailenceUtils.email(auth);
+    	UUID sharedCollectionUuidForCaller = SharedCollectionUtils.getSharedCollectionUuid(shareId);
+    	return sharedCollectionRepo.getSharedCollectionHavingMember(sharedCollectionUuidForCaller, caller)
+    	.flatMap(col -> {
+    		var trackOwner = SharedCollectionUtils.SHARED_OWNER_PREFIX + col.getUuid();
+    		var quotaOwner = col.getOwner();
+    		return self.deleteTracksWithQuota(uuids.stream().map(UUID::fromString).collect(Collectors.toSet()), trackOwner, quotaOwner);
+    	}); 
+    }
+	
+	public Mono<Void> deleteTracksWithQuota(Set<UUID> uuids, String owner, String quotaOwner) {
 		log.info("Deleting {} tracks for {}", uuids.size(), owner);
 		return repo.findAllByUuidInAndOwner(uuids, owner)
-		.flatMap(entity -> self.deleteTrackWithQuota(entity.getUuid(), owner, entity.getData().length), 1, 1)
+		.flatMap(entity -> self.deleteTrackWithQuota(entity.getUuid(), owner, quotaOwner, entity.getData().length), 1, 1)
 		.then(Mono.fromRunnable(() -> log.info("Tracks deleted ({} for {})", uuids.size(), owner)));
 	}
 	
 	@Transactional
-	public Mono<Void> deleteTrackWithQuota(UUID uuid, String owner, int dataSize) {
+	public Mono<Void> deleteTrackWithQuota(UUID uuid, String owner, String quotaOwner, int dataSize) {
 		return repo.deleteByUuidAndOwner(uuid, owner)
-		.flatMap(nb -> nb == 0 ? Mono.empty() : quotaService.tracksDeleted(owner, 1, dataSize));
+		.flatMap(nb -> nb == 0 ? Mono.empty() : quotaService.tracksDeleted(quotaOwner, 1, dataSize));
 	}
 	
 	@SuppressWarnings("java:S2445") // synchronized on a parameter
 	public Mono<UpdateResponse<UuidAndOwner>> getUpdates(List<Versioned> known, Authentication auth) {
 		List<UuidAndOwner> newItems = new LinkedList<>();
 		List<UuidAndOwner> updatedItems = new LinkedList<>();
-		List<Select> selectAccessible = buildSelectAccessibleTracks(TrailenceUtils.email(auth));
-		return Flux.concat(selectAccessible.stream().map(select -> r2dbc.query(DbUtils.select(select, null, r2dbc), row -> Tuples.of((UUID) row.get("uuid"), (String) row.get("owner"), (Long) row.get("version"))).all()).toList())
+		List<Select> selectAccessible = buildSelectAccessibleTracks(auth);
+		return Flux.concat(
+			selectAccessible.stream()
+			.map(select -> r2dbc.query(DbUtils.select(select, null, r2dbc), row -> Tuples.of((UUID) row.get("uuid"), (String) row.get("owner"), (Long) row.get("version"))).all())
+			.toList()
+		)
 		.distinct()
 		.doOnNext(version -> {
 			Optional<Versioned> knownOpt;
@@ -179,7 +231,10 @@ public class TrackService {
 		}));
 	}
 	
-	private List<Select> buildSelectAccessibleTracks(String email) {
+	private List<Select> buildSelectAccessibleTracks(Authentication auth) {
+		List<Select> selects = new LinkedList<>();
+		String email = TrailenceUtils.email(auth);
+		
 		Select sharedWithMe = shareService.selectSharedElementsWithMe(
 			email,
 			new Expression[] { TrackEntity.COL_UUID, TrackEntity.COL_OWNER, TrackEntity.COL_VERSION },
@@ -191,23 +246,49 @@ public class TrackService {
 			),
 			null
 		);
+		selects.add(sharedWithMe);
 
     	Select owned = Select.builder()
 			.select(TrackEntity.COL_UUID, TrackEntity.COL_OWNER, TrackEntity.COL_VERSION)
 			.from(TrackEntity.TABLE)
 			.where(Conditions.isEqual(TrackEntity.COL_OWNER, SQL.literalOf(email)))
 			.build();
+    	selects.add(owned);
     	
-    	return List.of(owned, sharedWithMe);
+    	if (AuthDetails.getVersion(auth) >= SharedCollectionUtils.MIN_VERSION_FOR_SHARED)
+    		selects.add(
+    			Select.builder()
+    			.select(
+    				TrackEntity.COL_UUID,
+    				SimpleFunction.create("CONCAT", List.of(SQL.literalOf(SharedCollectionUtils.SHARED_OWNER_PREFIX), SharedCollectionMemberEntity.COL_UUID)).as(TrackEntity.COL_OWNER.getName()),
+    				TrackEntity.COL_VERSION
+    			)
+    			.from(SharedCollectionMemberEntity.TABLE)
+    			.join(TrackEntity.TABLE)
+    				.on(Conditions.isEqual(
+    		        	TrackEntity.COL_OWNER,
+    		        	SimpleFunction.create("CONCAT", List.of(SQL.literalOf(SharedCollectionUtils.SHARED_OWNER_PREFIX), SharedCollectionMemberEntity.COL_SHARED_COLLECTION_UUID))
+    		        ))
+    			.where(Conditions.isEqual(SharedCollectionMemberEntity.COL_OWNER, SQL.literalOf(email)))
+    			.build()
+    		);
+    	
+    	return selects;
 	}
 	
-	public Mono<Track> getTrack(String uuid, String owner, Authentication auth) {
-		String email = owner.toLowerCase();
-		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), email)
-			.map(this::toDTO)
-			.switchIfEmpty(Mono.error(new TrackNotFound(email, uuid)));
+	public Mono<Track> getTrack(String uuid, String requestOwner, Authentication auth) {
+		String owner = requestOwner.toLowerCase();
+		Mono<Track> getFromDB = repo.findByUuidAndOwner(UUID.fromString(uuid), owner)
+			.map(e -> toDTO(e, null))
+			.switchIfEmpty(Mono.error(new TrackNotFound(owner, uuid)));
 		String user = TrailenceUtils.email(auth);
-		if (email.equals(user)) return getFromDB;
+		if (owner.equals(user)) return getFromDB;
+		
+		if (SharedCollectionUtils.isSharedCollectionOwner(owner))
+			return sharedCollectionMemberRepo.findByUuidAndOwner(SharedCollectionUtils.getSharedCollectionUuid(owner), user)
+			.flatMap(member -> repo.findByUuidAndOwner(UUID.fromString(uuid), SharedCollectionUtils.SHARED_OWNER_PREFIX + member.getSharedCollectionUuid()))
+			.map(e -> toDTO(e, owner))
+			.switchIfEmpty(Mono.error(new TrackNotFound(owner, uuid)));
 		
 		Select sharedWithMe = shareService.selectSharedElementsWithMe(
 			user,
@@ -223,16 +304,16 @@ public class TrackService {
 		);
 		return r2dbc.query(DbUtils.select(sharedWithMe, null, r2dbc), UUID.class).first().hasElement()
 		.flatMap(isSharedWithMe -> {
-			if (!isSharedWithMe.booleanValue()) return Mono.error(new TrackNotFound(email, uuid));
+			if (!isSharedWithMe.booleanValue()) return Mono.error(new TrackNotFound(owner, uuid));
 			return getFromDB;
 		});
 	}
 	
 	@SuppressWarnings("java:S112") // generic exception
-	public Track toDTO(TrackEntity entity) {
+	public Track toDTO(TrackEntity entity, String ownerForCaller) {
 		Track dto = new Track();
 		dto.setUuid(entity.getUuid().toString());
-		dto.setOwner(entity.getOwner());
+		dto.setOwner(ownerForCaller != null ? ownerForCaller : entity.getOwner());
 		dto.setVersion(entity.getVersion());
 		dto.setCreatedAt(entity.getCreatedAt());
 		dto.setUpdatedAt(entity.getUpdatedAt());

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TrailTag {
 
+	private String owner;
 	private String tagUuid;
 	private String trailUuid;
 	private long createdAt;

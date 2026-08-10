@@ -11,9 +11,12 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.trailence.auth.db.UserKeyRepository;
 import org.trailence.auth.dto.AuthResponse;
+import org.trailence.auth.dto.ForgotPasswordRequest;
 import org.trailence.auth.dto.InitRenewRequest;
 import org.trailence.auth.dto.InitRenewResponse;
 import org.trailence.auth.dto.LoginRequest;
@@ -22,7 +25,12 @@ import org.trailence.auth.dto.UserKey;
 import org.trailence.captcha.CaptchaService;
 import org.trailence.test.AbstractTest;
 import org.trailence.test.TestUtils;
+import org.trailence.test.TestService.TestUser;
 import org.trailence.test.stubs.CaptchaStub;
+import org.trailence.user.dto.ChangePasswordRequest;
+import org.trailence.user.dto.RegisterNewUserCodeRequest;
+import org.trailence.user.dto.RegisterNewUserRequest;
+import org.trailence.user.dto.ResetPasswordRequest;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -551,6 +559,234 @@ class TestAuth extends AbstractTest {
 			.anyMatch(k -> k.getId().toString().equals(login1.getAuth().getKeyId()))
 			.anyMatch(k -> k.getId().toString().equals(login4.getAuth().getKeyId()))
 			;
+	}
+	
+	@Test
+	void testChangePassword() {
+		var user = test.createUserAndLogin();
+		
+		var response = user.get("/api/user/v1/sendChangePasswordCode?lang=aa");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		var email = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
+		assertThat(email.getT1()).isEqualTo("Your code to change your password on trailence.org");
+		assertThat(email.getT2()).contains("Here is your code to change your password on trailence.org: ");
+		int i = email.getT2().indexOf("Here is your code to change your password on trailence.org: ");
+		int j = email.getT2().indexOf("\r\n", i);
+		var code = email.getT2().substring(i + 60, j);
+
+		response = user.post("/api/user/v1/changePassword", new ChangePasswordRequest(user.getPassword(), "new_password", code));
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		var keyPair = test.generateKeyPair();
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new LoginRequest(user.getEmail(), "new_password", keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>(), null))
+			.post("/api/auth/v1/login");
+		assertThat(response.statusCode()).isEqualTo(200);
+	}
+
+	
+	@Test
+	void testForgotPassword() {
+		var user = test.createUser();
+		
+		var captchaToken = RandomStringUtils.secure().next(30);
+		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
+		
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ForgotPasswordRequest(user.getEmail(), captchaToken, "en"))
+			.post("/api/auth/v1/forgot");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
+		wireMockServer.removeStub(stub);
+
+		var email = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
+		assertThat(email.getT1()).isEqualTo("Your code to change your password on trailence.org");
+		assertThat(email.getT2()).contains("Here is your code to change your password on trailence.org: ");
+		int i = email.getT2().indexOf("Here is your code to change your password on trailence.org: ");
+		int j = email.getT2().indexOf("\r\n", i);
+		var code = email.getT2().substring(i + 60, j);
+
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ResetPasswordRequest(user.getEmail(), "new_password", code))
+			.post("/api/user/v1/resetPassword");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		var keyPair = test.generateKeyPair();
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new LoginRequest(user.getEmail(), "new_password", keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>(), null))
+			.post("/api/auth/v1/login");
+		assertThat(response.statusCode()).isEqualTo(200);
+	}
+	
+	@ParameterizedTest
+	@ValueSource(ints = { 1, 2, 3, 4 })
+	void testForgotPasswordWithInvalidCodeAttempts(int invalidAttempts) {
+		var user = test.createUser();
+		
+		var captchaToken = RandomStringUtils.secure().next(30);
+		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
+		
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ForgotPasswordRequest(user.getEmail(), captchaToken, "en"))
+			.post("/api/auth/v1/forgot");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
+		wireMockServer.removeStub(stub);
+
+		var email = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
+		assertThat(email.getT1()).isEqualTo("Your code to change your password on trailence.org");
+		assertThat(email.getT2()).contains("Here is your code to change your password on trailence.org: ");
+		int i = email.getT2().indexOf("Here is your code to change your password on trailence.org: ");
+		int j = email.getT2().indexOf("\r\n", i);
+		var code = email.getT2().substring(i + 60, j);
+
+		for (int attempts = 0; attempts < invalidAttempts; ++attempts) {
+			var invalidCode = RandomStringUtils.secure().nextNumeric(6);
+			while (invalidCode.equals(code)) invalidCode = RandomStringUtils.secure().nextNumeric(6);
+			response = RestAssured.given()
+				.contentType(ContentType.JSON)
+				.body(new ResetPasswordRequest(user.getEmail(), "new_password", invalidCode))
+				.post("/api/user/v1/resetPassword");
+			TestUtils.expectError(response, 400, "invalid-code");
+		}
+		
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ResetPasswordRequest(user.getEmail(), "new_password", code))
+			.post("/api/user/v1/resetPassword");
+		if (invalidAttempts >= 3) {
+			TestUtils.expectError(response, 400, "invalid-code");
+		} else {
+			assertThat(response.statusCode()).isEqualTo(200);
+		}
+		
+		var keyPair = test.generateKeyPair();
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new LoginRequest(user.getEmail(), "new_password", keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>(), null))
+			.post("/api/auth/v1/login");
+		if (invalidAttempts >= 3) {
+			TestUtils.expectError(response, 403, "invalid-credentials");
+		} else {
+			assertThat(response.statusCode()).isEqualTo(200);
+		}
+	}
+	
+	@Test
+	void testForgotPasswordCodeCancelled() {
+		var user = test.createUser();
+		
+		var captchaToken = RandomStringUtils.secure().next(30);
+		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
+		
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ForgotPasswordRequest(user.getEmail(), captchaToken, "en"))
+			.post("/api/auth/v1/forgot");
+		assertThat(response.statusCode()).isEqualTo(200);
+
+		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
+		wireMockServer.removeStub(stub);
+
+		var email = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
+		assertThat(email.getT1()).isEqualTo("Your code to change your password on trailence.org");
+		assertThat(email.getT2()).contains("Here is your code to change your password on trailence.org: ");
+		int i = email.getT2().indexOf("Here is your code to change your password on trailence.org: ");
+		int j = email.getT2().indexOf("\r\n", i);
+		var code = email.getT2().substring(i + 60, j);
+		
+		assertThat(email.getT2()).contains("https://trailence.org/link/");
+		i = email.getT2().indexOf("https://trailence.org/link/");
+		j = email.getT2().indexOf("\r\n", i);
+		var token = email.getT2().substring(i + 27, j);
+		
+		response = RestAssured.given()
+			.delete("/api/user/v1/changePassword?token=" + token);
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ResetPasswordRequest(user.getEmail(), "new_password", code))
+			.post("/api/user/v1/resetPassword");
+		TestUtils.expectError(response, 400, "invalid-code");
+	}
+
+
+	@Test
+	void testForgotPasswordInvalidCaptcha() {
+		var user = test.createUser();
+		
+		var captchaToken = RandomStringUtils.secure().next(30);
+		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, false);
+		
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new ForgotPasswordRequest(user.getEmail(), captchaToken, "en"))
+			.post("/api/auth/v1/forgot");
+		assertThat(response.statusCode()).isEqualTo(403);
+		
+		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
+		wireMockServer.removeStub(stub);
+	}
+
+	
+	@Test
+	void testRegisterThenDelete() {
+		var email = test.email();
+		
+		var captchaToken = RandomStringUtils.secure().next(30);
+		var stub = CaptchaStub.stubCaptcha(wireMockServer, captchaToken, true);
+		
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new RegisterNewUserCodeRequest(email, "en", captchaToken))
+			.post("/api/user/v1/sendRegisterCode");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		assertThat(wireMockServer.countRequestsMatching(stub.getRequest()).getCount()).isEqualTo(1);
+		wireMockServer.removeStub(stub);
+
+		var mail = assertMailSent("trailence@trailence.org", email.toLowerCase());
+		assertThat(mail.getT1()).isEqualTo("Confirm the creation of your account on trailence.org");
+		assertThat(mail.getT2()).contains("Here is your code to confirm the creation of your account on trailence.org: ");
+		int i = mail.getT2().indexOf("Here is your code to confirm the creation of your account on trailence.org: ");
+		int j = mail.getT2().indexOf("\r\n", i);
+		var code = mail.getT2().substring(i + 76, j);
+
+		response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new RegisterNewUserRequest(email, "en", code, "my_password"))
+			.post("/api/user/v1/registerNewUser");
+		assertThat(response.statusCode()).isEqualTo(200);
+
+		assertThat(test.asAdmin().listUsers().getElements().stream().anyMatch(u -> u.getEmail().equals(email.toLowerCase()))).isTrue();
+		
+		// login
+		var user = test.login(new TestUser(email, "my_password"), null, new HashMap<String, Object>());
+		
+		// delete me
+		response = user.post("/api/user/v1/sendDeletionCode?lang=en", "");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		mail = assertMailSent("trailence@trailence.org", email.toLowerCase());
+		assertThat(mail.getT1()).isEqualTo("Confirm the deletion of your account on trailence.org");
+		assertThat(mail.getT2()).contains("Here is your code to confirm the deletion of your account on trailence.org: ");
+		i = mail.getT2().indexOf("Here is your code to confirm the deletion of your account on trailence.org: ");
+		j = mail.getT2().indexOf("\r\n", i);
+		code = mail.getT2().substring(i + 76, j);
+		
+		response = user.post("/api/user/v1/deleteMe", code);
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		assertThat(test.asAdmin().listUsers().getElements().stream().anyMatch(u -> u.getEmail().equals(email.toLowerCase()))).isFalse();
 	}
 	
 }

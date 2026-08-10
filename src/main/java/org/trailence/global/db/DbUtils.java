@@ -7,6 +7,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.StreamSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.r2dbc.dialect.DialectResolver;
@@ -35,6 +37,8 @@ import reactor.core.publisher.Mono;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class DbUtils {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(DbUtils.class);
 
 	public static PreparedOperation<Select> select(Select select, Bindings bindings, R2dbcEntityTemplate r2dbc) {
 		return preparedOperation(select, bindings, () -> getRenderer(r2dbc).render(select));
@@ -67,7 +71,10 @@ public final class DbUtils {
 			
 			@Override
 			public String toQuery() {
-				return toQuery.get();
+				String q = toQuery.get();
+				if (LOGGER.isDebugEnabled())
+					LOGGER.debug(q);
+				return q;
 			}
 		};
 	}

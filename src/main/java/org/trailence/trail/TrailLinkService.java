@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -14,10 +15,12 @@ import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
 import org.trailence.global.exceptions.ConflictException;
 import org.trailence.global.exceptions.NotFoundException;
+import org.trailence.global.rest.AuthDetails;
 import org.trailence.storage.FileService;
 import org.trailence.trail.TrackStorage.V1.StoredData;
 import org.trailence.trail.db.PhotoEntity;
 import org.trailence.trail.db.PhotoRepository;
+import org.trailence.trail.db.SharedCollectionMemberRepository;
 import org.trailence.trail.db.TrackEntity;
 import org.trailence.trail.db.TrackRepository;
 import org.trailence.trail.db.TrailEntity;
@@ -32,6 +35,7 @@ import org.trailence.trail.exceptions.TrailNotFound;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
 import reactor.util.function.Tuple3;
 import reactor.util.function.Tuples;
 
@@ -45,37 +49,49 @@ public class TrailLinkService {
 	private final TrackRepository trackRepo;
 	private final PhotoRepository photoRepo;
 	private final FileService fileService;
+	private final SharedCollectionMemberRepository sharedCollectionMemberRepo;
 
 	public Mono<List<MyTrailLink>> getMyLinks(Authentication auth) {
-		String email = TrailenceUtils.email(auth);
-		return linkRepo.findAllByAuthor(email).map(this::toMyTrailLink).collectList();
+		String user = TrailenceUtils.email(auth);
+		return Flux.concat(
+			Mono.just(Tuples.of(user, user)),
+			AuthDetails.getVersion(auth) < SharedCollectionUtils.MIN_VERSION_FOR_SHARED ? Flux.empty() :
+				sharedCollectionMemberRepo.findAllByOwner(user)
+				.map(member -> Tuples.of(SharedCollectionUtils.SHARED_OWNER_PREFIX + member.getSharedCollectionUuid(), SharedCollectionUtils.SHARED_OWNER_PREFIX + member.getUuid()))
+		).collectList()
+		.flatMapMany(authors ->
+			linkRepo.findAllByAuthorIn(authors.stream().map(Tuple2::getT1).toList())
+			.map(entity -> toMyTrailLink(entity, authors.stream().filter(a -> a.getT1().equals(entity.getAuthor())).findAny().get().getT2()))
+		).collectList();
 	}
 	
-	public Mono<MyTrailLink> createLink(String trailUuid, Authentication auth) {
+	public Mono<MyTrailLink> createLink(String trailUuid, Optional<String> trailOwner, Authentication auth) {
 		UUID trailId = UUID.fromString(trailUuid);
-		String email = TrailenceUtils.email(auth);
-		return linkRepo.findOneByAuthorAndAuthorUuid(email, trailId)
+		return SharedCollectionUtils.getOwner(trailOwner, auth, sharedCollectionMemberRepo)
+		.flatMap(owner ->
+			linkRepo.findOneByAuthorAndAuthorUuid(owner.getAuthorInDb(), trailId)
 			.flatMap(_ -> Mono.error(() -> new ConflictException("trail-link-exists", "This trail already has a link")))
-			.then(trailRepo.findByUuidAndOwner(trailId, email))
-			.switchIfEmpty(Mono.error(() -> new TrailNotFound(trailUuid, email)))
+			.then(trailRepo.findByUuidAndOwner(trailId, owner.getAuthorInDb()))
+			.switchIfEmpty(Mono.error(() -> new TrailNotFound(trailUuid, owner.getAuthorForUser())))
 			.then(Mono.defer(() -> {
 				TrailLinkEntity entity = new TrailLinkEntity(
 					UUID.randomUUID(),
 					UUID.randomUUID(),
 					UUID.randomUUID(),
-					email,
+					owner.getAuthorInDb(),
 					trailId,
 					System.currentTimeMillis()
 				);
 				return r2dbc.insert(entity);
 			}))
-			.map(this::toMyTrailLink);
+			.map(e -> toMyTrailLink(e, owner.getAuthorForUser()))
+		);
 	}
 	
-	public Mono<Void> deleteLink(String trailUuid, Authentication auth) {
+	public Mono<Void> deleteLink(String trailUuid, Optional<String> trailOwner, Authentication auth) {
 		UUID trailId = UUID.fromString(trailUuid);
-		String email = TrailenceUtils.email(auth);
-		return linkRepo.deleteAllByAuthorUuidInAndAuthor(List.of(trailId), email);
+		return SharedCollectionUtils.getOwner(trailOwner, auth, sharedCollectionMemberRepo)
+		.flatMap(owner -> linkRepo.deleteAllByAuthorUuidInAndAuthor(List.of(trailId), owner.getAuthorInDb()));
 	}
 	
 	public Mono<TrailLinkContent> getTrailByLink(String link) {
@@ -114,9 +130,10 @@ public class TrailLinkService {
 		return linkRepo.deleteAllByAuthorUuidInAndAuthor(uuids, owner);
 	}
 	
-	private MyTrailLink toMyTrailLink(TrailLinkEntity entity) {
+	private MyTrailLink toMyTrailLink(TrailLinkEntity entity, String myOwner) {
 		return new MyTrailLink(
 			toLink(entity),
+			myOwner,
 			entity.getAuthorUuid().toString(),
 			entity.getCreatedAt()
 		);

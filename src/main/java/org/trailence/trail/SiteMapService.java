@@ -6,6 +6,7 @@ import org.apache.commons.lang3.time.DateFormatUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.trailence.global.TrailenceUtils;
+import org.trailence.trail.db.PublicTrailRepository.SlugWithDatesAndLanguages;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -65,29 +66,7 @@ public class SiteMapService {
 			Mono.just(XML_HEADER),
 			Mono.just(URLSET_HEADER),
 			service.slugsWithDatesAndLanguages(((long) (page - 1)) * MAX_TRAILS_BY_SITEMAP, MAX_TRAILS_BY_SITEMAP)
-			.map(slug -> {
-				StringBuilder s = new StringBuilder(2048);
-				long ts = slug.getUpdatedAt();
-				if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
-				if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
-				String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
-				for (String lang : slug.getLanguages()) {
-					s.append(URL_START);
-						s.append(LOC_START);publicUrl(lang, slug.getSlug(), s).append(LOC_END);
-						s.append(LASTMOD_START).append(date).append(LASTMOD_END);
-						if (slug.getLanguages().size() > 1) {
-							for (String alternateLange : slug.getLanguages()) {
-								alternate(alternateLange, slug.getSlug(), s);
-							}
-						}
-					s.append(URL_END);
-				}
-				s.append(URL_START);
-					s.append(LOC_START).append(protocol).append("://").append(hostname).append("/trail/trailence/").append(slug.getSlug()).append(LOC_END);
-					s.append(LASTMOD_START).append(date).append(LASTMOD_END);
-				s.append(URL_END);
-				return s;
-			})
+			.map(this::slugToSiteMapEntries)
 			.buffer(20)
 			.map(list -> {
 				if (list.isEmpty()) return new byte[0];
@@ -97,6 +76,30 @@ public class SiteMapService {
 			}),
 			Mono.just(URLSET_FOOTER)
 		);
+	}
+	
+	private StringBuilder slugToSiteMapEntries(SlugWithDatesAndLanguages slug) {
+		StringBuilder s = new StringBuilder(2048);
+		long ts = slug.getUpdatedAt();
+		if (slug.getLatestFeedbackAt() != null && slug.getLatestFeedbackAt().longValue() > ts) ts = slug.getLatestFeedbackAt().longValue();
+		if (TrailenceUtils.STARTUP_TIME > ts) ts = TrailenceUtils.STARTUP_TIME;
+		String date = DateFormatUtils.ISO_8601_EXTENDED_DATE_FORMAT.format(ts);
+		for (String lang : slug.getLanguages()) {
+			s.append(URL_START);
+				s.append(LOC_START);publicUrl(lang, slug.getSlug(), s).append(LOC_END);
+				s.append(LASTMOD_START).append(date).append(LASTMOD_END);
+				if (slug.getLanguages().size() > 1) {
+					for (String alternateLange : slug.getLanguages()) {
+						alternate(alternateLange, slug.getSlug(), s);
+					}
+				}
+			s.append(URL_END);
+		}
+		s.append(URL_START);
+			s.append(LOC_START).append(protocol).append("://").append(hostname).append("/trail/trailence/").append(slug.getSlug()).append(LOC_END);
+			s.append(LASTMOD_START).append(date).append(LASTMOD_END);
+		s.append(URL_END);
+		return s;
 	}
 	
 	private StringBuilder publicUrl(String lang, String slug, StringBuilder s) {

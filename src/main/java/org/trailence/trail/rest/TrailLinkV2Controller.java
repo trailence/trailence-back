@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.trailence.trail.TrailLinkService;
+import org.trailence.trail.dto.CreatePublicLinkRequest;
 import org.trailence.trail.dto.MyTrailLink;
 import org.trailence.trail.dto.TrailLinkContent;
 
@@ -23,11 +24,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("/api/trail-link/v1")
+@RequestMapping("/api/trail-link/v2")
 @RequiredArgsConstructor
-@Deprecated(since = "2.3.0", forRemoval = true)
-@SuppressWarnings("java:S1123")
-public class TrailLinkV1Controller {
+public class TrailLinkV2Controller {
 
 	private final TrailLinkService service;
 	
@@ -37,13 +36,13 @@ public class TrailLinkV1Controller {
 	}
 	
 	@PostMapping
-	public Mono<MyTrailLink> createLink(@RequestBody String trailUuid, Authentication auth) {
-		return service.createLink(trailUuid, Optional.empty(), auth);
+	public Mono<MyTrailLink> createLink(@RequestBody CreatePublicLinkRequest request, Authentication auth) {
+		return service.createLink(request.getTrailUuid(), Optional.ofNullable(request.getTrailOwner()), auth);
 	}
 	
-	@DeleteMapping("/{trailUuid}")
-	public Mono<Void> deleteLink(@PathVariable("trailUuid") String trailUuid, Authentication auth) {
-		return service.deleteLink(trailUuid, Optional.empty(), auth);
+	@DeleteMapping("/{trailOwner}/{trailUuid}")
+	public Mono<Void> deleteLink(@PathVariable("trailOwner") String trailOwner, @PathVariable("trailUuid") String trailUuid, Authentication auth) {
+		return service.deleteLink(trailUuid, Optional.of(trailOwner), auth);
 	}
 	
 	@GetMapping("/trail/{link}")

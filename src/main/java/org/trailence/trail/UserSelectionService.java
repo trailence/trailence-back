@@ -27,7 +27,7 @@ public class UserSelectionService {
 	private final R2dbcEntityTemplate r2dbc;
 	
 	public Mono<List<UserSelection>> getMySelection(Authentication auth) {
-		return repo.findById(auth.getPrincipal().toString())
+		return repo.findById(TrailenceUtils.email(auth))
 		.map(selection -> {
 			try {
 				return TrailenceUtils.mapper.readValue(selection.getSelection().asArray(), new TypeReference<List<UserSelection>>() {});
@@ -41,7 +41,7 @@ public class UserSelectionService {
 	
 	@Transactional
 	public Mono<List<UserSelection>> createSelection(List<UserSelection> newSelection, Authentication auth) {
-		return repo.findByIdForUpdate(auth.getPrincipal().toString())
+		return repo.findByIdForUpdate(TrailenceUtils.email(auth))
 		.flatMap(entity -> {
 			try {
 				List<UserSelection> current = TrailenceUtils.mapper.readValue(entity.getSelection().asArray(), new TypeReference<List<UserSelection>>() {});
@@ -70,7 +70,7 @@ public class UserSelectionService {
 	
 	@Transactional
 	public Mono<Void> deleteSelection(List<UserSelection> selectionToDelete, Authentication auth) {
-		return repo.findByIdForUpdate(auth.getPrincipal().toString())
+		return repo.findByIdForUpdate(TrailenceUtils.email(auth))
 		.flatMap(entity -> {
 			try {
 				List<UserSelection> current = TrailenceUtils.mapper.readValue(entity.getSelection().asArray(), new TypeReference<List<UserSelection>>() {});

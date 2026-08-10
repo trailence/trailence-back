@@ -35,6 +35,7 @@ import org.trailence.trail.dto.Track;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailAndPhotos;
 import org.trailence.trail.dto.TrailCollectionType;
+import org.trailence.trail.exceptions.CollectionNotFound;
 import org.trailence.trail.exceptions.TrailNotFound;
 
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("java:S6539")
 public class ModerationService {
 	
 	private final TrailRepository trailRepo;
@@ -66,9 +68,9 @@ public class ModerationService {
 		return trailRepo.findTrailsToReview(TrailenceUtils.isAdmin(auth) ? "" : TrailenceUtils.email(auth), size)
 		.flatMap(trail ->
 			photoRepo.findAllByTrailUuidInAndOwner(List.of(trail.getUuid()), trail.getOwner())
-			.map(photoService::toDto)
+			.map(e -> photoService.toDto(e, null))
 			.collectList()
-			.map(photos -> new TrailAndPhotos(trailService.toDTO(trail), photos))
+			.map(photos -> new TrailAndPhotos(trailService.toDTO(trail, null), photos))
 		, 2, 1)
 		.flatMap(this::addMessages, 1, 1);
 	}
@@ -80,9 +82,9 @@ public class ModerationService {
 		.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, owner)))
 		.flatMap(trail ->
 			photoRepo.findAllByTrailUuidInAndOwner(List.of(trail.getUuid()), trail.getOwner())
-			.map(photoService::toDto)
+			.map(e -> photoService.toDto(e, null))
 			.collectList()
-			.map(photos -> new TrailAndPhotos(trailService.toDTO(trail), photos))
+			.map(photos -> new TrailAndPhotos(trailService.toDTO(trail, null), photos))
 		)
 		.flatMap(this::addMessages);
 	}
@@ -100,7 +102,7 @@ public class ModerationService {
 	public Mono<Track> getTrackFromReview(String trailUuid, String trailOwner, String trackUuid, Authentication auth) {
 		if (trailOwner.toLowerCase().equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
 		return trackRepo.findTrackForReview(UUID.fromString(trailUuid), UUID.fromString(trackUuid), trailOwner.toLowerCase())
-		.map(trackService::toDTO)
+		.map(e -> trackService.toDTO(e, null))
 		.switchIfEmpty(Mono.error(new NotFoundException("track", trackUuid)));
 	}
 	
@@ -138,7 +140,7 @@ public class ModerationService {
 			.switchIfEmpty(Mono.error(new TrailNotFound(entity.getTrailUuid().toString(), owner)))
 			.flatMap(trail ->
 				collectionRepo.findByUuidAndOwner(trail.getCollectionUuid(), owner)
-				.switchIfEmpty(Mono.error(new NotFoundException("collection", "PUB_SUBMIT-" + owner)))
+				.switchIfEmpty(Mono.error(new CollectionNotFound("PUB_SUBMIT-" + owner)))
 				.flatMap(collection -> {
 					if (!TrailCollectionType.PUB_SUBMIT.equals(collection.getType()))
 						return Mono.error(new TrailNotFound(entity.getTrailUuid().toString(), owner));
@@ -158,32 +160,28 @@ public class ModerationService {
 				collectionRepo.findByUuidAndOwner(trail.getCollectionUuid(), email)
 				.flatMap(collection -> {
 					if (!TrailCollectionType.PUB_SUBMIT.equals(collection.getType())) return Mono.empty();
-					return photoService.deletePhotoWithFileAndQuota(entity).then();
+					return photoService.deletePhotoWithFileAndQuota(entity, owner).then();
 				})
 			)
 		);
 	}
 	
-	public Mono<Photo> createPhoto(
-		String photoUuid, String owner, String trailUuid,
-		String description, Long dateTaken, Long latitude, Long longitude, boolean isCover, int index,
-		Flux<DataBuffer> content, long size,
-		Authentication auth
-	) {
-		String email = owner.toLowerCase();
+	public Mono<Photo> createPhoto(Photo dto, Flux<DataBuffer> content, long size, Authentication auth) {
+		String email = dto.getOwner().toLowerCase();
 		if (email.equals(TrailenceUtils.email(auth)) && !TrailenceUtils.isAdmin(auth)) return Mono.error(new ForbiddenException());
-		ValidationUtils.field("photoUuid", photoUuid).notNull().isUuid();
-		ValidationUtils.field("trailUuid", trailUuid).notNull().isUuid();
-		ValidationUtils.field("description", description).nullable().maxLength(5000);
-		return trailRepo.findByUuidAndOwner(UUID.fromString(trailUuid), email)
+		ValidationUtils.field("photoUuid", dto.getUuid()).notNull().isUuid();
+		ValidationUtils.field("trailUuid", dto.getTrailUuid()).notNull().isUuid();
+		ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
+		return trailRepo.findByUuidAndOwner(UUID.fromString(dto.getTrailUuid()), email)
 			.flatMap(trail ->
 				collectionRepo.findByUuidAndOwner(trail.getCollectionUuid(), email)
 				.flatMap(collection -> {
 					if (!TrailCollectionType.PUB_SUBMIT.equals(collection.getType())) return Mono.empty();
-					return photoService.createPhotoWithQuota(photoUuid, owner, trailUuid, description, dateTaken, latitude, longitude, isCover, index, content, size);
+					return photoService.createPhotoWithQuota(dto, email, email, content, size)
+					.map(entity -> photoService.toDto(entity, null));
 				})
 			)
-			.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, email)));
+			.switchIfEmpty(Mono.error(new TrailNotFound(dto.getTrailUuid(), email)));
 	}
 	
 	public Mono<Trail> updateTrailTrack(String trailUuid, String trailOwner, Track track, Authentication auth) {
@@ -195,7 +193,7 @@ public class ModerationService {
 		.flatMap(trail ->
 			trackService.createTrackAsSuperUser(track)
 			.flatMap(newTrack -> {
-				var newDto = trailService.toDTO(trail);
+				var newDto = trailService.toDTO(trail, null);
 				newDto.setCurrentTrackUuid(newTrack.getUuid());
 				return trailService.updateTrailAsModerator(trail, newDto, false);
 			})
@@ -226,12 +224,12 @@ public class ModerationService {
 	}
 	
 	private Mono<List<UuidAndTrailUuid>> getFeedbackUuidWithTrailToReview(String emailToExclude) {
-		return (emailToExclude == null ? feedbackRepo.getToReview() : feedbackRepo.getToReview(emailToExclude)).collectList()
+		return getFeedbacksToReview(emailToExclude).collectList()
 		.flatMap(uuids -> {
 			Set<UUID> notIn = new HashSet<>();
 			for (var u : uuids) notIn.add(u.getUuid());
 			if (notIn.isEmpty()) notIn.add(UUID.randomUUID());
-			return (emailToExclude == null ? feedbackReplyRepo.getToReview(notIn) : feedbackReplyRepo.getToReview(notIn, emailToExclude)).collectList()
+			return getRepliesToReview(notIn, emailToExclude).collectList()
 			.map(moreUuids -> {
 				if (moreUuids.isEmpty()) return uuids;
 				List<UuidAndTrailUuid> all = new ArrayList<>(uuids.size() + moreUuids.size());
@@ -240,6 +238,16 @@ public class ModerationService {
 				return all;
 			});
 		});
+	}
+	
+	private Flux<UuidAndTrailUuid> getFeedbacksToReview(String emailToExclude) {
+		if (emailToExclude == null) return feedbackRepo.getToReview();
+		return feedbackRepo.getToReview(emailToExclude);
+	}
+	
+	private Flux<UuidAndTrailUuid> getRepliesToReview(Set<UUID> notIn, String emailToExclude) {
+		if (emailToExclude == null) return feedbackReplyRepo.getToReview(notIn);
+		return feedbackReplyRepo.getToReview(notIn, emailToExclude);
 	}
 	
 	public Mono<Void> feedbackValidated(String feedbackUuid, Authentication auth) {

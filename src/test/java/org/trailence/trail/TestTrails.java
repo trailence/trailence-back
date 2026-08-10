@@ -7,6 +7,8 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.test.AbstractTest;
@@ -101,8 +103,8 @@ class TestTrails extends AbstractTest {
 		var mytrails = user.getMyTrails();
 		var trail = user.createTrail(mytrails, true);
 		
-		var newTrack1 = user.createTrack();
-		var newTrack2 = user.createTrack();
+		var newTrack1 = user.createTrack(mytrails);
+		var newTrack2 = user.createTrack(mytrails);
 		
 		var originalTrackUuid = trail.getOriginalTrackUuid();
 		trail.setOriginalTrackUuid(newTrack1.getUuid());
@@ -121,7 +123,7 @@ class TestTrails extends AbstractTest {
 	void createWithNullables() {
 		var user = test.createUserAndLogin();
 		var col = user.getMyTrails();
-		var track = user.createTrack();
+		var track = user.createTrack(col);
 		
 		var response = user.post("/api/trail/v1/_bulkCreate", List.of(new Trail(
 			UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0,
@@ -175,8 +177,8 @@ class TestTrails extends AbstractTest {
 		var col1 = user1.getMyTrails();
 		var col2 = user2.getMyTrails();
 		
-		var track1 = user1.createTrack();
-		var track2 = user2.createTrack();
+		var track1 = user1.createTrack(col1);
+		var track2 = user2.createTrack(col1);
 		
 		// create with collection of another user
 		var response = user1.post("/api/trail/v1/_bulkCreate", List.of(new Trail(
@@ -289,7 +291,7 @@ class TestTrails extends AbstractTest {
 	void createWithInvalidInput() {
 		var user = test.createUserAndLogin();
 		var col = user.getMyTrails();
-		var track = user.createTrack();
+		var track = user.createTrack(col);
 		
 		var response = user.post("/api/trail/v1/_bulkCreate", List.of(new Trail(
 			null, user.getEmail(), 0, 0, 0,
@@ -656,6 +658,22 @@ class TestTrails extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		var updated = response.getBody().as(Trail[].class);
 		assertThat(updated).singleElement().isEqualTo(trail);
+	}
+	
+	@ParameterizedTest
+	@ValueSource(ints = {20000, 20300})
+	void testPublicLinkV1V2(int clientVersion) {
+		var user = test.createUserAndLogin();
+		user.setClientVersion(clientVersion);
+		var col = user.getMyTrails();
+		var trail = user.createTrail(col, true);
+		assertThat(user.getPublicLinks()).isEmpty();
+		var link = user.createPublicLink(trail);
+		assertThat(user.getPublicLinks()).singleElement().isEqualTo(link);
+		var content = user.getPublicLinkContent(link);
+		assertThat(content.getTrail().getDescription()).isEqualTo(trail.getDescription());
+		user.deletePublicLink(link);
+		assertThat(user.getPublicLinks()).isEmpty();
 	}
 	
 }

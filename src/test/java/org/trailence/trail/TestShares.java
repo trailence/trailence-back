@@ -83,7 +83,7 @@ class TestShares extends AbstractTest {
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
 		assertThat(auth.isComplete()).isFalse();
-		var friend = new TestUserLoggedIn(to, null, keyPair, auth, response.getCookie("trailence_token"));
+		var friend = new TestUserLoggedIn(to, null, keyPair, auth, response.getCookie("trailence_token"), TestUserLoggedIn.DEFAULT_CLIENT_VERSION);
 		
 		assertThat(friend.getCollections()).singleElement().extracting(c -> c.getType()).isEqualTo(TrailCollectionType.MY_TRAILS);
 		friend.expectTracksIds(sharedTracks);

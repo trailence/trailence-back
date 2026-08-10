@@ -42,6 +42,7 @@ import org.trailence.global.db.PlusExpression;
 import org.trailence.global.db.SqlBuilder;
 import org.trailence.global.exceptions.BadRequestException;
 import org.trailence.global.exceptions.ForbiddenException;
+import org.trailence.global.exceptions.InternalException;
 import org.trailence.global.exceptions.NotFoundException;
 import org.trailence.global.exceptions.ValidationUtils;
 import org.trailence.notifications.NotificationsService;
@@ -87,6 +88,7 @@ import tools.jackson.core.type.TypeReference;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("java:S6539")
 public class PublicTrailService {
 	
 	private final PublicTrailRepository publicTrailRepo;
@@ -128,7 +130,7 @@ public class PublicTrailService {
 				r2dbc.insert(toTrackEntity(tuple.getT1(), request))
 				.then(Flux.fromIterable(request.getPhotos()).flatMap(p -> photoService.transferToPublic(UUID.fromString(p.getUuid()), author, tuple.getT1(), p), 1, 1).then())
 				.then(r2dbc.insert(toTrailEntity(tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), request)).flatMap(this::updateTextSearch))
-				.then(trailService.delete(Flux.just(fromTrail), author))
+				.then(trailService.delete(Flux.just(fromTrail), author, author))
 				.then(notificationsService.create(author, "publications.accepted", List.of(request.getName(), tuple.getT1().toString())))
 				.then(userCommunityService.addPublication(author))
 			)
@@ -178,18 +180,8 @@ public class PublicTrailService {
 	
 	private PublicTrailEntity toTrailEntity(UUID uuid, String slug, PublicTrailEntity existing, CreatePublicTrailRequest request) {
 		long now = System.currentTimeMillis();
-		Json nameTranslations = null;
-		Json descriptionTranslations = null;
-		try {
-			nameTranslations = Json.of(TrailenceUtils.mapper.writeValueAsBytes(request.getNameTranslations()));
-		} catch (Exception e) {
-			log.error("Mapping error", e);
-		}
-		try {
-			descriptionTranslations = Json.of(TrailenceUtils.mapper.writeValueAsBytes(request.getDescriptionTranslations()));
-		} catch (Exception e) {
-			log.error("Mapping error", e);
-		}
+		Json nameTranslations = TrailenceUtils.toJsonOrNull(request.getNameTranslations());
+		Json descriptionTranslations = TrailenceUtils.toJsonOrNull(request.getDescriptionTranslations());
 		return new PublicTrailEntity(
 			uuid,
 			request.getAuthor().toLowerCase(),
@@ -240,12 +232,7 @@ public class PublicTrailService {
 		var dialect = DialectResolver.getDialect(r2dbc.getDatabaseClient().getConnectionFactory());
 		MutableBindings bindings = new MutableBindings(dialect.getBindMarkersFactory().create());
 		
-		Map<String, String> nameTranslations = new HashMap<>();
-		try {
-			nameTranslations = TrailenceUtils.mapper.readValue(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {});
-		} catch (Exception e) {
-			log.error("Mapping error", e);
-		}
+		Map<String, String> nameTranslations = TrailenceUtils.fromJsonOr(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {}, new HashMap<>());
 		List<Tuple3<String, String, String>> searchTexts = new LinkedList<>();
 		for (var entry : TEXT_SEARCH_LANGS.entrySet()) {
 			String langCode = entry.getKey();
@@ -279,7 +266,8 @@ public class PublicTrailService {
 				TrackStorage.V1V2Bridge.v1DtoToV2(new StoredData(request.getFullTrack(), request.getWayPoints()))
 			);
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			log.error("Cannot encode track", e);
+			throw new InternalException(e);
 		}
 	}
 	
@@ -518,7 +506,7 @@ public class PublicTrailService {
 		return publicTrailRepo.findMyPublicTrails(user);
 	}
 	
-	public Mono<UserTrails> getUserTrails(String userPublicId, Authentication auth) {
+	public Mono<UserTrails> getUserTrails(String userPublicId) {
 		ValidationUtils.field("userId", userPublicId).notBlank().isUuid();
 		return userCommunityService.getUserCommunityFromPublicId(userPublicId)
 		.flatMap(user ->
@@ -529,18 +517,9 @@ public class PublicTrailService {
 	}
 	
 	private PublicTrail toPublicTrailDto(PublicTrailEntity entity, Stream<PublicPhotoEntity> photos, UserCommunity authorCommunity, Authentication auth) {
-		Map<String, String> nameTranslations = new HashMap<>();
-		Map<String, String> descriptionTranslations = new HashMap<>();
-		try {
-			nameTranslations = TrailenceUtils.mapper.readValue(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {});
-		} catch (Exception e) {
-			log.error("Mapping error", e);
-		}
-		try {
-			descriptionTranslations = TrailenceUtils.mapper.readValue(entity.getDescriptionTranslations().asArray(), new TypeReference<Map<String, String>>() {});
-		} catch (Exception e) {
-			log.error("Mapping error", e);
-		}
+		Map<String, String> nameTranslations = TrailenceUtils.fromJsonOr(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {}, new HashMap<>());
+		Map<String, String> descriptionTranslations = TrailenceUtils.fromJsonOr(entity.getDescriptionTranslations().asArray(), new TypeReference<Map<String, String>>() {}, new HashMap<>());
+		String caller = TrailenceUtils.email(auth);
 		return new PublicTrail(
 			entity.getUuid().toString(),
 			entity.getSlug(),
@@ -552,8 +531,8 @@ public class PublicTrailService {
 			authorCommunity.getNbPublications(),
 			authorCommunity.getNbComments(),
 			authorCommunity.getNbRates(),
-			auth == null || !auth.getPrincipal().toString().equals(entity.getAuthor()) || entity.getAuthorUuid() == null ? null : entity.getAuthorUuid().toString(),
-			auth != null && auth.getPrincipal().toString().equals(entity.getAuthor()),
+			auth == null || !caller.equals(entity.getAuthor()) || entity.getAuthorUuid() == null ? null : entity.getAuthorUuid().toString(),
+			auth != null && caller.equals(entity.getAuthor()),
 			entity.getName(),
 			entity.getDescription(),
 			entity.getLocation(),
@@ -608,7 +587,8 @@ public class PublicTrailService {
 			try {
 				return TrackStorage.V1V2Bridge.v2ToV1Dto(track.getData());
 			} catch (IOException e) {
-				throw new RuntimeException(e);
+				log.error("Cannot encode track", e);
+				throw new InternalException(e);
 			}
 		})
 		.map(data -> new PublicTrack(data.s, data.wp));

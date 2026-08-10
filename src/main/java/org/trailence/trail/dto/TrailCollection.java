@@ -1,5 +1,7 @@
 package org.trailence.trail.dto;
 
+import java.util.List;
+
 import org.trailence.global.dto.Versioned;
 
 import lombok.AllArgsConstructor;
@@ -20,5 +22,9 @@ public class TrailCollection implements Versioned.Interface {
 
     private String name;
     private TrailCollectionType type;
+    
+    // shared collections
+    private List<String> sharedWith;
+    private String sharedBy;
 
 }

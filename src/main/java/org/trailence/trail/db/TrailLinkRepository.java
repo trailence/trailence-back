@@ -12,7 +12,7 @@ public interface TrailLinkRepository extends ReactiveCrudRepository<TrailLinkEnt
 
 	Mono<TrailLinkEntity> findOneByAuthorAndAuthorUuid(String author, UUID authorUuid);
 	
-	Flux<TrailLinkEntity> findAllByAuthor(String author);
+	Flux<TrailLinkEntity> findAllByAuthorIn(Collection<String> authors);
 	
 	Mono<Void> deleteAllByAuthorUuidInAndAuthor(Collection<UUID> uuids, String author);
 	

@@ -28,6 +28,10 @@ public final class BulkGetUpdates {
         );
 	}
 
+	public static <E extends AbstractEntityUuidOwner, R, K> Mono<UpdateResponse<R>> bulkGetUpdates(R2dbcEntityTemplate r2dbc, Select selectAccessible, Class<E> entityClass, Function<E, K> uniqueKeyExtractor, List<Versioned> known, Function<E, R> mapper) {
+		return bulkGetUpdates(r2dbc, List.of(selectAccessible), entityClass, uniqueKeyExtractor, known, mapper);
+	}
+
 	public static <E extends AbstractEntityUuidOwner, R> Mono<UpdateResponse<R>> bulkGetUpdates(R2dbcEntityTemplate r2dbc, Select selectAccessible, Class<E> entityClass, List<Versioned> known, Function<E, R> mapper) {
 		return bulkGetUpdates(
 			r2dbc.query(DbUtils.select(selectAccessible, null, r2dbc), entityClass).all(),

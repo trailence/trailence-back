@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.trailence.global.TrailenceUtils;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.Versioned;
 import org.trailence.global.rest.RetryRest;
@@ -34,6 +35,7 @@ public class PhotoV1Controller {
 	
 	private final PhotoService service;
 
+	@Deprecated(since = "2.3.0", forRemoval = true)
 	@PostMapping(path = "/{trailUuid}/{photoUuid}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
 	public Mono<Photo> storePhoto(
 		@PathVariable("photoUuid") String photoUuid,
@@ -48,7 +50,51 @@ public class PhotoV1Controller {
 		ServerHttpRequest request,
 		Authentication auth
 	) {
-		return RetryRest.retry(service.storePhoto(photoUuid, trailUuid, description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
+		var dto = new Photo(
+			photoUuid,
+			TrailenceUtils.email(auth),
+			0L,
+			0L, 0L,
+			trailUuid,
+			description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null,
+			dateTaken,
+			latitude,
+			longitude,
+			isCover,
+			index
+		);
+		return RetryRest.retry(service.storePhoto(dto, request.getBody(), size, auth));
+	}
+
+	@PostMapping(path = "/{trailUuid}/{photoUuid}/{owner}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public Mono<Photo> storePhoto(
+		@PathVariable("photoUuid") String photoUuid,
+		@PathVariable("trailUuid") String trailUuid,
+		@PathVariable("owner") String owner,
+		@RequestHeader("X-Description") String description,
+		@RequestHeader(name = "X-DateTaken", required = false) Long dateTaken,
+		@RequestHeader(name = "X-Latitude", required = false) Long latitude,
+		@RequestHeader(name = "X-Longitude", required = false) Long longitude,
+		@RequestHeader(name = "X-Cover", defaultValue = "false") boolean isCover,
+		@RequestHeader(name = "X-Index", defaultValue = "1") int index,
+		@RequestHeader("Content-Length") long size,
+		ServerHttpRequest request,
+		Authentication auth
+	) {
+		var dto = new Photo(
+			photoUuid,
+			owner,
+			0L,
+			0L, 0L,
+			trailUuid,
+			description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null,
+			dateTaken,
+			latitude,
+			longitude,
+			isCover,
+			index
+		);
+		return RetryRest.retry(service.storePhoto(dto, request.getBody(), size, auth));
 	}
 	
 	@PutMapping("/_bulkUpdate")
@@ -59,6 +105,11 @@ public class PhotoV1Controller {
 	@PostMapping("/_bulkDelete")
 	public Mono<Long> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
 		return RetryRest.retry(service.bulkDelete(uuids, auth));
+	}
+	
+	@PostMapping("/_bulkDelete/{shareId}")
+	public Mono<Long> bulkDelete(@PathVariable("shareId") String shareId, @RequestBody List<String> uuids, Authentication auth) {
+		return RetryRest.retry(service.bulkDelete(shareId, uuids, auth));
 	}
 	
 	@PostMapping("/_bulkGetUpdates")

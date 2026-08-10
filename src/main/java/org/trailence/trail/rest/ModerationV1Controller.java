@@ -133,7 +133,20 @@ public class ModerationV1Controller {
 		ServerHttpRequest request,
 		Authentication auth
 	) {
-		return RetryRest.retry(service.createPhoto(photoUuid, photoOwner, trailUuid, description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null, dateTaken, latitude, longitude, isCover, index, request.getBody(), size, auth));
+		var dto = new Photo(
+			photoUuid,
+			photoOwner,
+			0L,
+			0L, 0L,
+			trailUuid,
+			description != null ? URLDecoder.decode(description, StandardCharsets.UTF_8) : null,
+			dateTaken,
+			latitude,
+			longitude,
+			isCover,
+			index
+		);
+		return RetryRest.retry(service.createPhoto(dto, request.getBody(), size, auth));
 	}
 
 	

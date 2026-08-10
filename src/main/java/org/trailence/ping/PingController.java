@@ -26,18 +26,19 @@ public class PingController {
 	@Value("${trailence.osm-data.v1}")
 	private long osmDataVersionV1;
 	
-	private static final String minSupportedVersion = "0.10.0";
+	private static final String MIN_SUPPORTED_VERSION = "0.13.0";
 	
-	private static PingResponse RESPONSE = null;
+	private static PingResponse response = null;
 	
 	@PostConstruct
+	@SuppressWarnings("java:S2696")
 	public void init() {
-		RESPONSE = new PingResponse(minSupportedVersion, Map.of(1, osmDataVersionV1));
+		response = new PingResponse(MIN_SUPPORTED_VERSION, Map.of(1, osmDataVersionV1));
 	}
 
 	@GetMapping
 	public Mono<PingResponse> ping() {
-		return Mono.just(RESPONSE);
+		return Mono.just(response);
 	}
 	
 }

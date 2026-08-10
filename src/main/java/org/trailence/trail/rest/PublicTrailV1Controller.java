@@ -77,8 +77,8 @@ public class PublicTrailV1Controller {
 	}
 	
 	@GetMapping("/user/{userId}")
-	public Mono<UserTrails> getUserTrails(@PathVariable("userId") String userId, Authentication auth) {
-		return service.getUserTrails(userId, auth);
+	public Mono<UserTrails> getUserTrails(@PathVariable("userId") String userId) {
+		return service.getUserTrails(userId);
 	}
 	
 	private static final long PHOTO_CACHE_SECONDS = 100L * 24 * 60 * 60;

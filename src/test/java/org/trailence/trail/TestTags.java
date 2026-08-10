@@ -182,11 +182,11 @@ class TestTags extends AbstractTest {
 		assertThat(user2.getTags().stream().filter(t -> t.getUuid().equals(tag2.getUuid()) && t.getName().equals(originalName)).findAny()).isPresent();
 		
 		// cannot attach tags
-		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag3.getUuid(), trail2.getUuid(), 0)));
+		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail2.getOwner(), tag3.getUuid(), trail2.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
-		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getUuid(), trail2.getUuid(), 0)));
+		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail2.getOwner(), tag1.getUuid(), trail2.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
-		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag3.getUuid(), trail1.getUuid(), 0)));
+		response = user1.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail1.getOwner(), tag3.getUuid(), trail1.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
 		
 		// cannot remove trail tag

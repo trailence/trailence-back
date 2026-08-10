@@ -304,8 +304,16 @@ public class QuotaService {
 		return incrementQuota(email, nb, UserQuotasEntity.COL_COLLECTIONS_USED, UserQuotasEntity.COL_COLLECTIONS_MAX, "collections");
 	}
 	
+	public Mono<Void> addSharedCollection(String email) {
+		return incrementQuota(email, 1L, UserQuotasEntity.COL_COLLECTIONS_USED, UserQuotasEntity.COL_COLLECTIONS_MAX, "collections", false).then();
+	}
+	
 	public Mono<Void> collectionsDeleted(String email, long nb) {
 		return decrementQuota(email, UserQuotasEntity.COL_COLLECTIONS_USED, nb);
+	}
+	
+	public Mono<Void> sharedCollectionDeleted(String email) {
+		return decrementQuota(email, UserQuotasEntity.COL_COLLECTIONS_USED, 1);
 	}
 
 	
@@ -507,7 +515,7 @@ public class QuotaService {
 		+ " AND (user_subscriptions.ends_at IS NULL OR user_subscriptions.ends_at >= {now})"
 		+ " GROUP BY user_subscriptions.user_email"
 		+ ") "
-		+ "UPDATE user_quotas SET "
+		+ "UPDATE user_quotas SET " // TODO add items from shared collections
 		+ "collections_used = (SELECT count(*) FROM collections WHERE collections.owner = user_quotas.email AND collections.type NOT IN " + TrailCollectionType.EXCLUDE_NOT_IN_QUOTA_TYPES + "),"
 		+ "trails_used = (SELECT count(*) FROM trails WHERE trails.owner = user_quotas.email),"
 		+ "tracks_used = (SELECT count(*) FROM tracks WHERE tracks.owner = user_quotas.email),"

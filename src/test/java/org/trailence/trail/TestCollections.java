@@ -40,12 +40,12 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		// create 6 collections
 		var create = List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM),
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null)
 		);
 		var beforeCreate = System.currentTimeMillis();
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", create);
@@ -93,7 +93,7 @@ class TestCollections extends AbstractTest {
 			.satisfiesOnlyOnce(col -> assertThat(col.getType()).isEqualTo(TrailCollectionType.MY_TRAILS));
 
 		// update collections at index 3 and 5
-		var updateRequest = List.of(create.get(3), create.get(5)).stream().map(col -> new TrailCollection(col.getUuid(), user.getEmail(), 1L, 0, 0, "updated" + RandomStringUtils.insecure().next(5), TrailCollectionType.CUSTOM)).toList();
+		var updateRequest = List.of(create.get(3), create.get(5)).stream().map(col -> new TrailCollection(col.getUuid(), user.getEmail(), 1L, 0, 0, "updated" + RandomStringUtils.insecure().next(5), TrailCollectionType.CUSTOM, null, null)).toList();
 		response = user.put("/api/trail-collection/v1/_bulkUpdate", updateRequest);
 		assertThat(response.statusCode()).isEqualTo(200);
 		var updated = response.getBody().as(TrailCollection[].class);
@@ -130,7 +130,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.MY_TRAILS)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.MY_TRAILS, null, null)
 		));
 		TestUtils.expectError(response, 400, "invalid-type-value");
 
@@ -146,7 +146,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM, null, null)
 		));
 		TestUtils.expectError(response, 400, "invalid-name-too-long");
 		
@@ -161,12 +161,12 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM, null, null)
 		));
 		TestUtils.expectError(response, 400, "invalid-uuid");
 
 		response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(null, user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM)
+			new TrailCollection(null, user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM, null, null)
 		));
 		TestUtils.expectError(response, 400, "missing-uuid");
 	}
@@ -176,7 +176,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM),
+			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM, null, null),
 			user.generateRandomCollection()
 		));
 		assertThat(response.getStatusCode()).isEqualTo(200);
@@ -185,7 +185,7 @@ class TestCollections extends AbstractTest {
 		
 		// create again the same with 1 error
 		response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM),
+			new TrailCollection("not a uuid", user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(51), TrailCollectionType.CUSTOM, null, null),
 			created[0]
 		));
 		assertThat(response.getStatusCode()).isEqualTo(200);
@@ -199,7 +199,7 @@ class TestCollections extends AbstractTest {
 		var user = test.createUserAndLogin();
 		
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), "not me", 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), "not me", 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM, null, null)
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
@@ -216,7 +216,7 @@ class TestCollections extends AbstractTest {
 		
 		var beforeCreate = System.currentTimeMillis();
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(
-			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 10L, 20L, 30L, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM)
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 10L, 20L, 30L, RandomStringUtils.insecure().nextAlphanumeric(10), TrailCollectionType.CUSTOM, null, null)
 		));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
@@ -250,7 +250,7 @@ class TestCollections extends AbstractTest {
 	@Test
 	void createTwiceTheSameCreateOnlyFirst() {
 		var user = test.createUserAndLogin();
-		var create = new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
+		var create = new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null);
 		var response = user.post("/api/trail-collection/v1/_bulkCreate", List.of(create, create));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var created = response.getBody().as(TrailCollection[].class);
@@ -307,7 +307,7 @@ class TestCollections extends AbstractTest {
 		var col = user.createCollection();
 		
 		col.setName("this is the updated taken into account");
-		var copy = new TrailCollection(col.getUuid(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
+		var copy = new TrailCollection(col.getUuid(), user.getEmail(), 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null);
 		var response = user.put("/api/trail-collection/v1/_bulkUpdate", List.of(col, copy));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var updatedList = response.getBody().as(TrailCollection[].class);
@@ -375,8 +375,68 @@ class TestCollections extends AbstractTest {
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) 1);
 	}
 	
-	// TODO cannot create 2 collections of a unique type
-	// TODO publication types must not be counted in quotas
+	@Test
+	void testCreateSeveralTypesTogether() {
+		var user1 = test.createUserAndLogin();
+		var user2 = test.createUserAndLogin();
+		
+		user1.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col1", TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col2", TrailCollectionType.SHARED, List.of(), null),
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col3", TrailCollectionType.SHARED, List.of(user2.getEmail()), null),
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col4", TrailCollectionType.PUB_DRAFT, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col5", TrailCollectionType.CUSTOM, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user1.getEmail(), 0, 0, 0, "col6", TrailCollectionType.PUB_SUBMIT, null, null),
+		});
+		var collections = assertThat(user1.getCollections()).hasSize(7).actual();
+		assertThat(collections)
+			.anyMatch(c -> TrailCollectionType.MY_TRAILS.equals(c.getType()))
+			.anyMatch(c -> TrailCollectionType.CUSTOM.equals(c.getType()) && "col1".equals(c.getName()))
+			.anyMatch(c -> TrailCollectionType.SHARED.equals(c.getType()) && "col2".equals(c.getName()))
+			.anyMatch(c -> TrailCollectionType.SHARED.equals(c.getType()) && "col3".equals(c.getName()))
+			.anyMatch(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType()))
+			.anyMatch(c -> TrailCollectionType.CUSTOM.equals(c.getType()) && "col5".equals(c.getName()))
+			.anyMatch(c -> TrailCollectionType.PUB_SUBMIT.equals(c.getType()));
+		
+		assertThat(user2.getCollections()).hasSize(2).filteredOn(c -> TrailCollectionType.SHARED.equals(c.getType())).singleElement().extracting("sharedBy").isEqualTo(user1.getEmail().toLowerCase());
+		
+		assertThat(test.getQuotas(user1)).extracting(q -> q.getCollectionsUsed()).isEqualTo((short) 5);
+	}
+	
+	@Test
+	void cannotCreate2UniqueCollections() {
+		var user = test.createUserAndLogin();
+		
+		user.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col1", TrailCollectionType.PUB_DRAFT, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col2", TrailCollectionType.PUB_SUBMIT, null, null),
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col3", TrailCollectionType.PUB_DRAFT, null, null),
+		});
+		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
+		assertThat(test.getQuotas(user)).extracting(q -> q.getCollectionsUsed()).isEqualTo((short) 1);
+		
+		user.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_DRAFT, null, null),
+		});
+		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
+
+		user.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_SUBMIT, null, null),
+		});
+		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
+		
+		user.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "r", TrailCollectionType.PUB_REJECT, null, null),
+		});
+		assertThat(user.getCollections()).hasSize(4);
+
+		user.createCollections(new TrailCollection[] {
+			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_REJECT, null, null),
+		});
+		assertThat(user.getCollections()).hasSize(4).filteredOn(c -> TrailCollectionType.PUB_REJECT.equals(c.getType())).hasSize(1);
+		
+		assertThat(test.getQuotas(user)).extracting(q -> q.getCollectionsUsed()).isEqualTo((short) 1);
+	}
 	
 	private UpdateResponse<TrailCollection> getCollections(TestUserLoggedIn user, List<Versioned> known) {
 		var response = user.post("/api/trail-collection/v1/_bulkGetUpdates", known);

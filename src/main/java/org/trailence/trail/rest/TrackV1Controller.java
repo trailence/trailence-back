@@ -47,6 +47,11 @@ public class TrackV1Controller {
 		return RetryRest.retry(service.bulkDelete(uuids, auth));
 	}
 	
+	@PostMapping("/_bulkDelete/{shareId}")
+	public Mono<Void> bulkDelete(@PathVariable("shareId") String shareId, @RequestBody List<String> uuids, Authentication auth) {
+		return RetryRest.retry(service.bulkDelete(shareId, uuids, auth));
+	}
+	
 	@PostMapping("/_bulkGetUpdates")
 	public Mono<UpdateResponse<UuidAndOwner>> bulkGetUpdates(@RequestBody List<Versioned> known, Authentication auth) {
 		return RetryRest.retry(service.getUpdates(known, auth));

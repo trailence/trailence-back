@@ -30,8 +30,14 @@ import org.trailence.global.TrailenceUtils;
 import org.trailence.global.dto.PageResult;
 import org.trailence.global.dto.UpdateResponse;
 import org.trailence.global.dto.UuidAndOwner;
+import org.trailence.global.rest.AuthDetails;
+import org.trailence.quotas.db.UserQuotasEntity;
+import org.trailence.quotas.db.UserQuotasRepository;
 import org.trailence.quotas.dto.Plan;
 import org.trailence.quotas.dto.UserSubscription;
+import org.trailence.trail.SharedCollectionUtils;
+import org.trailence.trail.dto.CreatePublicLinkRequest;
+import org.trailence.trail.dto.MyTrailLink;
 import org.trailence.trail.dto.Photo;
 import org.trailence.trail.dto.Share;
 import org.trailence.trail.dto.Tag;
@@ -42,6 +48,7 @@ import org.trailence.trail.dto.Track.WayPoint;
 import org.trailence.trail.dto.Trail;
 import org.trailence.trail.dto.TrailCollection;
 import org.trailence.trail.dto.TrailCollectionType;
+import org.trailence.trail.dto.TrailLinkContent;
 import org.trailence.trail.dto.TrailTag;
 import org.trailence.user.UserService;
 import org.trailence.user.dto.User;
@@ -64,6 +71,7 @@ import reactor.util.function.Tuples;
 public class TestService {
 
 	private final UserService userService;
+	private final UserQuotasRepository quotaRepo;
 	
 	private static Set<String> usedEmails = new HashSet<>();
 	private static TestAdminLoggedIn admin = null;
@@ -132,7 +140,15 @@ public class TestService {
 			.post("/api/auth/v1/login");
 		assertThat(response.statusCode()).isEqualTo(200);
 		var auth = response.getBody().as(AuthResponse.class);
-		return new TestUserLoggedIn(user.getEmail(), user.getPassword(), keyPair, auth, response.getCookie("trailence_token"));
+		return new TestUserLoggedIn(user.getEmail(), user.getPassword(), keyPair, auth, response.getCookie("trailence_token"), TestUserLoggedIn.DEFAULT_CLIENT_VERSION);
+	}
+	
+	public UserQuotasEntity getQuotas(String email) {
+		return quotaRepo.findById(email.toLowerCase()).block();
+	}
+	
+	public UserQuotasEntity getQuotas(TestUserLoggedIn user) {
+		return getQuotas(user.getEmail());
 	}
 	
 	@AllArgsConstructor
@@ -143,9 +159,24 @@ public class TestService {
 		private KeyPair keyPair;
 		private AuthResponse auth;
 		private String trustToken;
+		private int clientVersion;
+		public static final int DEFAULT_CLIENT_VERSION = 20300;
+		public static final int OLD_CLIENT_VERSION = 20101;
+		
+		public TestUserLoggedIn usingOldClient() {
+			this.clientVersion = OLD_CLIENT_VERSION;
+			return this;
+		}
+
+		public TestUserLoggedIn usingRecentClient() {
+			this.clientVersion = DEFAULT_CLIENT_VERSION;
+			return this;
+		}
 		
 		public RequestSpecification request() {
-			return RestAssured.given().header("Authorization", "Bearer " + auth.getAccessToken());
+			var req = RestAssured.given().header("Authorization", "Bearer " + auth.getAccessToken());
+			if (clientVersion > AuthDetails.MIN_VERSION) req = req.header(AuthDetails.HEADER_VERSION, Integer.toString(clientVersion));
+			return req;
 		}
 		
 		public Response get(String path, Object... pathParams) {
@@ -174,9 +205,7 @@ public class TestService {
 			return updates.getCreated();
 		}
 		
-		public List<TrailCollection> createCollections(int nbCollections, int expectedError, String expectedErrorCode) {
-			var dtos = new TrailCollection[nbCollections];
-			for (int i = 0; i < dtos.length; ++i) dtos[i] = generateRandomCollection();
+		public List<TrailCollection> createCollections(TrailCollection[] dtos, int expectedError, String expectedErrorCode) {
 			var response = post("/api/trail-collection/v1/_bulkCreate", dtos);
 			if (expectedError > 0) {
 				TestUtils.expectError(response, expectedError, expectedErrorCode);
@@ -184,7 +213,7 @@ public class TestService {
 			}
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(TrailCollection[].class);
-			assertThat(list).hasSizeLessThanOrEqualTo(nbCollections);
+			assertThat(list).hasSizeLessThanOrEqualTo(dtos.length);
 			for (var i = 0; i < list.length; ++i) {
 				var col = list[i];
 				for (var j = 0; j < list.length; ++j)
@@ -193,15 +222,25 @@ public class TestService {
 				assertThat(dtoOpt).isPresent();
 				var dto = dtoOpt.get();
 				assertThat(col.getName()).isEqualTo(dto.getName());
-				assertThat(col.getType()).isEqualTo(TrailCollectionType.CUSTOM);
+				assertThat(col.getType()).isEqualTo(dto.getType());
 				assertThat(col.getOwner()).isEqualTo(email.toLowerCase());
 				assertThat(col.getVersion()).isEqualTo(1L);
 			}
 			return Arrays.asList(list);
 		}
 		
+		public List<TrailCollection> createCollections(TrailCollection[] dtos) {
+			return createCollections(dtos, -1, null);
+		}
+		
+		public List<TrailCollection> createCollections(int nbCollections, int expectedError, String expectedErrorCode) {
+			var dtos = new TrailCollection[nbCollections];
+			for (int i = 0; i < dtos.length; ++i) dtos[i] = generateRandomCollection();
+			return createCollections(dtos, expectedError, expectedErrorCode);
+		}
+		
 		public TrailCollection generateRandomCollection() {
-			return new TrailCollection(UUID.randomUUID().toString(), email, 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM);
+			return new TrailCollection(UUID.randomUUID().toString(), email, 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.CUSTOM, null, null);
 		}
 		
 		public List<TrailCollection> createCollections(int nbCollections) {
@@ -210,6 +249,14 @@ public class TestService {
 		
 		public TrailCollection createCollection() {
 			var list = createCollections(1);
+			assertThat(list).hasSize(1);
+			return list.getFirst();
+		}
+		
+		public TrailCollection createSharedCollection(String... friends) {
+			var list = createCollections(new TrailCollection[] {
+				new TrailCollection(UUID.randomUUID().toString(), email, 0, 0, 0, RandomStringUtils.insecure().nextAlphanumeric(3, 20), TrailCollectionType.SHARED, List.of(friends), null)
+			});
 			assertThat(list).hasSize(1);
 			return list.getFirst();
 		}
@@ -234,12 +281,12 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		
-		public Track generateRandomTrack() {
+		public Track generateRandomTrack(TrailCollection collection) {
 			var random = new Random();
-			return generateRandomTrack(random, 0, 10, 0, 100, 0, 10);
+			return generateRandomTrack(collection, random, 0, 10, 0, 100, 0, 10);
 		}
 		
-		public Track generateRandomTrack(Random random, int minNbSegments, int maxNbSegments, int minPointsPerSegment, int maxPointsPerSegment, int minWayPoints, int maxWayPoints) {
+		public Track generateRandomTrack(TrailCollection collection, Random random, int minNbSegments, int maxNbSegments, int minPointsPerSegment, int maxPointsPerSegment, int minWayPoints, int maxWayPoints) {
 			var segments = new Segment[random.nextInt(minNbSegments, maxNbSegments + 1)];
 			for (var i = 0; i < segments.length; ++i) {
 				segments[i] = new Segment(new Point[random.nextInt(minPointsPerSegment, maxPointsPerSegment + 1)]);
@@ -267,11 +314,15 @@ public class TestService {
 					null, null
 				);
 			}
-			return new Track(UUID.randomUUID().toString(), email, 0, 0, 0, segments, wayPoints, 0);
+			return new Track(
+				UUID.randomUUID().toString(),
+				TrailCollectionType.SHARED.equals(collection.getType()) ? SharedCollectionUtils.SHARED_OWNER_PREFIX + collection.getUuid() : email,
+				0, 0, 0,
+				segments, wayPoints, 0);
 		}
 		
-		public Track createTrack() {
-			return createTrack(generateRandomTrack(), -1, null);
+		public Track createTrack(TrailCollection collection) {
+			return createTrack(generateRandomTrack(collection), -1, null);
 		}
 		
 		public Track createTrack(Track dto, int expectedStatus, String expectedErrorCode) {
@@ -283,7 +334,7 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 			var track = response.getBody().as(Track.class);
 			assertThat(track.getUuid()).isEqualTo(dto.getUuid());
-			assertThat(track.getOwner()).isEqualTo(email.toLowerCase());
+			assertThat(track.getOwner()).isEqualTo(SharedCollectionUtils.isSharedCollectionOwner(dto.getOwner()) ? dto.getOwner() : email.toLowerCase());
 			assertThat(track.getVersion()).isEqualTo(1L);
 			assertThat(track.getS()).isEqualTo(dto.getS());
 			assertThat(track.getWp()).isEqualTo(dto.getWp());
@@ -319,12 +370,19 @@ public class TestService {
 			assertThat(getTracks()).containsExactlyInAnyOrderElementsOf(tracks);
 		}
 		
+		public Track getTrack(String owner, String uuid) {
+			var response = get("/api/track/v1/" + owner + "/" + uuid);
+			assertThat(response.statusCode()).isEqualTo(200);
+			return response.getBody().as(Track.class);
+		}
+		
 		public void deleteTracks(Track... tracks) {
 			deleteTracks(Arrays.asList(tracks));
 		}
 		
 		public void deleteTracks(List<Track> tracks) {
-			var response = post("/api/track/v1/_bulkDelete", tracks.stream().map(Track::getUuid).toList());
+			String shareId = !tracks.isEmpty() && SharedCollectionUtils.isSharedCollectionOwner(tracks.getFirst().getOwner()) ? "/" + tracks.getFirst().getOwner() : "";
+			var response = post("/api/track/v1/_bulkDelete" + shareId, tracks.stream().map(Track::getUuid).toList());
 			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		
@@ -335,10 +393,12 @@ public class TestService {
 		public List<Trail> createTrails(TrailCollection collection, int nbTrails, boolean sameCurrentAndOriginalTracks) {
 			var trails = new LinkedList<Trail>();
 			for (int i = 0; i < nbTrails; ++i) {
-				var track1 = createTrack();
-				var track2 = sameCurrentAndOriginalTracks ? track1 : createTrack();
+				var track1 = createTrack(collection);
+				var track2 = sameCurrentAndOriginalTracks ? track1 : createTrack(collection);
 				var trail = new Trail(
-					UUID.randomUUID().toString(), email, 0, 0, 0,
+					UUID.randomUUID().toString(),
+					TrailCollectionType.SHARED.equals(collection.getType()) ? SharedCollectionUtils.SHARED_OWNER_PREFIX + collection.getUuid() : email,
+					0, 0, 0,
 					RandomStringUtils.insecure().nextAlphanumeric(0, 201),
 					RandomStringUtils.insecure().nextAlphanumeric(0, 50001),
 					RandomStringUtils.insecure().nextAlphanumeric(0, 101),
@@ -357,6 +417,7 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(Trail[].class);
 			assertThat(list).hasSize(nbTrails);
+			String expectedOwner = TrailCollectionType.SHARED.equals(collection.getType()) ? SharedCollectionUtils.SHARED_OWNER_PREFIX + collection.getUuid() : email.toLowerCase();
 			for (int i = 0; i < nbTrails; ++i) {
 				var created = list[i];
 				for (int j = 0; j < nbTrails; ++j) if (j != i) assertThat(list[j].getUuid()).isNotEqualTo(created.getUuid());
@@ -364,7 +425,7 @@ public class TestService {
 				assertThat(trailOpt).isPresent();
 				var trail = trailOpt.get();
 				assertThat(created.getUuid()).isEqualTo(trail.getUuid());
-				assertThat(created.getOwner()).isEqualTo(email.toLowerCase());
+				assertThat(created.getOwner()).isEqualTo(expectedOwner);
 				assertThat(created.getVersion()).isEqualTo(1L);
 				assertThat(created.getName()).isEqualTo(trail.getName());
 				assertThat(created.getDescription()).isEqualTo(trail.getDescription());
@@ -378,7 +439,8 @@ public class TestService {
 		}
 		
 		public void deleteTrails(Trail... trails) {
-			var response = post("/api/trail/v1/_bulkDelete", Stream.of(trails).map(Trail::getUuid).toList());
+			String shareId = trails.length > 0 && SharedCollectionUtils.isSharedCollectionOwner(trails[0].getOwner()) ? "/" + trails[0].getOwner() : ""; 
+			var response = post("/api/trail/v1/_bulkDelete" + shareId, Stream.of(trails).map(Trail::getUuid).toList());
 			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		
@@ -423,7 +485,7 @@ public class TestService {
 				else if (parent instanceof Integer i) parentTag = dtos.get(i);
 				var dto = new Tag(
 					UUID.randomUUID().toString(),
-					email,
+					TrailCollectionType.SHARED.equals(collection.getType()) ? SharedCollectionUtils.SHARED_OWNER_PREFIX + collection.getUuid() : email,
 					0, 0, 0,
 					RandomStringUtils.insecure().nextAlphanumeric(0, 51),
 					parentTag == null ? null : parentTag.getUuid(),
@@ -435,6 +497,7 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(Tag[].class);
 			assertThat(list).hasSize(parents.length);
+			String expectedOwner = TrailCollectionType.SHARED.equals(collection.getType()) ? SharedCollectionUtils.SHARED_OWNER_PREFIX + collection.getUuid() : email.toLowerCase();
 			Tag[] result = new Tag[parents.length];
 			for (int i = 0; i < parents.length; ++i) {
 				var created = list[i];
@@ -444,7 +507,7 @@ public class TestService {
 				var dto = dtoOpt.get();
 				result[dtos.indexOf(dto)] = created;
 				assertThat(created.getUuid()).isEqualTo(dto.getUuid());
-				assertThat(created.getOwner()).isEqualTo(email.toLowerCase());
+				assertThat(created.getOwner()).isEqualTo(expectedOwner);
 				assertThat(created.getVersion()).isEqualTo(1L);
 				assertThat(created.getName()).isEqualTo(dto.getName());
 				assertThat(created.getParentUuid()).isEqualTo(dto.getParentUuid());
@@ -485,7 +548,8 @@ public class TestService {
 		}
 		
 		public void deleteTags(List<Tag> tags) {
-			var response = post("/api/tag/v1/_bulkDelete", tags.stream().map(Tag::getUuid).toList());
+			String shareId = !tags.isEmpty() && SharedCollectionUtils.isSharedCollectionOwner(tags.getFirst().getOwner()) ? "/" + tags.getFirst().getOwner() : "";
+			var response = post("/api/tag/v1/_bulkDelete" + shareId, tags.stream().map(Tag::getUuid).toList());
 			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		
@@ -494,7 +558,7 @@ public class TestService {
 		}
 		
 		public TrailTag createTrailTag(Trail trail, Tag tag) {
-			var dto = new TrailTag(tag.getUuid(), trail.getUuid(), 0);
+			var dto = new TrailTag(trail.getOwner(), tag.getUuid(), trail.getUuid(), 0);
 			var response = post("/api/tag/v1/trails/_bulkCreate", List.of(dto));
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(TrailTag[].class);
@@ -511,6 +575,11 @@ public class TestService {
 			return response.getBody().as(new TypeRef<List<TrailTag>>() {});
 		}
 		
+		public void deleteTrailTags(TrailTag... tags) {
+			var response = post("/api/tag/v1/trails/_bulkDelete", tags);
+			assertThat(response.statusCode()).isEqualTo(200);
+		}
+
 		public Tuple2<Photo, byte[]> createPhoto(Trail trail) {
 			return createPhoto(trail, 123456, 123456, -1, null);
 		}
@@ -519,6 +588,10 @@ public class TestService {
 			var uuid = UUID.randomUUID().toString();
 			var random = new Random();
 			var content = new byte[random.nextInt(minFileSize, maxFileSize + 1)];
+			var path = "/api/photo/v1/" + trail.getUuid() + "/" + uuid;
+			if (clientVersion >= SharedCollectionUtils.MIN_VERSION_FOR_SHARED) {
+				path += "/" + trail.getOwner();
+			}
 			random.nextBytes(content);
 			var response = request()
 				.contentType(ContentType.BINARY)
@@ -528,7 +601,7 @@ public class TestService {
 				.header("X-Longitude", "369852")
 				.header("X-Index", "12")
 				.body(content)
-				.post("/api/photo/v1/" + trail.getUuid() + "/" + uuid);
+				.post(path);
 			if (expectedStatus > 0) {
 				TestUtils.expectError(response, expectedStatus, expectedErrorCode);
 				return null;
@@ -536,7 +609,8 @@ public class TestService {
 			assertThat(response.statusCode()).isEqualTo(200);
 			var photo = response.getBody().as(Photo.class);
 			assertThat(photo.getUuid()).isEqualTo(uuid);
-			assertThat(photo.getOwner()).isEqualTo(email.toLowerCase());
+			String expectedOwner = clientVersion >= SharedCollectionUtils.MIN_VERSION_FOR_SHARED && SharedCollectionUtils.isSharedCollectionOwner(trail.getOwner()) ? trail.getOwner() : email.toLowerCase();
+			assertThat(photo.getOwner()).isEqualTo(expectedOwner);
 			assertThat(photo.getVersion()).isEqualTo(1);
 			assertThat(photo.getDescription()).isEqualTo("test");
 			assertThat(photo.getTrailUuid()).isEqualTo(trail.getUuid());
@@ -554,12 +628,23 @@ public class TestService {
 			return updates.getCreated();
 		}
 		
+		public List<Photo> updatePhotos(Photo... photos) {
+			return updatePhotos(Arrays.asList(photos));
+		}
+		
+		public List<Photo> updatePhotos(List<Photo> photos) {
+			var response = put("/api/photo/v1/_bulkUpdate", photos);
+			assertThat(response.statusCode()).isEqualTo(200);
+			return Arrays.asList(response.getBody().as(Photo[].class));
+		}
+		
 		public long deletePhotos(Photo... photos) {
 			return deletePhotos(Arrays.asList(photos));
 		}
 		
 		public long deletePhotos(List<Photo> photos) {
-			var response = post("/api/photo/v1/_bulkDelete", photos.stream().map(Photo::getUuid).toList());
+			String shareId = !photos.isEmpty() && SharedCollectionUtils.isSharedCollectionOwner(photos.getFirst().getOwner()) ? "/" + photos.getFirst().getOwner() : "";
+			var response = post("/api/photo/v1/_bulkDelete" + shareId, photos.stream().map(Photo::getUuid).toList());
 			assertThat(response.statusCode()).isEqualTo(200);
 			return response.getBody().as(Long.class);
 		}
@@ -568,6 +653,41 @@ public class TestService {
 			var response = get("/api/share/v2");
 			assertThat(response.statusCode()).isEqualTo(200);
 			return Arrays.asList(response.getBody().as(Share[].class));
+		}
+		
+		public MyTrailLink createPublicLink(Trail trail) {
+			Response response;
+			if (clientVersion < 20300)
+				response = post("/api/trail-link/v1", trail.getUuid());
+			else
+				response = post("/api/trail-link/v2", new CreatePublicLinkRequest(trail.getOwner(), trail.getUuid()));
+			assertThat(response.statusCode()).isEqualTo(200);
+			var link = response.getBody().as(MyTrailLink.class);
+			assertThat(link.getLink()).isNotNull();
+			assertThat(link.getTrailOwner()).isEqualTo(trail.getOwner());
+			assertThat(link.getTrailUuid()).isEqualTo(trail.getUuid());
+			return link;
+		}
+		
+		public List<MyTrailLink> getPublicLinks() {
+			var response = get("/api/trail-link/v" + (clientVersion < 20300 ? "1" : "2"));
+			assertThat(response.statusCode()).isEqualTo(200);
+			return Arrays.asList(response.getBody().as(MyTrailLink[].class));
+		}
+		
+		public TrailLinkContent getPublicLinkContent(MyTrailLink link) {
+			var response = get("/api/trail-link/v" + (clientVersion < 20300 ? "1" : "2") + "/trail/" + link.getLink());
+			assertThat(response.statusCode()).isEqualTo(200);
+			return response.getBody().as(TrailLinkContent.class);
+		}
+		
+		public void deletePublicLink(MyTrailLink link) {
+			Response response;
+			if (clientVersion < 20300)
+				response = delete("/api/trail-link/v1/" + link.getTrailUuid());
+			else
+				response = delete("/api/trail-link/v2/" + link.getTrailOwner() + "/" + link.getTrailUuid());
+			assertThat(response.statusCode()).isEqualTo(200);
 		}
 		
 		public AuthResponse renewToken() {
@@ -606,12 +726,11 @@ public class TestService {
 			this.auth = authRenew;
 			return authRenew;
 		}
-		
 	}
 	
 	public static class TestAdminLoggedIn extends TestUserLoggedIn {
 		private TestAdminLoggedIn(TestUserLoggedIn admin) {
-			super(admin.getEmail(), admin.getPassword(), admin.getKeyPair(), admin.getAuth(), admin.getTrustToken());
+			super(admin.getEmail(), admin.getPassword(), admin.getKeyPair(), admin.getAuth(), admin.getTrustToken(), TestUserLoggedIn.DEFAULT_CLIENT_VERSION);
 		}
 		
 		public Plan createPlan(Plan plan) {

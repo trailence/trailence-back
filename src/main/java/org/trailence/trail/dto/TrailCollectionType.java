@@ -9,7 +9,8 @@ public enum TrailCollectionType {
     CUSTOM,
     PUB_DRAFT,
     PUB_SUBMIT,
-    PUB_REJECT;
+    PUB_REJECT,
+    SHARED;
 	
 	public static final Set<TrailCollectionType> PUBLICATION_TYPES;
 	public static final Set<TrailCollectionType> NOT_IN_QUOTA;
@@ -26,5 +27,5 @@ public enum TrailCollectionType {
 	}
 	
 	public static final String EXCLUDE_NOT_IN_QUOTA_TYPES = "(" + String.join(",",TrailCollectionType.NOT_IN_QUOTA.stream().map(t -> "'" + t.name() + "'").toList()) + ")";
-
+	
 }

@@ -89,28 +89,28 @@ class TestTrailTag extends AbstractTest {
 		var trail2 = user.createTrail(col, true);
 		var tag2 = user.createTag(col, null);
 		
-		var response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getUuid(), trail2.getUuid(), 0)));
+		var response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail2.getOwner(), tag1.getUuid(), trail2.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag2.getUuid(), trail1.getUuid(), 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail1.getOwner(), tag2.getUuid(), trail1.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(UUID.randomUUID().toString(), trail1.getUuid(), 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail1.getOwner(), UUID.randomUUID().toString(), trail1.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(null, trail1.getUuid(), 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail1.getOwner(), null, trail1.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "missing-tagUuid");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag("1234", trail1.getUuid(), 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(trail1.getOwner(), "1234", trail1.getUuid(), 0)));
 		TestUtils.expectError(response, 400, "invalid-tagUuid");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getUuid(), UUID.randomUUID().toString(), 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getOwner(), tag1.getUuid(), UUID.randomUUID().toString(), 0)));
 		TestUtils.expectError(response, 400, "invalid-input");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getUuid(), null, 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getOwner(), tag1.getUuid(), null, 0)));
 		TestUtils.expectError(response, 400, "missing-trailUuid");
 		
-		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getUuid(), "1234", 0)));
+		response = user.post("/api/tag/v1/trails/_bulkCreate", List.of(new TrailTag(tag1.getOwner(), tag1.getUuid(), "1234", 0)));
 		TestUtils.expectError(response, 400, "invalid-trailUuid");
 	}
 	

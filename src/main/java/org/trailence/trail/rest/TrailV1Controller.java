@@ -3,6 +3,7 @@ package org.trailence.trail.rest;
 import java.util.List;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,6 +39,11 @@ public class TrailV1Controller {
 	@PostMapping("/_bulkDelete")
 	public Mono<Void> bulkDelete(@RequestBody List<String> uuids, Authentication auth) {
 		return RetryRest.retry(service.bulkDelete(uuids, auth));
+	}
+	
+	@PostMapping("/_bulkDelete/{shareId}")
+	public Mono<Void> bulkDelete(@PathVariable("shareId") String shareId, @RequestBody List<String> uuids, Authentication auth) {
+		return RetryRest.retry(service.bulkDelete(shareId, uuids, auth));
 	}
 	
 	@PostMapping("/_bulkGetUpdates")

@@ -107,7 +107,7 @@ public class ShareService {
 			List<ShareRecipientEntity> shareRecipients = new ArrayList<>(request.getRecipients().size());
 			Set<String> recipients = new HashSet<>();
 			for (String to : request.getRecipients()) {
-				String recipient = to.toLowerCase();
+				String recipient = TrailenceUtils.normalizeEmail(to);
 				if (recipients.add(recipient))
 					shareRecipients.add(new ShareRecipientEntity(share.getUuid(), share.getOwner(), recipient));
 			}
@@ -116,7 +116,7 @@ public class ShareService {
 				shareElements.add(new ShareElementEntity(share.getUuid(), uuid, user));
 			}
 			return self.createShareWithQuota(share, shareElements, shareRecipients)
-			.then(Mono.defer(() -> sendInvitationEmails(share.getUuid().toString(), user, new ArrayList<>(recipients), request.getMailLanguage(), request.getName())))
+			.then(Mono.defer(() -> sendInvitationEmails(share.getUuid().toString(), user, new ArrayList<>(recipients), request.getMailLanguage(), request.getName(), "", "shares.new_share_with_you")))
 			.then(Mono.just(toDto(share, shareRecipients.stream().map(r -> r.getRecipient()).toList(), elements, null)))
 			.onErrorResume(DuplicateKeyException.class, _ -> getShare(request.getId(), user));
 		}));
@@ -158,42 +158,43 @@ public class ShareService {
 		.then();
 	}
 	
-	private Mono<Void> sendInvitationEmails(String uuid, String owner, List<String> recipients, String language, String shareName) {
+	public Mono<Void> sendInvitationEmails(String uuid, String sender, List<String> recipients, String language, String shareName, String dataType, String notifName) {
 		if (recipients.isEmpty()) return Mono.empty();
 		return userRepo.findAllByEmailIn(recipients)
 		.collectList()
 		.flatMapMany(existingUsers ->
 			Flux.fromIterable(recipients)
 			.flatMap(recipient ->
-				sendInvitationEmail(uuid, owner, recipient, existingUsers.stream().filter(u -> u.getEmail().equals(recipient)).findAny(), language, shareName)
+				sendInvitationEmail(uuid, sender, recipient, existingUsers.stream().filter(u -> u.getEmail().equals(recipient)).findAny(), language, shareName, dataType, notifName)
 				, 2, 4
 			)
 		).then();
 	}
 	
-	private Mono<Void> sendInvitationEmail(String uuid, String owner, String recipient, Optional<UserEntity> optUser, String language, String shareName) {
-		return (optUser.isEmpty() ? Mono.empty() : notifService.create(recipient, "shares.new_share_with_you", List.of(owner, shareName, uuid)))
-		.then(shareEmailRepo.findByShareUuidAndFromEmailAndToEmail(UUID.fromString(uuid), owner, recipient))
+	@SuppressWarnings("java:S107") // number of parameters
+	private Mono<Void> sendInvitationEmail(String uuid, String sender, String recipient, Optional<UserEntity> optUser, String language, String shareName, String dataType, String notifName) {
+		return (optUser.isEmpty() ? Mono.empty() : notifService.create(recipient, notifName, List.of(sender, shareName, uuid)))
+		.then(shareEmailRepo.findByShareUuidAndFromEmailAndToEmail(UUID.fromString(uuid), sender, recipient))
 		.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
 		.flatMap(optSent -> {
 			if (optSent.isPresent()) return Mono.empty();
-			ShareEmailEntity entity = new ShareEmailEntity(UUID.fromString(uuid), owner, recipient, System.currentTimeMillis());
+			ShareEmailEntity entity = new ShareEmailEntity(UUID.fromString(uuid), sender, recipient, System.currentTimeMillis());
 			return r2dbc.insert(entity);
 		}).flatMap(_ -> {
 			if (optUser.isEmpty() || optUser.get().getPassword() == null) {
 				String token;
 				try {
-					token = tokenService.generate(new TokenData("share", recipient, uuid + "/" + owner));
+					token = tokenService.generate(new TokenData("share", recipient, uuid + "/" + dataType + sender));
 				} catch (Exception _) {
 					return Mono.empty();
 				}
 				return emailService.send(EmailService.SHARE_INVITE_PRIORITY, recipient, "invite_share", language, Map.of(
-					"from", owner,
+					"from", sender,
 					"link", emailService.getLinkUrl(token + "?lang=" + language)
 				));
 			} else {
 				return emailService.send(EmailService.SHARE_NEW_PRIORITY, recipient, "new_share", language, Map.of(
-					"from", owner
+					"from", sender
 				));
 			}
 		});
@@ -579,7 +580,7 @@ public class ShareService {
 	public Mono<Share> updateShare(String uuid, UpdateShareRequest request, Authentication auth) {
 		String user = TrailenceUtils.email(auth);
 		return self.updateShareAndRecipients(uuid, user, request)
-		.flatMap(added -> sendInvitationEmails(uuid, user, added, request.getMailLanguage(), request.getName()))
+		.flatMap(added -> sendInvitationEmails(uuid, user, added, request.getMailLanguage(), request.getName(), "", "shares.new_share_with_you"))
 		.then(Mono.defer(() -> getShare(uuid, user)));
 	}
 	

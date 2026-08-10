@@ -34,8 +34,16 @@ import org.trailence.livegroup.dto.UpdateMyPositionRequest;
 import org.trailence.stats.EventType;
 import org.trailence.stats.StatsService;
 import org.trailence.trail.ShareService;
+import org.trailence.trail.SharedCollectionUtils;
 import org.trailence.trail.TrailLinkService;
+import org.trailence.trail.db.SharedCollectionMemberEntity;
+import org.trailence.trail.db.SharedCollectionMemberRepository;
+import org.trailence.trail.db.TrailEntity;
+import org.trailence.trail.db.TrailRepository;
+import org.trailence.trail.exceptions.TrailNotFound;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -52,6 +60,8 @@ public class LiveGroupService {
 	private final ShareService shareService;
 	private final TrailLinkService linkService;
 	private final StatsService stats;
+	private final SharedCollectionMemberRepository sharedCollectionMemberRepo;
+	private final TrailRepository trailRepo;
 	@Lazy @Autowired @SuppressWarnings("java:S6813")
 	private LiveGroupService self;
 	
@@ -84,30 +94,44 @@ public class LiveGroupService {
 		if (auth == null) return Mono.error(new UnauthorizedException());
 		ValidationUtils.field(FIELD_GROUP_NAME, request.getGroupName()).notNull().notBlank().maxLength(30);
 		ValidationUtils.field(FIELD_MY_NAME, request.getMyName()).notNull().notBlank().maxLength(25);
-		String owner = TrailenceUtils.email(auth);
+		String user = TrailenceUtils.email(auth);
 		String slug = RandomStringUtils.secure().nextAlphanumeric(128);
 		long now = System.currentTimeMillis();
-		LiveGroupEntity groupEntity = new LiveGroupEntity(
-			UUID.randomUUID(),
-			owner,
-			slug,
-			request.getGroupName(),
-			now,
-			request.getTrailOwner(),
-			request.getTrailUuid(),
-			request.getTrailShared() != null && request.getTrailShared().booleanValue()
-		);
-		LiveGroupMemberEntity memberEntity = new LiveGroupMemberEntity(
-			UUID.randomUUID(),
-			groupEntity.getUuid(),
-			owner,
-			request.getMyName(),
-			now,
-			null, null, null // position
-		);
-		return this.self.createGroup(groupEntity, memberEntity)
-		.flatMap(tuple -> toDto(tuple.getT1(), Stream.of(tuple.getT2()), owner))
+		return getTrail(request.getTrailOwner(), request.getTrailUuid(), auth)
+		.map(trailOpt -> {
+			var groupEntity = new LiveGroupEntity(
+				UUID.randomUUID(),
+				user,
+				slug,
+				request.getGroupName(),
+				now,
+				trailOpt.map(t -> t.getT1().getAuthorInDb()).orElse(null),
+				trailOpt.map(t -> t.getT2().getUuid().toString()).orElse(null),
+				request.getTrailShared() != null && request.getTrailShared().booleanValue() && trailOpt.isPresent()
+			);
+			var memberEntity = new LiveGroupMemberEntity(
+				UUID.randomUUID(),
+				groupEntity.getUuid(),
+				user,
+				request.getMyName(),
+				now,
+				null, null, null // position
+			);
+			return Tuples.of(groupEntity, memberEntity);
+		})
+		.flatMap(tuple -> this.self.createGroup(tuple.getT1(), tuple.getT2()))
+		.flatMap(tuple -> toDto(tuple.getT1(), Stream.of(tuple.getT2()), user))
 		.flatMap(dto -> stats.addEvent(EventType.NEW_LIVE_GROUP, Map.of()).thenReturn(dto));
+	}
+	
+	private Mono<Optional<Tuple2<SharedCollectionUtils.Owner, TrailEntity>>> getTrail(String trailOwner, String trailUuid, Authentication auth) {
+		if (trailOwner == null || trailUuid == null) return Mono.just(Optional.empty());
+		return SharedCollectionUtils.getOwner(Optional.of(trailOwner), auth, sharedCollectionMemberRepo)
+		.flatMap(owner -> 
+			trailRepo.findByUuidAndOwner(UUID.fromString(trailUuid), owner.getAuthorInDb())
+			.switchIfEmpty(Mono.error(new TrailNotFound(trailUuid, trailOwner)))
+			.map(trail -> Optional.of(Tuples.of(owner, trail)))
+		);
 	}
 	
 	@Transactional
@@ -127,8 +151,21 @@ public class LiveGroupService {
 		return groupRepo.findOneBySlugAndOwner(slug, owner)
 		.switchIfEmpty(Mono.error(new LiveGroupNotFound(slug)))
 		.flatMap(groupEntity -> {
-			if (!updateGroupEntity(groupEntity, request)) return Mono.just(groupEntity);
-			return groupRepo.save(groupEntity);
+			if (request.getTrailOwner() == null || request.getTrailUuid() == null) {
+				request.setTrailOwner(null);
+				request.setTrailUuid(null);
+				request.setTrailShared(Boolean.FALSE);
+				if (!updateGroupEntity(groupEntity, request)) return Mono.just(groupEntity);
+				return groupRepo.save(groupEntity);
+			}
+			return getTrail(request.getTrailOwner(), request.getTrailUuid(), auth)
+			.flatMap(trailOpt -> {
+				request.setTrailOwner(trailOpt.map(t -> t.getT1().getAuthorInDb()).orElse(null));
+				request.setTrailUuid(trailOpt.map(t -> t.getT2().getUuid().toString()).orElse(null));
+				request.setTrailShared(trailOpt.isPresent() && request.getTrailShared() != null && request.getTrailShared().booleanValue());
+				if (!updateGroupEntity(groupEntity, request)) return Mono.just(groupEntity);
+				return groupRepo.save(groupEntity);
+			});
 		})
 		.flatMap(groupEntity -> {
 			if (request.getMyName() == null) return Mono.just(groupEntity);
@@ -224,30 +261,49 @@ public class LiveGroupService {
 	}
 	
 	private Mono<LiveGroup> toDto(LiveGroupEntity groupEntity, Stream<LiveGroupMemberEntity> membersEntities, String myMemberId) {
-		Mono<Tuple2<Boolean, Optional<String>>> hasAccess;
-		if (groupEntity.getOwner().equals(myMemberId))
-			hasAccess = Mono.just(Tuples.of(true, Optional.empty()));
-		else if (groupEntity.getTrailOwner() == null || !groupEntity.isTrailShared())
-			hasAccess = Mono.just(Tuples.of(false, Optional.empty()));
-		else
-			hasAccess =
-				(myMemberId.indexOf('@') < 0 ?
-					Mono.just(false) :
-					shareService.hasAccessThroughShare(myMemberId, groupEntity.getTrailOwner(), groupEntity.getTrailUuid()))
-				.flatMap(throughShare -> {
-					if (throughShare.booleanValue()) return Mono.just(Tuples.of(true, Optional.empty()));
-					return linkService.getTrailLink(groupEntity.getTrailOwner(), groupEntity.getTrailUuid())
-						.map(l -> Tuples.of(true, Optional.of(l)))
-						.switchIfEmpty(Mono.just(Tuples.of(false, Optional.empty())));
+		@Data
+		@AllArgsConstructor
+		class Share {
+			private String trailOwner;
+			private String trailUuid;
+			private boolean trailShared;
+		}
+		Mono<Share> share$;
+		if (groupEntity.getTrailOwner() == null) // no trail shared by group
+			share$ = Mono.just(new Share(null, null, false));
+		else if (groupEntity.getTrailOwner().equals(myMemberId)) // my own trail
+			share$ = Mono.just(new Share(groupEntity.getTrailOwner(), groupEntity.getTrailUuid(), groupEntity.isTrailShared()));
+		else if (!groupEntity.isTrailShared())
+			share$ = Mono.just(new Share(null, null, false));
+		else {
+			Mono<Share> throughPublicLink = linkService.getTrailLink(groupEntity.getTrailOwner(), groupEntity.getTrailUuid()).map(link -> new Share("link", link, true))
+				.switchIfEmpty(Mono.just(new Share(null, null, false)));
+			if (myMemberId.indexOf('@') < 0) {
+				// anonymous can only get it through a public link
+				share$ = throughPublicLink;
+			} else if (SharedCollectionUtils.isSharedCollectionOwner(groupEntity.getTrailOwner())) {
+				// trail from a shared collection => accessible my members of collection, or public link
+				UUID colId = SharedCollectionUtils.getSharedCollectionUuid(groupEntity.getTrailOwner());
+				Mono<SharedCollectionMemberEntity> member$ = myMemberId.indexOf('@') > 0 ? sharedCollectionMemberRepo.findOneBySharedCollectionUuidAndOwner(colId, myMemberId) : Mono.empty();
+				share$ = member$.map(member -> new Share(SharedCollectionUtils.SHARED_OWNER_PREFIX + member.getUuid(), groupEntity.getTrailUuid(), true))
+					.switchIfEmpty(throughPublicLink);
+			} else {
+				// can have access through a share
+				share$ = shareService.hasAccessThroughShare(myMemberId, groupEntity.getTrailOwner(), groupEntity.getTrailUuid())
+				.flatMap(shared -> {
+					if (shared.booleanValue()) return Mono.just(new Share(groupEntity.getTrailOwner(), groupEntity.getTrailUuid(), true));
+					return throughPublicLink;
 				});
-		return hasAccess.map(share -> new LiveGroup(
+			}
+		}
+		return share$.map(share -> new LiveGroup(
 			groupEntity.getSlug(),
 			groupEntity.getName(),
 			groupEntity.getStartedAt(),
 			Instant.ofEpochMilli(groupEntity.getStartedAt()).plus(maxDuration).toEpochMilli(),
-			share.getT1().booleanValue() ? share.getT2().map(_ -> "link").orElse(groupEntity.getTrailOwner()) : null,
-			share.getT1().booleanValue() ? share.getT2().orElse(groupEntity.getTrailUuid()) : null,
-			share.getT1().booleanValue() && groupEntity.isTrailShared(),
+			share.getTrailOwner(),
+			share.getTrailUuid(),
+			share.isTrailShared(),
 			toDto(membersEntities, myMemberId, groupEntity.getOwner())
 		));
 	}

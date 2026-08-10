@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,16 +17,20 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.FileSystemUtils;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.trailence.auth.dto.AuthResponse;
+import org.trailence.auth.dto.LoginShareRequest;
 import org.trailence.email.EmailJob;
 import org.trailence.jobs.db.JobRepository;
 import org.trailence.mailhog.MailHogDtos;
 import org.trailence.mailhog.MailHogDtos.Message;
+import org.trailence.test.TestService.TestUserLoggedIn;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 
 import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import jakarta.mail.internet.MimeUtility;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +69,7 @@ import reactor.util.function.Tuples;
 public abstract class AbstractTest {
 	
 	@SuppressWarnings("resource")
-	static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine").withUsername("postgres").withPassword("postgres").withDatabaseName("trailence");
+	static PostgreSQLContainer postgreSQLContainer = new PostgreSQLContainer("postgres:16-alpine").withUsername("postgres").withPassword("postgres").withDatabaseName("trailence");
 	@SuppressWarnings({ "rawtypes", "resource" })
 	static GenericContainer smtp = new GenericContainer<>("mailhog/mailhog:v1.0.1").withExposedPorts(1025, 8025);
 	public static WireMockServer wireMockServer = null;
@@ -153,6 +158,7 @@ public abstract class AbstractTest {
 		for (var trial = 0; trial < 100; trial++) {
 			var messageOpt = searchMail(from, to);
 			if (messageOpt.isPresent()) {
+				log.info("Email found from {} to {}", from, to);
 				message = messageOpt.get();
 				break;
 			}
@@ -227,4 +233,44 @@ public abstract class AbstractTest {
 			return true;
 		}).findAny();
 	}
+	
+	
+	protected TestUserLoggedIn loginWithShareLink(String from, String to) {
+		var mail = assertMailSent("trailence@trailence.org", to.toLowerCase());
+		assertThat(mail.getT1()).isEqualTo(from.toLowerCase() + " shared trails with you on trailence.org");
+		var i = mail.getT2().indexOf("\r\nYou can access it without having an account by following this link: ");
+		assertThat(i).isPositive();
+		var j = mail.getT2().indexOf("\r\n", i + 70);
+		assertThat(j).isPositive();
+		var link = mail.getT2().substring(i + 70, j);
+		assertThat(link).startsWith("https://trailence.org/link/").endsWith("?lang=en");
+		i = link.lastIndexOf('?');
+		var token = link.substring(27, i);
+		
+		var keyPair = test.generateKeyPair();
+		var response = RestAssured.given()
+			.contentType(ContentType.JSON)
+			.body(new LoginShareRequest(token, keyPair.getPublic().getEncoded(), null, new HashMap<String, Object>()))
+			.post("/api/auth/v1/share");
+		assertThat(response.statusCode()).isEqualTo(200);
+		var auth = response.getBody().as(AuthResponse.class);
+		assertThat(auth.isComplete()).isFalse();
+		return new TestUserLoggedIn(to, null, keyPair, auth, response.getCookie("trailence_token"), TestUserLoggedIn.DEFAULT_CLIENT_VERSION);
+	}
+	
+	protected void deleteMe(TestUserLoggedIn user) {
+		var response = user.post("/api/user/v1/sendDeletionCode?lang=en", "");
+		assertThat(response.statusCode()).isEqualTo(200);
+		
+		var mail = assertMailSent("trailence@trailence.org", user.getEmail().toLowerCase());
+		assertThat(mail.getT1()).isEqualTo("Confirm the deletion of your account on trailence.org");
+		assertThat(mail.getT2()).contains("Here is your code to confirm the deletion of your account on trailence.org: ");
+		var i = mail.getT2().indexOf("Here is your code to confirm the deletion of your account on trailence.org: ");
+		var j = mail.getT2().indexOf("\r\n", i);
+		var code = mail.getT2().substring(i + 76, j);
+		
+		response = user.post("/api/user/v1/deleteMe", code);
+		assertThat(response.statusCode()).isEqualTo(200);
+	}
+	
 }
