@@ -110,7 +110,9 @@ public class TrailenceUtils {
 	
 	public static <T> T fromJsonOr(byte[] value, TypeReference<T> type, T defaultValue) {
 		try {
-			return TrailenceUtils.mapper.readValue(value, type);
+			T result = TrailenceUtils.mapper.readValue(value, type);
+			if (result == null) return defaultValue;
+			return result;
 		} catch (Exception e) {
 			log.error("Mapping error", e);
 			return defaultValue;

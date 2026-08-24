@@ -519,7 +519,7 @@ public class PublicTrailService {
 	private PublicTrail toPublicTrailDto(PublicTrailEntity entity, Stream<PublicPhotoEntity> photos, UserCommunity authorCommunity, Authentication auth) {
 		Map<String, String> nameTranslations = TrailenceUtils.fromJsonOr(entity.getNameTranslations().asArray(), new TypeReference<Map<String, String>>() {}, new HashMap<>());
 		Map<String, String> descriptionTranslations = TrailenceUtils.fromJsonOr(entity.getDescriptionTranslations().asArray(), new TypeReference<Map<String, String>>() {}, new HashMap<>());
-		String caller = TrailenceUtils.email(auth);
+		String caller = auth != null ? TrailenceUtils.email(auth) : null;
 		return new PublicTrail(
 			entity.getUuid().toString(),
 			entity.getSlug(),
