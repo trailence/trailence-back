@@ -43,6 +43,7 @@ import org.trailence.quotas.db.UserSubscriptionRepository;
 import org.trailence.quotas.dto.Plan;
 import org.trailence.quotas.dto.UserQuotas;
 import org.trailence.quotas.dto.UserSubscription;
+import org.trailence.trail.SharedCollectionUtils;
 import org.trailence.trail.dto.TrailCollectionType;
 
 import io.r2dbc.spi.Row;
@@ -515,15 +516,39 @@ public class QuotaService {
 		+ " AND (user_subscriptions.ends_at IS NULL OR user_subscriptions.ends_at >= {now})"
 		+ " GROUP BY user_subscriptions.user_email"
 		+ ") "
-		+ "UPDATE user_quotas SET " // TODO add items from shared collections
-		+ "collections_used = (SELECT count(*) FROM collections WHERE collections.owner = user_quotas.email AND collections.type NOT IN " + TrailCollectionType.EXCLUDE_NOT_IN_QUOTA_TYPES + "),"
-		+ "trails_used = (SELECT count(*) FROM trails WHERE trails.owner = user_quotas.email),"
-		+ "tracks_used = (SELECT count(*) FROM tracks WHERE tracks.owner = user_quotas.email),"
-		+ "tracks_size_used = (SELECT COALESCE(sum(octet_length(tracks.data)), 0) FROM tracks WHERE tracks.owner = user_quotas.email),"
-		+ "photos_used = (SELECT count(*) FROM photos WHERE photos.owner = user_quotas.email),"
-		+ "photos_size_used = (SELECT COALESCE(sum(files.size),0) FROM photos left join files on files.id = photos.file_id WHERE photos.owner = user_quotas.email),"
-		+ "tags_used = (SELECT count(*) FROM tags WHERE tags.owner = user_quotas.email),"
-		+ "trail_tags_used = (SELECT count(*) FROM trails_tags WHERE trails_tags.owner = user_quotas.email),"
+		+ "UPDATE user_quotas SET "
+		+ "collections_used = " +
+			"(SELECT count(*) FROM collections WHERE collections.owner = user_quotas.email AND collections.type NOT IN " + TrailCollectionType.EXCLUDE_NOT_IN_QUOTA_TYPES + ")" +
+			"+ (SELECT count(*) FROM shared_collections WHERE shared_collections.owner = user_quotas.email)" +
+			","
+		+ "trails_used = " +
+			"(SELECT count(*) FROM trails WHERE trails.owner = user_quotas.email)" +
+			" + (SELECT count(*) FROM shared_collections c JOIN trails t ON t.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
+		+ "tracks_used = " +
+			"(SELECT count(*) FROM tracks WHERE tracks.owner = user_quotas.email)" +
+			" + (SELECT count(*) FROM shared_collections c JOIN tracks t ON t.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
+		+ "tracks_size_used = " +
+			"(SELECT COALESCE(sum(octet_length(tracks.data)), 0) FROM tracks WHERE tracks.owner = user_quotas.email)" +
+			" + (SELECT COALESCE(sum(octet_length(t.data)), 0) FROM shared_collections c JOIN tracks t ON t.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
+		+ "photos_used = " +
+			"(SELECT count(*) FROM photos WHERE photos.owner = user_quotas.email)" +
+			" + (SELECT count(*) FROM shared_collections c JOIN photos p ON p.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
+		+ "photos_size_used = " +
+			"(SELECT COALESCE(sum(files.size),0) FROM photos left join files on files.id = photos.file_id WHERE photos.owner = user_quotas.email)" +
+			" + (SELECT COALESCE(sum(f.size),0) FROM shared_collections c JOIN photos p ON p.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) JOIN files f on f.id = p.file_id WHERE c.owner = user_quotas.email)" +
+			","
+		+ "tags_used = " +
+			"(SELECT count(*) FROM tags WHERE tags.owner = user_quotas.email)" +
+			" + (SELECT count(*) FROM shared_collections c JOIN tags t ON t.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
+		+ "trail_tags_used = " +
+			"(SELECT count(*) FROM trails_tags WHERE trails_tags.owner = user_quotas.email)" +
+			" + (SELECT count(*) FROM shared_collections c JOIN trails_tags t ON t.owner = CONCAT('" + SharedCollectionUtils.SHARED_OWNER_PREFIX + "', c.uuid) WHERE c.owner = user_quotas.email)" +
+			","
 		+ "shares_used = (SELECT count(*) FROM shares WHERE shares.owner = user_quotas.email),"
 		+ "collections_max = (SELECT collections_max FROM users_max WHERE users_max.email = user_quotas.email),"
 		+ "trails_max = (SELECT trails_max FROM users_max WHERE users_max.email = user_quotas.email),"
