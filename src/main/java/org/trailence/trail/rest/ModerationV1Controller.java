@@ -186,18 +186,6 @@ public class ModerationV1Controller {
 		return publicTrailService.getCurrentPublicUuid(trailUuid, trailOwner);
 	}
 	
-	@PostMapping("/detectLanguage")
-	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Mono<String> detectLanguage(@RequestBody String text) {
-		return translation.detectLanguage(text).switchIfEmpty(Mono.just(""));
-	}
-
-	@PostMapping("/translate")
-	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
-	public Mono<String> translate(@RequestBody String text, @RequestParam("from") String from, @RequestParam("to") String to) {
-		return translation.translate(text, from, to).switchIfEmpty(Mono.just(""));
-	}
-	
 	@PostMapping("/translateai")
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN + " or " + TrailenceUtils.PREAUTHORIZE_MODERATOR)
 	public Mono<String> translateWithAI(@RequestBody String text) {

@@ -285,6 +285,7 @@ public class AuthService {
 			key.getId().toString(),
 			key.getCreatedAt(),
 			key.getCreatedAt() + key.getExpiresAfter(),
+			user.getCreatedAt(),
 			null, // preferences
 			user.getPassword() != null,
 			user.isAdmin(),

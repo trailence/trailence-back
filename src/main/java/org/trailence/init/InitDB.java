@@ -13,7 +13,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.sql.SQL;
 import org.trailence.global.TrailenceUtils;
-import org.trailence.init.migrations.AddLanguageAndTranslationsToPublicTrails;
 import org.trailence.init.migrations.InitDailyStats;
 import org.trailence.init.migrations.TrackStorageV1toV2Migration;
 import org.trailence.preferences.UserCommunityService;
@@ -66,7 +65,6 @@ public class InitDB {
 		new DatabaseMigration("0.18_preferences_add_alias"),
 		new DatabaseMigration("0.18_trails_add_published_from"),
 		new DatabaseMigration("0.18_public_trails_language"),
-		new AddLanguageAndTranslationsToPublicTrails(),
 		new DatabaseMigration("0.18_feedback_add_reviewed"),
 		new DatabaseMigration("1.0_trails_add_publication_data"),
 		new DatabaseMigration("1.0_public_trails_add_source_url"),
