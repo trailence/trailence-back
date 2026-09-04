@@ -1,6 +1,8 @@
 package org.trailence.global.rest;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.springframework.web.server.ServerWebExchange;
@@ -26,16 +28,22 @@ public class HttpFilter implements WebFilter {
 			if (time > 2000) log.info("Request took {} ms: {} {}", time, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
 		}));
 		checkExchange(exchange, 10, schedule);
-		return chain.filter(exchange);
+		return chain.filter(exchange)
+			.map(_ -> Boolean.TRUE)
+			.switchIfEmpty(Mono.just(Boolean.TRUE))
+			.timeout(Duration.ofMinutes(11))
+			.doOnError(TimeoutException.class, _ -> log.info("Request timeout: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath()))
+			.doOnCancel(() -> log.info("Request cancelled: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath()))
+			.then();
 	}
 	
 	private void checkExchange(ServerWebExchange exchange, int seconds, MutableObject<Disposable> schedule) {
 		schedule.setValue(Schedulers.boundedElastic().schedule(() -> {
+			log.warn("Request not comitted after {} seconds: {} {}", seconds, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
 			if (seconds < 10 * 60)
 				checkExchange(exchange, seconds * 2, schedule);
 			else
 				schedule.setValue(null);
-			log.warn("Request not comitted after {} seconds: {} {}", seconds, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
 		}, 10, TimeUnit.SECONDS));
 	}
 	

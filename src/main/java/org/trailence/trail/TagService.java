@@ -265,6 +265,7 @@ public class TagService {
 	}
 	
 	public Mono<Void> bulkDelete(String shareId, List<String> uuids, Authentication auth) {
+		if (uuids.isEmpty()) return Mono.empty();
 		String caller = TrailenceUtils.email(auth);
     	UUID sharedCollectionUuidForCaller = SharedCollectionUtils.getSharedCollectionUuid(shareId);
     	return sharedCollectionRepo.getSharedCollectionHavingMember(sharedCollectionUuidForCaller, caller)
