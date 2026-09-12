@@ -42,8 +42,10 @@ public final class RetryRest {
 	}
 	
 	private static Mono<Integer> delay(int numRetry) {
-		if (numRetry == 0) return Mono.just(1).delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(10, 200)));
-		return Mono.just(1).delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(numRetry * 10L, numRetry * 200L)));
+		Mono<Integer> mono = Mono.just(1).checkpoint("Retry " + (numRetry + 1) + " - wait");
+		if (numRetry == 0) mono = mono.delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(10, 200)));
+		else mono = mono.delayElement(Duration.ofMillis(RandomUtils.insecure().randomLong(numRetry * 10L, numRetry * 200L)));
+		return mono.checkpoint("Retry " + (numRetry + 1));
 	}
 	
 }

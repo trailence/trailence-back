@@ -1,5 +1,6 @@
 package org.trailence.stats;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -112,7 +113,7 @@ public class StatsService {
 	
 	@Scheduled(cron = "0 0 3 * * *")
 	public void computeDailyStats() {
-		Long today = ZonedDateTime.now().truncatedTo(ChronoUnit.DAYS).toInstant().toEpochMilli();
+		Long today = ZonedDateTime.now(ZoneId.systemDefault()).truncatedTo(ChronoUnit.DAYS).toInstant().toEpochMilli();
 		Long yesterday = today - 24L * 60 * 60 * 1000;
 		Long since30 = today - 30L * 24 * 60 * 60 * 1000;
 		Long since45 = today - 45L * 24 * 60 * 60 * 1000;
@@ -187,6 +188,7 @@ public class StatsService {
 		AGG_BY_TYPE.put("nbActiveUsers18045", "MAX");
 		AGG_BY_TYPE.put("nbInactiveUsers18045", "MAX");
 	}
+	private static final String GROUPER = "grouper";
 	
 	@PreAuthorize(TrailenceUtils.PREAUTHORIZE_ADMIN)
 	public Mono<List<StatsValue>> getStats(String type, String aggregation) {
@@ -211,9 +213,9 @@ public class StatsService {
 				Expressions.just("EXTRACT(week FROM date_trunc('week', date))"),
 				SQL.nullLiteral(),
 				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
-				Expressions.just("date_trunc('week', date) AS grouper")
+				Expressions.just("date_trunc('week', date) AS " + GROUPER)
 			);
-			groupBy = Expressions.just("grouper");
+			groupBy = Expressions.just(GROUPER);
 			break;
 		case "month":
 			selectFields = List.of(
@@ -222,9 +224,9 @@ public class StatsService {
 				SQL.nullLiteral(),
 				SQL.nullLiteral(),
 				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
-				Expressions.just("date_trunc('month', date) AS grouper")
+				Expressions.just("date_trunc('month', date) AS " + GROUPER)
 			);
-			groupBy = Expressions.just("grouper");
+			groupBy = Expressions.just(GROUPER);
 			break;
 		case "year":
 			selectFields = List.of(
@@ -233,9 +235,9 @@ public class StatsService {
 				SQL.nullLiteral(),
 				SQL.nullLiteral(),
 				SimpleFunction.create(AGG_BY_TYPE.get(type), List.of(Column.create(colName, STATS_TABLE))),
-				Expressions.just("date_trunc('year', date) AS grouper")
+				Expressions.just("date_trunc('year', date) AS " + GROUPER)
 			);
-			groupBy = Expressions.just("grouper");
+			groupBy = Expressions.just(GROUPER);
 			break;
 		default: return Mono.error(new BadRequestException("Invalid aggregation: " + aggregation));
 		}

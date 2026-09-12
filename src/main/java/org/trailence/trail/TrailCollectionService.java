@@ -127,7 +127,7 @@ public class TrailCollectionService {
     			}));
     		},
     		repo
-    	).map(list -> list.stream().map(this::toDTO).toList());
+    	).map(list -> list.stream().map(this::toDto).toList());
     }
 
     @Transactional
@@ -260,33 +260,11 @@ public class TrailCollectionService {
 		Map<UUID, SharedCollectionEntity> colById = new HashMap<>();
 		List<SharedCollectionMemberEntity> callerMembers = new LinkedList<>();
 		Map<UUID, UUID> colIdByCallerId = new HashMap<>();
-    	Flux<TrailCollectionEntity> shared = AuthDetails.getVersion(auth) < SharedCollectionUtils.MIN_VERSION_FOR_SHARED ? Flux.empty() :
-    		sharedCollectionMemberRepo.findAllByOwner(email).collectList()
-    		.flatMap(members -> {
-    			if (members.isEmpty()) return Mono.empty();
-    			callerMembers.addAll(members);
-    			return sharedCollectionRepo.findAllById(Streams.of(members).map(m -> m.getSharedCollectionUuid()).distinct().toList()).collectList()
-    			.map(collections -> {
-    				for (var col : collections) colById.put(col.getUuid(), col);
-    				return Streams.of(members).map(member -> {
-    					colIdByCallerId.put(member.getUuid(), member.getSharedCollectionUuid());
-    					TrailCollectionEntity entity = new TrailCollectionEntity();
-    					entity.setType(TrailCollectionType.SHARED);
-   						entity.setOwner(email);
-    					entity.setUuid(member.getUuid());
-    					entity.setName(member.getName());
-    					entity.setCreatedAt(member.getCreatedAt());
-    					entity.setUpdatedAt(member.getUpdatedAt());
-    					entity.setVersion(member.getVersion());
-    					return entity;
-    				}).toList();
-    			});
-    		})
-    		.flatMapMany(Flux::fromIterable);
+    	Flux<TrailCollectionEntity> shared = getSharedCollections(email, auth, colIdByCallerId, colById, callerMembers);
     	return BulkGetUpdates.bulkGetUpdates(
     		Flux.concat(owned, shared),
     		known,
-    		this::toDTO
+    		this::toDto
     	).flatMap(response -> {
     		// handle shared collections attributes
     		if (callerMembers.isEmpty()) return Mono.just(response);
@@ -314,6 +292,32 @@ public class TrailCollectionService {
         		return response;
     		});
     	});
+    }
+    
+    private Flux<TrailCollectionEntity> getSharedCollections(String email, Authentication auth, Map<UUID, UUID> colIdByCallerId, Map<UUID, SharedCollectionEntity> colById, List<SharedCollectionMemberEntity> callerMembers) {
+    	if (AuthDetails.getVersion(auth) < SharedCollectionUtils.MIN_VERSION_FOR_SHARED) return Flux.empty();
+		return sharedCollectionMemberRepo.findAllByOwner(email).collectList()
+		.flatMap(members -> {
+			if (members.isEmpty()) return Mono.empty();
+			callerMembers.addAll(members);
+			return sharedCollectionRepo.findAllById(Streams.of(members).map(m -> m.getSharedCollectionUuid()).distinct().toList()).collectList()
+			.map(collections -> {
+				for (var col : collections) colById.put(col.getUuid(), col);
+				return Streams.of(members).map(member -> {
+					colIdByCallerId.put(member.getUuid(), member.getSharedCollectionUuid());
+					TrailCollectionEntity entity = new TrailCollectionEntity();
+					entity.setType(TrailCollectionType.SHARED);
+					entity.setOwner(email);
+					entity.setUuid(member.getUuid());
+					entity.setName(member.getName());
+					entity.setCreatedAt(member.getCreatedAt());
+					entity.setUpdatedAt(member.getUpdatedAt());
+					entity.setVersion(member.getVersion());
+					return entity;
+				}).toList();
+			});
+		})
+		.flatMapMany(Flux::fromIterable);
     }
     
     private void setSharedAttributes(TrailCollection dto, String caller, Map<UUID, SharedCollectionEntity> colById, Map<UUID, UUID> colIdByCallerId, Collection<SharedCollectionMemberEntity> allMembers) {
@@ -363,7 +367,7 @@ public class TrailCollectionService {
 	    		},
 	    		repo,
 	    		r2dbc
-	    	).map(this::toDTO);
+	    	).map(this::toDto);
     	Flux<TrailCollection> sharedUpdates = sharedCollectionsDtos.isEmpty() ? Flux.empty() :
     		BulkUtils.<TrailCollection, UUID, Throwable, Tuple2<SharedCollectionEntity, List<SharedCollectionMemberEntity>>>bulkUpdate(
     			sharedCollectionsDtos,
@@ -581,7 +585,7 @@ public class TrailCollectionService {
         .build();
     }
 
-    private TrailCollection toDTO(TrailCollectionEntity entity) {
+    private TrailCollection toDto(TrailCollectionEntity entity) {
         return new TrailCollection(
             entity.getUuid().toString(),
             entity.getOwner(),
@@ -604,9 +608,7 @@ public class TrailCollectionService {
     			callerEntity = member;
     			if (sharedWith == null) break;
     		}
-    		if (sharedWith != null) {
-    			if (callerEntity != member) sharedWith.add(member.getOwner());
-    		}
+    		if (sharedWith != null && callerEntity != member) sharedWith.add(member.getOwner());
     	}
     	if (callerEntity == null) throw new IllegalStateException();
     	return new TrailCollection(

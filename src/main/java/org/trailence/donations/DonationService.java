@@ -62,7 +62,7 @@ public class DonationService {
 	}
 	
 	private Mono<Long> convertAmount(BigDecimal amount, String currency) {
-		if (amount.equals(BigDecimal.ZERO)) return Mono.just(0L);
+		if (amount.compareTo(BigDecimal.ZERO) == 0) return Mono.just(0L);
 		if ("eur".equalsIgnoreCase(currency)) return Mono.just(amount.multiply(BigDecimal.valueOf(1000000)).longValue());
 		return currencyConverterService.convertToEuro(currency, amount).map(a -> a.multiply(BigDecimal.valueOf(1000000)).longValue());
 	}

@@ -27,24 +27,34 @@ public class HttpFilter implements WebFilter {
 			long time = System.currentTimeMillis() - start;
 			if (time > 2000) log.info("Request took {} ms: {} {}", time, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
 		}));
-		checkExchange(exchange, 10, schedule);
+		checkExchange(exchange, 10, 0, schedule);
 		return chain.filter(exchange)
 			.map(_ -> Boolean.TRUE)
 			.switchIfEmpty(Mono.just(Boolean.TRUE))
 			.timeout(Duration.ofMinutes(11))
-			.doOnError(TimeoutException.class, _ -> log.info("Request timeout: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath()))
-			.doOnCancel(() -> log.info("Request cancelled: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath()))
+			.doOnError(TimeoutException.class, _ -> {
+				Disposable d = schedule.get();
+				if (d != null && !d.isDisposed()) d.dispose();
+				log.info("Request timeout: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath());
+			})
+			.doOnCancel(() -> {
+				Disposable d = schedule.get();
+				if (d != null && !d.isDisposed()) d.dispose();
+				log.info("Request cancelled: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getPath());
+			})
 			.then();
 	}
 	
-	private void checkExchange(ServerWebExchange exchange, int seconds, MutableObject<Disposable> schedule) {
+	private void checkExchange(ServerWebExchange exchange, int delay, int delayAlreadyDone, MutableObject<Disposable> schedule) {
 		schedule.setValue(Schedulers.boundedElastic().schedule(() -> {
-			log.warn("Request not comitted after {} seconds: {} {}", seconds, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
-			if (seconds < 10 * 60)
-				checkExchange(exchange, seconds * 2, schedule);
+			log.warn("Request not comitted after {} seconds: {} {}", delayAlreadyDone + delay, exchange.getRequest().getMethod(), exchange.getRequest().getPath());
+			if (delayAlreadyDone < 5 * 60)
+				checkExchange(exchange, delay * 2, delayAlreadyDone + delay, schedule);
+			else if (delayAlreadyDone < 10 * 60)
+				checkExchange(exchange, delay, delayAlreadyDone + delay, schedule);
 			else
 				schedule.setValue(null);
-		}, 10, TimeUnit.SECONDS));
+		}, delay, TimeUnit.SECONDS));
 	}
 	
 }
