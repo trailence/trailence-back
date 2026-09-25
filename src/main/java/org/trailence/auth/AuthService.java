@@ -213,7 +213,7 @@ public class AuthService {
 	
 	public Mono<Tuple2<AuthResponse, String>> renew(RenewTokenRequest request, String trustToken) {
 		return keyRepo.findByIdAndEmail(UUID.fromString(request.getKeyId()), request.getEmail().toLowerCase())
-		.switchIfEmpty(Mono.error(new ForbiddenException()))
+		.switchIfEmpty(Mono.error(new ForbiddenException("unknown-key")))
 		.flatMap(key -> validKeyAndGetUser(key, request, trustToken))
 		.flatMap(tuple -> {
 			var key = tuple.getT1();
@@ -246,7 +246,7 @@ public class AuthService {
 	}
 	
 	private Mono<Tuple2<UserKeyEntity, UserEntity>> validKeyAndGetUser(UserKeyEntity key, RenewTokenRequest request, String trustToken) {
-		if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException());
+		if (key.getDeletedAt() != null || key.getRandom() == null || key.getRandomExpires() < System.currentTimeMillis()) return Mono.error(new ForbiddenException("invalid-key"));
 		boolean isValid = key.getRandom().equals(request.getRandom());
 		if (isValid && !isValidSignature(key.getPublicKey(), request.getEmail(), key.getRandom(), request.getSignature())) isValid = false;
 		if (isValid && key.getTrustToken() != null) isValid = key.getTrustToken().equals(trustToken);
@@ -255,10 +255,10 @@ public class AuthService {
 			if (key.getInvalidAttempts() > MAX_ATTEMPTS_BEFORE_REMOVING_KEY) {
 				key.setDeletedAt(System.currentTimeMillis());
 			}
-			return keyRepo.save(key).then(Mono.error(new ForbiddenException()));
+			return keyRepo.save(key).then(Mono.error(new ForbiddenException("invalid-attempt")));
 		}
 		return userRepo.findById(key.getEmail())
-		.switchIfEmpty(Mono.error(new ForbiddenException()))
+		.switchIfEmpty(Mono.error(new ForbiddenException("user-removed")))
 		.map(user -> Tuples.of(key, user));
 	}
 	
