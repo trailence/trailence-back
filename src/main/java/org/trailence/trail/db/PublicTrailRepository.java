@@ -43,9 +43,6 @@ public interface PublicTrailRepository  extends ReactiveCrudRepository<PublicTra
 	
 	Mono<PublicTrailEntity> findFirst1ByAuthorAndAuthorUuid(String auther, UUID authorUuid);
 	
-	@Query("SELECT * FROM public_trails ORDER BY RANDOM() LIMIT 200")
-	Flux<PublicTrailEntity> random();
-	
 	@Query("SELECT pt.slug, MAX(pt.updated_at) as updated_at, MAX(ptf.date) as latestFeedbackAt, MIN(pt.created_at) as created_at, ARRAY_AGG(DISTINCT l.lang ORDER BY l.lang) AS languages FROM public_trails pt LEFT JOIN public_trail_feedback ptf ON ptf.public_trail_uuid = pt.uuid LEFT JOIN LATERAL (SELECT pt.lang UNION SELECT jsonb_object_keys(COALESCE(pt.name_translations, '{}'::jsonb)) WHERE jsonb_typeof(pt.name_translations) = 'object') AS l(lang) ON TRUE GROUP BY pt.slug ORDER BY created_at ASC LIMIT :nb OFFSET :start")
 	Flux<SlugWithDatesAndLanguages> slugsWithDatesAndLanguages(int nb, long offset);
 	

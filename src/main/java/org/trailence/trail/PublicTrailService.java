@@ -628,10 +628,6 @@ public class PublicTrailService {
 		;
 	}
 	
-	public Flux<PublicTrailEntity> random() {
-		return publicTrailRepo.random();
-	}
-	
 	public Flux<SlugWithDatesAndLanguages> slugsWithDatesAndLanguages(long offset, int nb) {
 		return publicTrailRepo.slugsWithDatesAndLanguages(nb, offset);
 	}
