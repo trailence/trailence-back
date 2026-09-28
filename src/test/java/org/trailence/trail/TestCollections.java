@@ -328,12 +328,12 @@ class TestCollections extends AbstractTest {
 		assertThat(collections).hasSize(maxCollections - 2);
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) (maxCollections - 1));
 		// create more than quota should create the 1 remaining in quota and ignore the 2 others
-		collections.addAll(user.createCollections(3));
+		collections.addAll(user.createCollections(3, -1, null, false));
 		assertThat(collections).hasSize(maxCollections - 1);
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		// quota reached: create should return an error 
-		user.createCollections(1, 403, "quota-exceeded-collections");
-		user.createCollections(2, 403, "quota-exceeded-collections");
+		user.createCollections(1, 403, "quota-exceeded-collections", false);
+		user.createCollections(2, 403, "quota-exceeded-collections", false);
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		
 		// create 2 existing ones, plus 2 new ones, with quota reached: should say the 2 existing ones are created
@@ -366,7 +366,7 @@ class TestCollections extends AbstractTest {
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo((short) (maxCollections - 2));
 		
 		// we can create again up to 2 collections
-		collections.addAll(user.createCollections(5));
+		collections.addAll(user.createCollections(5, -1, null, false));
 		assertThat(collections).hasSize(maxCollections - 1);
 		assertThat(user.renewToken().getQuotas().getCollectionsUsed()).isEqualTo(maxCollections);
 		
@@ -411,19 +411,20 @@ class TestCollections extends AbstractTest {
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col1", TrailCollectionType.PUB_DRAFT, null, null),
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col2", TrailCollectionType.PUB_SUBMIT, null, null),
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "col3", TrailCollectionType.PUB_DRAFT, null, null),
-		});
+		}, -1, null, false);
 		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
 		assertThat(test.getQuotas(user)).extracting(q -> q.getCollectionsUsed()).isEqualTo((short) 1);
 		
 		user.createCollections(new TrailCollection[] {
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_DRAFT, null, null),
-		});
+		}, -1, null, false);
 		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
 
 		user.createCollections(new TrailCollection[] {
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_SUBMIT, null, null),
-		});
+		}, -1, null, false);
 		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_DRAFT.equals(c.getType())).hasSize(1);
+		assertThat(user.getCollections()).hasSize(3).filteredOn(c -> TrailCollectionType.PUB_SUBMIT.equals(c.getType())).hasSize(1);
 		
 		user.createCollections(new TrailCollection[] {
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "r", TrailCollectionType.PUB_REJECT, null, null),
@@ -432,7 +433,7 @@ class TestCollections extends AbstractTest {
 
 		user.createCollections(new TrailCollection[] {
 			new TrailCollection(UUID.randomUUID().toString(), user.getEmail(), 0, 0, 0, "dup", TrailCollectionType.PUB_REJECT, null, null),
-		});
+		}, -1, null, false);
 		assertThat(user.getCollections()).hasSize(4).filteredOn(c -> TrailCollectionType.PUB_REJECT.equals(c.getType())).hasSize(1);
 		
 		assertThat(test.getQuotas(user)).extracting(q -> q.getCollectionsUsed()).isEqualTo((short) 1);

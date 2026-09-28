@@ -117,7 +117,11 @@ public class TrailCollectionService {
     					classic.add(entity);
     			});
     			var createUniques = uniques.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) :
-    				Flux.fromIterable(uniques).flatMap(entity -> self.createUniqueCollectionWithoutQuota(entity), 1, 1).onErrorResume(IgnoreException.class, _ -> Mono.empty()).collectList();
+    				Flux.fromIterable(uniques)
+    				.flatMap(entity -> self.createUniqueCollectionWithoutQuota(entity), 1, 1)
+    				.onErrorResume(IgnoreException.class, _ -> Mono.empty())
+    				.collectList()
+    				.map(list -> TrailenceUtils.distinct(list, (c1, c2) -> c1.getType().equals(c2.getType())));
     			var createClassic = classic.isEmpty() ? Mono.just(new LinkedList<TrailCollectionEntity>()) : self.createCollectionsWithQuota(classic, owner);
     			return createUniques.flatMap(uniquesCreated -> createClassic.map(classicCreated -> {
     				var all = new LinkedList<TrailCollectionEntity>();
@@ -144,7 +148,7 @@ public class TrailCollectionService {
     	return repo.findOneByTypeAndOwner(entity.getType().name(), entity.getOwner())
     	.map(Optional::of).switchIfEmpty(Mono.just(Optional.empty()))
     	.flatMap(opt -> {
-    		if (opt.isPresent()) return Mono.empty();
+    		if (opt.isPresent()) return Mono.just(opt.get());
     		return r2dbc.insert(entity)
     		.flatMap(created -> repo.findAllByTypeAndOwner(entity.getType().name(), entity.getOwner()).collectList().flatMap(list -> {
     			if (list.size() == 1 && list.get(0).getUuid().equals(created.getUuid())) return Mono.just(created);

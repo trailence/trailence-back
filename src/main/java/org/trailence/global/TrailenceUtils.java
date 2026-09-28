@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiPredicate;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.security.core.Authentication;
@@ -58,6 +59,21 @@ public class TrailenceUtils {
 		result.addAll(list1);
 		result.addAll(list2);
 		result.addAll(list3);
+		return result;
+	}
+	
+	public static <T> List<T> distinct(List<T> list, BiPredicate<T, T> comparator) {
+		List<T> result = new ArrayList<>(list.size());
+		for (var element : list) {
+			boolean found = false;
+			for (var element2 : result) {
+				if (comparator.test(element2, element)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) result.add(element);
+		}
 		return result;
 	}
 	

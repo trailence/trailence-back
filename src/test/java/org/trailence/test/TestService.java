@@ -204,8 +204,9 @@ public class TestService {
 			var updates = response.getBody().as(new TypeRef<UpdateResponse<TrailCollection>>() {});
 			return updates.getCreated();
 		}
+
 		
-		public List<TrailCollection> createCollections(TrailCollection[] dtos, int expectedError, String expectedErrorCode) {
+		public List<TrailCollection> createCollections(TrailCollection[] dtos, int expectedError, String expectedErrorCode, boolean expectAllCreated) {
 			var response = post("/api/trail-collection/v1/_bulkCreate", dtos);
 			if (expectedError > 0) {
 				TestUtils.expectError(response, expectedError, expectedErrorCode);
@@ -213,12 +214,16 @@ public class TestService {
 			}
 			assertThat(response.statusCode()).isEqualTo(200);
 			var list = response.getBody().as(TrailCollection[].class);
-			assertThat(list).hasSizeLessThanOrEqualTo(dtos.length);
+			if (expectAllCreated)
+				assertThat(list).hasSize(dtos.length);
+			else
+				assertThat(list).hasSizeLessThanOrEqualTo(dtos.length);
 			for (var i = 0; i < list.length; ++i) {
 				var col = list[i];
 				for (var j = 0; j < list.length; ++j)
 					if (j != i) assertThat(col.getUuid()).isNotEqualTo(list[j].getUuid());
 				var dtoOpt = Arrays.stream(dtos).filter(d -> d.getUuid().equals(col.getUuid())).findAny();
+				if (!expectAllCreated && !dtoOpt.isPresent()) continue;
 				assertThat(dtoOpt).isPresent();
 				var dto = dtoOpt.get();
 				assertThat(col.getName()).isEqualTo(dto.getName());
@@ -230,13 +235,13 @@ public class TestService {
 		}
 		
 		public List<TrailCollection> createCollections(TrailCollection[] dtos) {
-			return createCollections(dtos, -1, null);
+			return createCollections(dtos, -1, null, true);
 		}
 		
-		public List<TrailCollection> createCollections(int nbCollections, int expectedError, String expectedErrorCode) {
+		public List<TrailCollection> createCollections(int nbCollections, int expectedError, String expectedErrorCode, boolean expectAllCreated) {
 			var dtos = new TrailCollection[nbCollections];
 			for (int i = 0; i < dtos.length; ++i) dtos[i] = generateRandomCollection();
-			return createCollections(dtos, expectedError, expectedErrorCode);
+			return createCollections(dtos, expectedError, expectedErrorCode, expectAllCreated);
 		}
 		
 		public TrailCollection generateRandomCollection() {
@@ -244,7 +249,7 @@ public class TestService {
 		}
 		
 		public List<TrailCollection> createCollections(int nbCollections) {
-			return createCollections(nbCollections, -1, null);
+			return createCollections(nbCollections, -1, null, true);
 		}
 		
 		public TrailCollection createCollection() {
