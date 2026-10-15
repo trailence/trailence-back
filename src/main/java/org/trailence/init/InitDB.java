@@ -77,6 +77,7 @@ public class InitDB {
 		new DatabaseMigration("1.5_trust_token"),
 		new TrackStorageV1toV2Migration(),
 		new InitDailyStats(),
+		new DatabaseMigration("2.4_add_tz_offset"),
 	};
 	
 	public void init(ApplicationContext context) {

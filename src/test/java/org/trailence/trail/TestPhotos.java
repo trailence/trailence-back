@@ -50,6 +50,7 @@ class TestPhotos extends AbstractTest {
 		assertThat(photo.getLongitude()).isNull();
 		assertThat(photo.getIndex()).isEqualTo(1);
 		assertThat(photo.getDateTaken()).isNull();
+		assertThat(photo.getDateTakenTzOffset()).isNull();
 		
 		response = user.post("/api/photo/v1/_bulkGetUpdates", List.of());
 		assertThat(response.statusCode()).isEqualTo(200);
@@ -68,6 +69,7 @@ class TestPhotos extends AbstractTest {
 		photo.setDescription("updated");
 		photo.setIndex(111);
 		photo.setDateTaken(123456789L);
+		photo.setDateTakenTzOffset((short) -60);
 		response = user.put("/api/photo/v1/_bulkUpdate", List.of(photo));
 		assertThat(response.statusCode()).isEqualTo(200);
 		var list = response.getBody().as(Photo[].class);
@@ -78,6 +80,7 @@ class TestPhotos extends AbstractTest {
 		assertThat(photo.getDescription()).isEqualTo("updated");
 		assertThat(photo.getIndex()).isEqualTo(111);
 		assertThat(photo.getDateTaken()).isEqualTo(123456789);
+		assertThat(photo.getDateTakenTzOffset()).isEqualTo((short) -60);
 		assertThat(photo.getVersion()).isEqualTo(2);
 		
 		response = user.post("/api/photo/v1/_bulkGetUpdates", List.of());
@@ -102,6 +105,39 @@ class TestPhotos extends AbstractTest {
 	}
 	
 	@Test
+	void createWithHeaders() {
+		var user = test.createUserAndLogin();
+		var mytrails = user.getMyTrails();
+		var trail = user.createTrail(mytrails, true);
+		
+		var uuid = UUID.randomUUID().toString();
+		var content = new byte[123456];
+		new Random().nextBytes(content);
+		var response = user.request()
+			.contentType(ContentType.BINARY)
+			.header("X-Description", "test")
+			.header("X-DateTaken", "123456789")
+			.header("X-DateTakenTz", "-60")
+			.header("X-Latitude", "147")
+			.header("X-Longitude", "369852")
+			.header("X-Index", "12")
+			.body(content)
+			.post("/api/photo/v1/" + trail.getUuid() + "/" + uuid + "/" + user.getEmail());
+		assertThat(response.statusCode()).isEqualTo(200);
+		var photo = response.getBody().as(Photo.class);
+		assertThat(photo.getUuid()).isEqualTo(uuid);
+		assertThat(photo.getOwner()).isEqualTo(user.getEmail().toLowerCase());
+		assertThat(photo.getVersion()).isEqualTo(1);
+		assertThat(photo.getDescription()).isEqualTo("test");
+		assertThat(photo.getTrailUuid()).isEqualTo(trail.getUuid());
+		assertThat(photo.getLatitude()).isEqualTo(147);
+		assertThat(photo.getLongitude()).isEqualTo(369852);
+		assertThat(photo.getIndex()).isEqualTo(12);
+		assertThat(photo.getDateTaken()).isEqualTo(123456789);
+		assertThat(photo.getDateTakenTzOffset()).isEqualTo((short) -60);
+	}
+	
+	@Test
 	void cannotAccessToPhotoFromAnotherUser() {
 		var user1 = test.createUserAndLogin();
 		var user2 = test.createUserAndLogin();
@@ -120,6 +156,7 @@ class TestPhotos extends AbstractTest {
 			.contentType(ContentType.BINARY)
 			.header("X-Description", "test")
 			.header("X-DateTaken", "123456789")
+			.header("X-DateTakenTz", "120")
 			.header("X-Latitude", "147")
 			.header("X-Longitude", "369852")
 			.header("X-Index", "12")
@@ -433,6 +470,7 @@ class TestPhotos extends AbstractTest {
 			p.getTrailUuid(),
 			p.getDescription(),
 			p.getDateTaken(),
+			p.getDateTakenTzOffset(),
 			p.getLatitude(),
 			p.getLongitude(),
 			p.isCover(),

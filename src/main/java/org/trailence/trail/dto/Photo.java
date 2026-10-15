@@ -21,6 +21,7 @@ public class Photo implements Versioned.Interface {
     private String trailUuid;
     private String description;
     private Long dateTaken;
+    private Short dateTakenTzOffset;
     private Long latitude;
     private Long longitude;
     private boolean isCover;

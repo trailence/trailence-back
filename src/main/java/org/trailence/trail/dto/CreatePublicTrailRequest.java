@@ -16,6 +16,7 @@ public class CreatePublicTrailRequest {
 	private String description;
 	private String location;
 	private long date;
+	private Short dateTzOffset;
 
 	private long distance;
 	private Long positiveElevation;
@@ -54,6 +55,7 @@ public class CreatePublicTrailRequest {
 		private Long lat;
 		private Long lng;
 		private Long date;
+		private Short dateTzOffset;
 		private String description;
 	}
 

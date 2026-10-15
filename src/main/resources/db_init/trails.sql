@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.trails
     description character varying(50000),
     location character varying(100),
     date bigint,
+    date_tz_offset smallint,
     loop_type character varying(2),
     activity character varying(20),
     source_type character varying(20),

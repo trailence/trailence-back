@@ -22,6 +22,7 @@ public class PublicPhotoEntity {
     
     private String description;
     private Long date;
+    private Short dateTzOffset;
     private Long latitude;
     private Long longitude;
     private int index;

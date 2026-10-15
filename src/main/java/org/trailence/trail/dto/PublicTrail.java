@@ -27,6 +27,7 @@ public class PublicTrail {
 	private String description;
 	private String location;
 	private long date;
+	private Short dateTzOffset;
 
 	private long distance;
 	private Long positiveElevation;
@@ -67,6 +68,7 @@ public class PublicTrail {
 		private String uuid;
 	    private String description;
 	    private Long date;
+	    private Short dateTzOffset;
 	    private Long latitude;
 	    private Long longitude;
 	    private int index;

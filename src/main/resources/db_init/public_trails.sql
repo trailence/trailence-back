@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.public_trails
     description character varying(50000) NOT NULL,
     location character varying(100) NOT NULL,
     date bigint NOT NULL,
+    date_tz_offset smallint,
     distance bigint NOT NULL,
     positive_elevation int,
     negative_elevation int,
@@ -130,6 +131,7 @@ CREATE TABLE IF NOT EXISTS public.public_photos
 	file_id bigint NOT NULL,
 	description character varying(5000),
     date bigint,
+    date_tz_offset smallint,
     latitude bigint,
     longitude bigint,
     index integer NOT NULL

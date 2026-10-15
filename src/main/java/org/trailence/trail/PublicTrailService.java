@@ -193,6 +193,7 @@ public class PublicTrailService {
 			request.getDescription(),
 			request.getLocation(),
 			request.getDate(),
+			request.getDateTzOffset(),
 			request.getDistance(),
 			request.getPositiveElevation(),
 			request.getNegativeElevation(),
@@ -537,6 +538,7 @@ public class PublicTrailService {
 			entity.getDescription(),
 			entity.getLocation(),
 			entity.getDate(),
+			entity.getDateTzOffset(),
 			entity.getDistance(),
 			entity.getPositiveElevation(),
 			entity.getNegativeElevation(),
@@ -562,6 +564,7 @@ public class PublicTrailService {
 				pe.getUuid().toString(),
 				pe.getDescription(),
 				pe.getDate(),
+				pe.getDateTzOffset(),
 				pe.getLatitude(),
 				pe.getLongitude(),
 				pe.getIndex()

@@ -30,6 +30,7 @@ public class PublicTrailEntity {
 	private String description;
 	private String location;
 	private long date;
+	private Short dateTzOffset;
 
 	private long distance;
 	private Long positiveElevation;

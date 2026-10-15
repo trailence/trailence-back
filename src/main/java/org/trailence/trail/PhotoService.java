@@ -80,10 +80,11 @@ public class PhotoService {
 		ValidationUtils.field("uuid", dto.getUuid()).notNull().isUuid();
 		ValidationUtils.field("trailUuid", dto.getTrailUuid()).notNull().isUuid();
 		ValidationUtils.field("description", dto.getDescription()).nullable().maxLength(5000);
+		String owner = dto.getOwner().toLowerCase();
 		String caller = TrailenceUtils.email(auth);
-		Mono<Optional<SharedCollectionInfo>> shared = SharedCollectionUtils.isSharedCollectionOwner(dto.getOwner()) ?
-				sharedCollectionMemberRepo.getInfoByCallerAndUuid(caller, SharedCollectionUtils.getSharedCollectionUuid(dto.getOwner()))
-				.switchIfEmpty(Mono.error(new NotFoundException("shared-collection", dto.getOwner())))
+		Mono<Optional<SharedCollectionInfo>> shared = SharedCollectionUtils.isSharedCollectionOwner(owner) ?
+				sharedCollectionMemberRepo.getInfoByCallerAndUuid(caller, SharedCollectionUtils.getSharedCollectionUuid(owner))
+				.switchIfEmpty(Mono.error(new NotFoundException("shared-collection", owner)))
 				.map(Optional::of)
 			: Mono.just(Optional.empty());
 		return shared.flatMap(sharedOpt -> {
@@ -100,13 +101,13 @@ public class PhotoService {
 			)
 			.flatMap(existing -> {
 				if (existing.getT1().isPresent()) {
-					return content.then(Mono.just(toDto(existing.getT1().get(), dto.getOwner())));
+					return content.then(Mono.just(toDto(existing.getT1().get(), owner)));
 				}
 				if (existing.getT2().isEmpty()) {
-					return Mono.error(new TrailNotFound(dto.getTrailUuid(), dto.getOwner()));
+					return Mono.error(new TrailNotFound(dto.getTrailUuid(), owner));
 				}
 				return createPhotoWithQuota(dto, ownerInDb, quotaOwner, content, size)
-					.map(entity -> toDto(entity, dto.getOwner()));
+					.map(entity -> toDto(entity, owner));
 			});
 		});
 	}
@@ -125,6 +126,7 @@ public class PhotoService {
 			entity.setTrailUuid(UUID.fromString(dto.getTrailUuid()));
 			entity.setDescription(dto.getDescription());
 			entity.setDateTaken(dto.getDateTaken());
+			if (dto.getDateTaken() != null) entity.setDateTakenTzOffset(dto.getDateTakenTzOffset());
 			entity.setLatitude(dto.getLatitude());
 			entity.setLongitude(dto.getLongitude());
 			entity.setCover(dto.isCover());
@@ -189,6 +191,11 @@ public class PhotoService {
             entity.setDateTaken(dto.getDateTaken());
             changed = true;
         }
+        var newTzOffset = entity.getDateTaken() == null ? null : dto.getDateTakenTzOffset();
+        if (!Objects.equals(entity.getDateTakenTzOffset(), newTzOffset)) {
+        	entity.setDateTakenTzOffset(newTzOffset);
+        	changed = true;
+        }
         if (!Objects.equals(entity.getLatitude(), dto.getLatitude())) {
             entity.setLatitude(dto.getLatitude());
             changed = true;
@@ -252,6 +259,7 @@ public class PhotoService {
         			privateEntity.getFileId(),
         			publicPhoto.getDescription(),
         			publicPhoto.getDate(),
+        			publicPhoto.getDateTzOffset(),
         			publicPhoto.getLat(),
         			publicPhoto.getLng(),
         			publicPhoto.getIndex()
@@ -272,6 +280,7 @@ public class PhotoService {
 			entity.getTrailUuid().toString(),
 			entity.getDescription(),
 			entity.getDateTaken(),
+			entity.getDateTakenTzOffset(),
 			entity.getLatitude(),
 			entity.getLongitude(),
 			entity.isCover(),

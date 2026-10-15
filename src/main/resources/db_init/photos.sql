@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.photos
     trail_uuid uuid NOT NULL,
     description character varying(5000),
     date_taken bigint,
+    date_taken_tz_offset smallint,
     latitude bigint,
     longitude bigint,
     is_cover boolean NOT NULL DEFAULT FALSE,

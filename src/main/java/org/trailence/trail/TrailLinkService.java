@@ -189,6 +189,7 @@ public class TrailLinkService {
 					photoEntity.getUpdatedAt(),
 					photoEntity.getDescription(),
 					photoEntity.getDateTaken(),
+					photoEntity.getDateTakenTzOffset(),
 					photoEntity.getLatitude(),
 					photoEntity.getLongitude(),
 					photoEntity.isCover(),
