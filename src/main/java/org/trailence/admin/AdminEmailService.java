@@ -1,6 +1,7 @@
 package org.trailence.admin;
 
 import java.time.Instant;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,7 +40,21 @@ public class AdminEmailService {
 	@Value("${trailence.hostname:trailence.org}")
 	private String hostname;
 
-	private long latestEmail = System.currentTimeMillis() - 24L * 60 * 60 * 1000;
+	private long latestEmail = getLastEmail();
+	
+	private static long getLastEmail() {
+		Calendar date = Calendar.getInstance();
+		date.set(Calendar.MINUTE, 0);
+		date.set(Calendar.SECOND, 0);
+		date.set(Calendar.MILLISECOND, 0);
+		if (date.get(Calendar.HOUR_OF_DAY) >= 2) {
+			date.set(Calendar.HOUR_OF_DAY, 2);
+			return date.getTimeInMillis();
+		}
+		date.set(Calendar.HOUR_OF_DAY, 2);
+		date.add(Calendar.DAY_OF_MONTH, -1);
+		return date.getTimeInMillis();
+	}
 	
 	private static final int MAX_CONTACTS = 10;
 	private static final int MAX_NEW_USERS = 25;
@@ -50,7 +65,7 @@ public class AdminEmailService {
 	private static final String LI = "<li>";
 	private static final String LI_END = "</li>";
 
-	@Scheduled(initialDelayString = "15m", fixedDelayString = "24h")
+	@Scheduled(cron = "0 0 3 * * *")
 	public void newsEmail() {
 		long previousEmail = latestEmail;
 		latestEmail = System.currentTimeMillis();

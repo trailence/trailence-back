@@ -274,7 +274,7 @@ public class PublicTrailService {
 	
 	public Mono<SearchByTileResponse> searchByTiles(SearchByTileRequest request) {
 		if (request.getZoom() < 1 || request.getZoom() > 10) return Mono.error(new BadRequestException("invalid-zoom", "Invalid zoom level"));
-		if (request.getTiles().size() > 1000) return Mono.error(new BadRequestException("too-many-tiles", "Maximum 1000 tiles by request"));
+		if (request.getTiles().size() > 1000) return Mono.error(new BadRequestException("too-many-tiles", "Maximum 1000 tiles by request, received " + request.getTiles().size()));
 
 		Column zoomColumn = Column.create("tile_zoom" + request.getZoom(), PublicTrailEntity.TABLE);
 		
