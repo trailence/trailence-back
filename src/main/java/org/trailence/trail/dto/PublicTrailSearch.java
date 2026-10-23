@@ -17,6 +17,7 @@ public final class PublicTrailSearch {
 		private FilterNumeric distance;
 		private FilterNumeric positiveElevation;
 		private FilterNumeric negativeElevation;
+		private FilterNumeric altitude;
 		private List<String> loopTypes;
 		private List<String> activities;
 		private FilterNumeric rate;

@@ -334,6 +334,7 @@ public class PublicTrailService {
 			where = applyFilterNumeric(where, filters.getDistance(), PublicTrailEntity.COL_DISTANCE);
 			where = applyFilterNumeric(where, filters.getPositiveElevation(), PublicTrailEntity.COL_POSITIVE_ELEVATION);
 			where = applyFilterNumeric(where, filters.getNegativeElevation(), PublicTrailEntity.COL_NEGATIVE_ELEVATION);
+			where = applyFilterNumeric2Columns(where, filters.getAltitude(), PublicTrailEntity.COL_LOWEST_ALTITUDE, PublicTrailEntity.COL_HIGHEST_ALTITUDE);
 			where = applyFilterList(where, filters.getLoopTypes(), PublicTrailEntity.COL_LOOP_TYPE);
 			where = applyFilterList(where, filters.getActivities(), PublicTrailEntity.COL_ACTIVITY);
 			where = applyFilterRate(where, filters.getRate());
@@ -357,6 +358,16 @@ public class PublicTrailService {
 			where = where.and(Conditions.isGreaterOrEqualTo(valueExpression, SQL.literalOf(filter.getFrom())));
 		if (filter.getTo() != null)
 			where = where.and(Conditions.isLessOrEqualTo(valueExpression, SQL.literalOf(filter.getTo())));
+		return where;
+	}
+	
+	private Condition applyFilterNumeric2Columns(Condition where, PublicTrailSearch.FilterNumeric filter, Expression fromExpression, Expression toExpression) {
+		if (filter == null) return where;
+		if (filter.getFrom() == null && filter.getTo() == null) return where;
+		if (filter.getFrom() != null)
+			where = where.and(Conditions.isGreaterOrEqualTo(fromExpression, SQL.literalOf(filter.getFrom())));
+		if (filter.getTo() != null)
+			where = where.and(Conditions.isLessOrEqualTo(toExpression, SQL.literalOf(filter.getTo())));
 		return where;
 	}
 	

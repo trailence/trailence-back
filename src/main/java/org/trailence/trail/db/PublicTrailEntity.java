@@ -80,6 +80,8 @@ public class PublicTrailEntity {
 	public static final Column COL_DISTANCE = Column.create("distance", TABLE);
 	public static final Column COL_POSITIVE_ELEVATION = Column.create("positive_elevation", TABLE);
 	public static final Column COL_NEGATIVE_ELEVATION = Column.create("negative_elevation", TABLE);
+	public static final Column COL_LOWEST_ALTITUDE = Column.create("lowest_altitude", TABLE);
+	public static final Column COL_HIGHEST_ALTITUDE = Column.create("highest_altitude", TABLE);
 	public static final Column COL_LOOP_TYPE = Column.create("loop_type", TABLE);
 	public static final Column COL_ACTIVITY = Column.create("activity", TABLE);
 	public static final String COL_NB_RATE_PREFIX = "nb_rate";
