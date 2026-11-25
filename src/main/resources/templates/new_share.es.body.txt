@@ -1,6 +1,6 @@
 Hola,
 
-{{from}} quiere compartir rutas contigo en {{hostname}}.
+{{from}} ha compartido rutas contigo en {{hostname}}.
 
 Para acceder a ellas solo tienes que iniciar sesión y abrir el menú "Compartido conmigo"
 

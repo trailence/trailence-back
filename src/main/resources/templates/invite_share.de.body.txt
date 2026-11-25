@@ -1,6 +1,6 @@
 Guten Tag,
 
-{{from}} möchte Touren mit Ihnen auf {{hostname}} teilen.
+{{from}} hat Touren mit Ihnen auf {{hostname}} geteilt.
 
 Sie können darauf ohne Konto zugreifen, indem Sie diesen Link verwenden: {{link}}
 

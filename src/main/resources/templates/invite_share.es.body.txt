@@ -1,6 +1,6 @@
 Hola,
 
-{{from}} quiere compartir rutas contigo en {{hostname}}.
+{{from}} ha compartido rutas contigo en {{hostname}}.
 
 Puedes acceder a ellas sin tener una cuenta usando este enlace: {{link}}
 

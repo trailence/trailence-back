@@ -1,6 +1,6 @@
 Olá,
 
-{{from}} pretende partilhar percursos consigo em {{hostname}}.
+{{from}} partilhou percursos consigo em {{hostname}}.
 
 Para aceder aos mesmos basta iniciar sessão e ir ao menu "Partilhado comigo"
 

@@ -1,6 +1,6 @@
 Ciao,
 
-{{from}} vuole condividere dei percorsi con te su {{hostname}}.
+{{from}} ha condiviso dei percorsi con te su {{hostname}}.
 
 Puoi accedervi senza avere un account utilizzando questo link: {{link}}
 

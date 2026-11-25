@@ -1,6 +1,6 @@
 Guten Tag,
 
-{{from}} möchte Touren mit Ihnen auf {{hostname}} teilen.
+{{from}} hat Touren mit Ihnen auf {{hostname}} geteilt.
 
 Um darauf zuzugreifen, müssen Sie sich nur anmelden und das Menü "Mit mir geteilt" öffnen
 

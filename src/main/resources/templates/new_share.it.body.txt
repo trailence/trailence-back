@@ -1,6 +1,6 @@
 Ciao,
 
-{{from}} vuole condividere dei percorsi con te su {{hostname}}.
+{{from}} ha condiviso dei percorsi con te su {{hostname}}.
 
 Per accedervi basta effettuare l'accesso e aprire il menu "Condiviso con me"
 

@@ -1,6 +1,6 @@
 Olá,
 
-{{from}} pretende partilhar percursos consigo em {{hostname}}.
+{{from}} partilhou percursos consigo em {{hostname}}.
 
 Pode aceder aos mesmos sem ter uma conta através desta ligação: {{link}}
 

@@ -1,6 +1,6 @@
 Hello,
 
-{{from}} wants to share trails with you on {{hostname}}.
+{{from}} shared trails with you on {{hostname}}.
 
 You can access it without having an account by following this link: {{link}}
 

@@ -1,6 +1,6 @@
 Bonjour,
 
-{{from}} souhaite partager des parcours avec vous sur {{hostname}}.
+{{from}} vous a partagé des parcours sur {{hostname}}.
 
 Pour y accéder il suffit de vous connecter et d'aller dans le menu "Partagé avec moi"
 
